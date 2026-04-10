@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html>
+<head><title>Admin - Tradion</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}
+.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}
+.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
+.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
+.main-content{margin-left:280px;padding:20px}
+.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}
+button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
+button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
+.content-pane{display:none}
+.content-pane.active{display:block}
+table{width:100%;border-collapse:collapse}
+th,td{padding:8px;border-bottom:1px solid #2a3040}
+input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}
+.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
+.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}
+.status-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px}
+.status-active{background:#00e5a0;color:#000}
+.status-inactive{background:#ff4d6d;color:#fff}
+</style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="logo">👑 ADMIN PANEL</div>
+    <div class="menu-item" onclick="showPane('cot')">📁 COT Upload</div>
+    <div class="menu-item" onclick="showPane('econ')">📊 Econ Upload</div>
+    <div class="menu-item" onclick="showPane('seasonality')">📅 Seasonality</div>
+    <div class="menu-item" onclick="showPane('users')">👥 Users</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'">⬅ Back to Dashboard</div>
+</div>
+<div class="main-content">
+    <div id="cotPane" class="content-pane active">
+        <div class="card">
+            <h2>Upload COT Data</h2>
+            <input type="file" id="cotFile" accept=".xlsx">
+            <button onclick="uploadCOT()">Upload</button>
+            <div id="cotStatus" style="margin-top:10px"></div>
+        </div>
+    </div>
+    <div id="econPane" class="content-pane">
+        <div class="card">
+            <h2>Upload Economic Data</h2>
+            <input type="file" id="econFile" accept=".xlsx">
+            <button onclick="uploadEcon()">Upload</button>
+            <div id="econStatus" style="margin-top:10px"></div>
+        </div>
+    </div>
+    <div id="seasonalityPane" class="content-pane">
+        <div class="card">
+            <h2>Seasonality Configurations</h2>
+            <button onclick="openSeasonModal()">+ Add Seasonality Pattern</button>
+            <div id="seasonList" style="margin-top:20px"></div>
+        </div>
+    </div>
+    <div id="usersPane" class="content-pane">
+        <div class="card">
+            <h2>User Management</h2>
+            <button onclick="loadUsers()">Refresh</button>
+            <div id="usersList" style="margin-top:15px"></div>
+        </div>
+    </div>
+</div>
+
+<!-- Seasonality Modal -->
+<div class="modal" id="seasonModal">
+    <div class="modal-content">
+        <h3 id="modalTitle" style="color:#00e5ff;margin-bottom:20px">Add Seasonality</h3>
+        <form id="seasonForm">
+            <input type="hidden" id="seasonId">
+            <label>Pair</label>
+            <select id="seasonPair" required></select>
+            <label>Description (e.g. "Bullish (70%)")</label>
+            <input type="text" id="seasonDesc" placeholder="Bullish (70%)" required>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+                <div><label>Start Month</label><input type="number" id="startMonth" min="1" max="12" required></div>
+                <div><label>Start Day</label><input type="number" id="startDay" min="1" max="31" required></div>
+                <div><label>End Month</label><input type="number" id="endMonth" min="1" max="12" required></div>
+                <div><label>End Day</label><input type="number" id="endDay" min="1" max="31" required></div>
+            </div>
+            <label>Score (positive=bullish, negative=bearish)</label>
+            <input type="number" step="0.1" id="seasonScore" placeholder="e.g. 1.5 or -1" required>
+            <div style="display:flex;gap:10px;margin-top:20px">
+                <button type="submit">Save</button>
+                <button type="button" onclick="closeSeasonModal()" class="secondary">Cancel</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    const allPairs = {{ ALL_PAIRS|tojson }};
+    let seasonData = [];
+
+    function showPane(pane){
+        document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
+        document.getElementById(pane+'Pane').classList.add('active');
+        if(pane==='users') loadUsers();
+        if(pane==='seasonality') loadSeasonality();
+    }
+
+    async function uploadCOT(){
+        const file=document.getElementById('cotFile').files[0];
+        if(!file) return;
+        const fd=new FormData(); fd.append('file',file);
+        const res=await fetch('/admin/cot/upload',{method:'POST',body:fd});
+        const data=await res.json();
+        document.getElementById('cotStatus').innerHTML=data.success?'✅ Uploaded successfully':'❌ Error uploading';
+    }
+
+    async function uploadEcon(){
+        const file=document.getElementById('econFile').files[0];
+        if(!file) return;
+        const fd=new FormData(); fd.append('file',file);
+        const res=await fetch('/admin/econ/upload',{method:'POST',body:fd});
+        const data=await res.json();
+        document.getElementById('econStatus').innerHTML=data.success?'✅ Uploaded successfully':'❌ Error uploading';
+    }
+
+    async function loadUsers(){
+        const res=await fetch('/admin/users');
+        const data=await res.json();
+        let html='<table><tr><th>User</th><th>Email</th><th>Admin</th><th>Status</th><th>Actions</th></tr>';
+        data.users.forEach(u=>{
+            const statusClass = u.is_active ? 'status-active' : 'status-inactive';
+            const statusText = u.is_active ? 'Active' : 'Inactive';
+            const actionBtn = u.is_active ?
+                `<button onclick="deactivateUser(${u.id})" class="secondary">Deactivate</button>` :
+                `<button onclick="activateUser(${u.id})">Activate</button>`;
+            html+=`<tr>
+                <td>${u.username}</td><td>${u.email}</td><td>${u.is_admin?'Yes':'No'}</td>
+                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
+                <td>${actionBtn}</td>
+            </tr>`;
+        });
+        html+='</table>';
+        document.getElementById('usersList').innerHTML=html;
+    }
+
+    async function activateUser(id) {
+        await fetch(`/admin/users/${id}/activate`, {method:'POST'});
+        loadUsers();
+    }
+
+    async function deactivateUser(id) {
+        await fetch(`/admin/users/${id}/deactivate`, {method:'POST'});
+        loadUsers();
+    }
+
+    async function loadSeasonality(){
+        const res = await fetch('/admin/seasonality');
+        seasonData = await res.json();
+        let html = '<table><tr><th>Pair</th><th>Description</th><th>Start</th><th>End</th><th>Score</th><th>Actions</th></tr>';
+        seasonData.forEach(c => {
+            html += `<tr><td>${c.pair}</td><td>${c.description}</td><td>${c.start_month}/${c.start_day}</td><td>${c.end_month}/${c.end_day}</td><td>${c.score}</td>
+                <td><button onclick="editSeason(${c.id})">Edit</button> <button onclick="deleteSeason(${c.id})" class="secondary">Del</button></td></tr>`;
+        });
+        html += '</table>';
+        document.getElementById('seasonList').innerHTML = html;
+        const select = document.getElementById('seasonPair');
+        select.innerHTML = '';
+        allPairs.forEach(p => { 
+            const pairStr = p[0]+'/'+p[1];
+            const opt = document.createElement('option'); 
+            opt.value = pairStr; 
+            opt.text = pairStr; 
+            select.appendChild(opt); 
+        });
+    }
+
+    function openSeasonModal(){ 
+        document.getElementById('modalTitle').innerText='Add Seasonality'; 
+        document.getElementById('seasonForm').reset(); 
+        document.getElementById('seasonId').value=''; 
+        document.getElementById('seasonModal').style.display='flex'; 
+    }
+
+    function closeSeasonModal(){ 
+        document.getElementById('seasonModal').style.display='none'; 
+    }
+
+    function editSeason(id){
+        const c = seasonData.find(s => s.id === id);
+        if(!c) return;
+        document.getElementById('modalTitle').innerText='Edit Seasonality';
+        document.getElementById('seasonId').value = c.id;
+        document.getElementById('seasonPair').value = c.pair;
+        document.getElementById('seasonDesc').value = c.description;
+        document.getElementById('startMonth').value = c.start_month;
+        document.getElementById('startDay').value = c.start_day;
+        document.getElementById('endMonth').value = c.end_month;
+        document.getElementById('endDay').value = c.end_day;
+        document.getElementById('seasonScore').value = c.score;
+        document.getElementById('seasonModal').style.display='flex';
+    }
+
+    async function deleteSeason(id){ 
+        if(confirm('Delete this seasonality pattern?')){ 
+            await fetch('/admin/seasonality/'+id,{method:'DELETE'}); 
+            loadSeasonality(); 
+        } 
+    }
+
+    document.getElementById('seasonForm').addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const id = document.getElementById('seasonId').value;
+        const data = {
+            pair: document.getElementById('seasonPair').value,
+            description: document.getElementById('seasonDesc').value,
+            start_month: parseInt(document.getElementById('startMonth').value),
+            start_day: parseInt(document.getElementById('startDay').value),
+            end_month: parseInt(document.getElementById('endMonth').value),
+            end_day: parseInt(document.getElementById('endDay').value),
+            score: parseFloat(document.getElementById('seasonScore').value)
+        };
+        const url = id ? '/admin/seasonality/'+id : '/admin/seasonality';
+        const method = id ? 'PUT' : 'POST';
+        await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
+        closeSeasonModal();
+        loadSeasonality();
+    });
+
+    loadUsers();
+    loadSeasonality();
+</script>
+</body>
+</html>

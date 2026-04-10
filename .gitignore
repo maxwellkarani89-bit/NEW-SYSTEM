@@ -1,0 +1,38 @@
+# Python cache
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.env
+.venv
+
+# Database files (local SQLite)
+*.db
+*.sqlite
+*.sqlite3
+
+# Uploaded files (they may contain sensitive data or be large)
+uploads/
+
+# IDE settings
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Logs
+*.log
+
+# Environment variables (contains SECRET_KEY, DATABASE_URL)
+.env
+
+# OS metadata
+.DS_Store
+Thumbs.db
+
+# Jupyter Notebook checkpoints
+.ipynb_checkpoints/

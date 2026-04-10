@@ -1,0 +1,265 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Tradion · Dashboard</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}
+        .sidebar.collapsed{width:80px}
+        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}
+        .sidebar.collapsed .logo{font-size:20px}
+        .sidebar.collapsed .logo span{display:none}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px}
+        .sidebar.collapsed .menu-icon{margin-right:0}
+        .sidebar.collapsed .menu-item span:not(.menu-icon){display:none}
+        .main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}
+        .navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+        .navbar-title{font-size:18px;color:#00e5ff}
+        button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}
+        button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
+        button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
+        table{width:100%;border-collapse:collapse;margin-top:20px;background:#121826;font-size:13px;border-radius:12px;overflow:hidden}
+        th,td{padding:12px 8px;text-align:center;border-bottom:1px solid #2a3040}
+        th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}
+        .currency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;margin-top:20px}
+        .currency-card{background:#121826;border-radius:16px;padding:20px 15px;text-align:center;transition:all 0.2s;border:1px solid #2a3040;cursor:pointer;position:relative}
+        .currency-card:hover{transform:translateY(-5px);border-color:#00e5ff;box-shadow:0 10px 25px rgba(0,229,255,0.1)}
+        .favorite-star{position:absolute;top:10px;right:10px;font-size:20px;cursor:pointer;color:#ffb800;opacity:0.6;transition:all 0.2s}
+        .favorite-star.active{opacity:1;text-shadow:0 0 10px #ffb800}
+        .gauge-wrapper{position:relative;width:120px;height:120px;margin:15px auto}
+        .gauge-svg{transform:rotate(-90deg);width:100%;height:100%}
+        .gauge-bg-circle{stroke:#2a3040;stroke-width:10;fill:none}
+        .gauge-fill-circle{stroke-width:10;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.8s}
+        .gauge-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}
+        .gauge-value{font-size:22px;font-weight:bold;color:#00e5ff}
+        .content-pane{display:none}
+        .content-pane.active{display:block}
+        .modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
+        .modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}
+        .loading-skeleton{background:linear-gradient(90deg,#1a1f2e,#2a3040,#1a1f2e);background-size:200% 100%;animation:shimmer 1.5s infinite}
+        @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+        .search-box{width:100%;max-width:300px;padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;margin-bottom:15px}
+        .clickable-pair{cursor:pointer;text-decoration:underline dotted #00e5ff}
+        .detail-row{display:flex;justify-content:space-between;margin-bottom:8px}
+        .toggle-btn{background:none;border:none;color:#00e5ff;font-size:24px;cursor:pointer;margin-right:10px}
+    </style>
+</head>
+<body>
+<div class="sidebar" id="sidebar">
+    <div class="logo">
+        <button class="toggle-btn" onclick="toggleSidebar()">☰</button>
+        <span>⚡ Tradion</span>
+    </div>
+    <div class="menu-item active" onclick="showPane('analysis')"><span class="menu-icon">📊</span><span>Analysis</span></div>
+    <div class="menu-item" onclick="showPane('heatmap')"><span class="menu-icon">🔥</span><span>Heatmap</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><span class="menu-icon">💱</span><span>Currencies</span></div>
+    <div class="menu-item" onclick="showPane('history')"><span class="menu-icon">📜</span><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><span class="menu-icon">👑</span><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/profile'"><span class="menu-icon">👤</span><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span>Logout</span></div>
+</div>
+
+<div class="main-content" id="mainContent">
+    <div class="navbar">
+        <div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div>
+        <div><span id="lastUpdateTime" style="font-size:12px;color:#8892b0"></span></div>
+    </div>
+
+    <div id="analysisPane" class="content-pane active">
+        <div style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button onclick="loadAnalysis()">🔥 RUN ANALYSIS</button>
+            <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
+            <input type="text" id="searchInput" class="search-box" placeholder="🔍 Search pair...">
+        </div>
+        <div id="loading" style="display:none"><div class="loading-skeleton" style="height:200px;border-radius:12px"></div></div>
+        <div id="results"></div>
+    </div>
+
+    <div id="heatmapPane" class="content-pane">
+        <h2 style="color:#00e5ff;margin-bottom:15px">Currency Strength & Economic Gauge</h2>
+        <div id="heatmapContent"></div>
+    </div>
+
+    <div id="historyPane" class="content-pane">
+        <button onclick="loadHistory()" class="secondary">Load History</button>
+        <div id="historyContent" style="margin-top:20px"></div>
+    </div>
+</div>
+
+<!-- Pair Detail Modal -->
+<div class="modal" id="detailModal">
+    <div class="modal-content">
+        <h3 style="color:#00e5ff;margin-bottom:20px" id="modalPairTitle">EUR/USD Details</h3>
+        <div id="modalDetailContent">Loading...</div>
+        <div style="margin-top:20px;text-align:right">
+            <button onclick="closeDetailModal()" class="secondary">Close</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    let currentData = null, heatmapData = null, favorites = {{ favorites|safe }};
+    let currentResults = [];
+
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebar');
+        const main = document.getElementById('mainContent');
+        sidebar.classList.toggle('collapsed');
+        if (sidebar.classList.contains('collapsed')) {
+            main.style.marginLeft = '80px';
+        } else {
+            main.style.marginLeft = '280px';
+        }
+    }
+
+    function showPane(pane) {
+        document.querySelectorAll('.content-pane').forEach(p => p.classList.remove('active'));
+        document.getElementById(pane + 'Pane').classList.add('active');
+        document.querySelectorAll('.menu-item').forEach(item => {
+            item.classList.remove('active');
+            const onclick = item.getAttribute('onclick');
+            if (onclick && onclick.includes(`'${pane}'`)) {
+                item.classList.add('active');
+            }
+        });
+        if (pane === 'history') loadHistory();
+    }
+
+    async function loadAnalysis() {
+        document.getElementById('loading').style.display = 'block';
+        try {
+            const res = await fetch('/api/analyze', {method:'POST'});
+            if (!res.ok) throw new Error((await res.json()).error);
+            const data = await res.json();
+            currentData = data.results;
+            heatmapData = data.heatmap;
+            currentResults = data.results;
+            displayResults(data.results);
+            displayHeatmap(data.heatmap);
+            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+        } catch(e) {
+            document.getElementById('results').innerHTML = '<div style="color:#ff4d6d;padding:20px">❌ ' + e.message + '</div>';
+        } finally {
+            document.getElementById('loading').style.display = 'none';
+        }
+    }
+
+    async function refreshAnalysis() {
+        await fetch('/admin/refresh', {method:'POST'});
+        loadAnalysis();
+    }
+
+    function filterResults() {
+        const term = document.getElementById('searchInput').value.toLowerCase();
+        const filtered = currentResults.filter(r => r.pair.toLowerCase().includes(term));
+        displayResults(filtered);
+    }
+
+    function displayResults(data) {
+        let html = '<div style="overflow-x:auto"><table><thead><tr><th>Pair</th><th>COT</th><th>Momentum</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
+        data.forEach(item => {
+            const isFav = favorites.includes(item.pair);
+            html += `<tr>
+                <td style="font-weight:bold">
+                    <span class="clickable-pair" onclick="showPairDetail('${item.pair}')">${item.pair}</span>
+                    <span class="favorite-star ${isFav?'active':''}" onclick="toggleFavorite('${item.pair}',this);event.stopPropagation();">⭐</span>
+                </td>
+                <td style="color:${item.cot.bias==='Bullish'?'#00e5a0':(item.cot.bias==='Bearish'?'#ff4d6d':'#ffb800')}">${item.cot.symbol} ${item.cot.bias}<br><small>[${item.cot.score}]</small></td>
+                <td style="color:${item.cot.momentum==='Bullish'?'#00e5a0':(item.cot.momentum==='Bearish'?'#ff4d6d':'#ffb800')}">${item.cot.mom_symbol} ${item.cot.momentum}<br><small>[${item.cot.momentum_score}]</small></td>
+                <td style="color:${item.economic.bias.includes('BULLISH')?'#00e5a0':(item.economic.bias.includes('BEARISH')?'#ff4d6d':'#ffb800')}">${item.economic.symbol}<br><small>[${item.economic.score}]</small></td>
+                <td style="color:${item.trend.bias==='Bullish'?'#00e5a0':(item.trend.bias==='Bearish'?'#ff4d6d':'#ffb800')}">${item.trend.symbol}<br><small>[${item.trend.score}]</small></td>
+                <td>${item.seasonality.bias}<br><small>[${item.seasonality.score}]</small></td>
+                <td style="color:${item.overall.color};font-weight:bold">${item.overall.symbol} ${item.overall.bias}<br><strong>[${item.overall.score}]</strong></td>
+            </tr>`;
+        });
+        html += '</tbody></table></div>';
+        document.getElementById('results').innerHTML = html;
+        document.getElementById('searchInput').addEventListener('input', filterResults);
+    }
+
+    function displayHeatmap(heatmap) {
+        if (!heatmap) return;
+        let html = '<div class="currency-grid">';
+        heatmap.ranking.forEach(curr => {
+            let currency = curr[0], score = curr[1], econPct = heatmap.econ_data[currency] || 50;
+            let scoreColor = score>3?'#00e5a0':(score>1.5?'#66ffb3':(score>0.5?'#99ffcc':(score>-0.5?'#ffb800':(score>-1.5?'#ffb3c1':(score>-3?'#ff8099':'#ff4d6d')))));
+            let circumference = 2 * Math.PI * 50;
+            let dashOffset = circumference * (1 - econPct/100);
+            let gaugeColor = econPct>=70?'#00e5a0':(econPct>=55?'#66ffb3':(econPct>=45?'#ffb800':(econPct>=30?'#ff8099':'#ff4d6d')));
+            html += `<div class="currency-card" style="border-top:3px solid ${scoreColor}">
+                <strong style="color:${scoreColor}">${currency}</strong>
+                <div class="gauge-wrapper">
+                    <svg class="gauge-svg" viewBox="0 0 120 120">
+                        <circle class="gauge-bg-circle" cx="60" cy="60" r="50"></circle>
+                        <circle class="gauge-fill-circle" cx="60" cy="60" r="50" style="stroke:${gaugeColor};stroke-dasharray:${circumference};stroke-dashoffset:${dashOffset}"></circle>
+                    </svg>
+                    <div class="gauge-center"><div class="gauge-value">${econPct.toFixed(1)}%</div></div>
+                </div>
+                <div>Score: ${score.toFixed(2)}</div>
+            </div>`;
+        });
+        html += '</div>';
+        document.getElementById('heatmapContent').innerHTML = html;
+    }
+
+    function toggleFavorite(pair, el) {
+        const idx = favorites.indexOf(pair);
+        if (idx > -1) favorites.splice(idx, 1);
+        else favorites.push(pair);
+        fetch('/api/favorites', {method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorites})});
+        el.classList.toggle('active');
+    }
+
+    async function showPairDetail(pair) {
+        document.getElementById('modalPairTitle').innerText = pair + ' Details';
+        document.getElementById('modalDetailContent').innerHTML = '<div class="loading-skeleton" style="height:150px"></div>';
+        document.getElementById('detailModal').style.display = 'flex';
+        try {
+            const res = await fetch('/api/pair_detail/' + encodeURIComponent(pair));
+            const data = await res.json();
+            let html = `
+                <div style="background:#1a1f2e;padding:15px;border-radius:8px;margin-bottom:15px">
+                    <h4 style="color:#00e5ff">${data.base.currency}</h4>
+                    <div class="detail-row"><span>COT Net Position:</span> <span style="color:${data.base.cot_net>=0?'#00e5a0':'#ff4d6d'}">${data.base.cot_net.toLocaleString()}</span></div>
+                    <div class="detail-row"><span>COT Weekly Change:</span> <span style="color:${data.base.cot_change>=0?'#00e5a0':'#ff4d6d'}">${data.base.cot_change.toLocaleString()}</span></div>
+                    <div class="detail-row"><span>Economic Sentiment:</span> <span>${data.base.econ_pct.toFixed(1)}%</span></div>
+                </div>
+                <div style="background:#1a1f2e;padding:15px;border-radius:8px">
+                    <h4 style="color:#00e5ff">${data.quote.currency}</h4>
+                    <div class="detail-row"><span>COT Net Position:</span> <span style="color:${data.quote.cot_net>=0?'#00e5a0':'#ff4d6d'}">${data.quote.cot_net.toLocaleString()}</span></div>
+                    <div class="detail-row"><span>COT Weekly Change:</span> <span style="color:${data.quote.cot_change>=0?'#00e5a0':'#ff4d6d'}">${data.quote.cot_change.toLocaleString()}</span></div>
+                    <div class="detail-row"><span>Economic Sentiment:</span> <span>${data.quote.econ_pct.toFixed(1)}%</span></div>
+                </div>
+            `;
+            document.getElementById('modalDetailContent').innerHTML = html;
+        } catch(e) {
+            document.getElementById('modalDetailContent').innerHTML = '<p style="color:#ff4d6d">Error loading details</p>';
+        }
+    }
+
+    function closeDetailModal() {
+        document.getElementById('detailModal').style.display = 'none';
+    }
+
+    async function loadHistory() {
+        const r = await fetch('/api/history');
+        const d = await r.json();
+        let html = '<table><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
+        d.forEach(i => {
+            html += `<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td></tr>`;
+        });
+        html += '</tbody></table>';
+        document.getElementById('historyContent').innerHTML = html;
+    }
+
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
+    loadAnalysis();
+</script>
+</body>
+</html>
