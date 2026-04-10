@@ -26,7 +26,7 @@ import hashlib
 
 app = Flask(__name__)
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL')
+app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///users.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
