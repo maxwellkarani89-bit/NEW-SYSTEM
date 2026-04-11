@@ -110,7 +110,21 @@ class SeasonalityConfig(db.Model):
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
 
 # -----------------------------
-# DATABASE MIGRATION
+# DATABASE INITIALIZATION (runs on every startup)
+# -----------------------------
+with app.app_context():
+    db.create_all()
+    # Create default admin if missing
+    admin = User.query.filter_by(username='Karlmax').first()
+    if not admin:
+        admin = User(username='Karlmax', email='maxwellkarani89@gmail.com', is_admin=True, is_active=True)
+        admin.set_password('admin4125')
+        db.session.add(admin)
+        db.session.commit()
+        print("✅ Database tables created. Admin user ready.")
+
+# -----------------------------
+# DATABASE MIGRATION (for SQLite local dev only)
 # -----------------------------
 def migrate_database():
     db_path = Path.cwd() / 'users.db'
@@ -1757,15 +1771,7 @@ function logout(){fetch('/logout').then(()=>window.location.href='/login');}
 # -----------------------------
 if __name__ == '__main__':
     migrate_database()
-    with app.app_context():
-        db.create_all()
-        admin = User.query.filter_by(username='Karlmax').first()
-        if not admin:
-            admin = User(username='Karlmax', email='maxwellkarani89@gmail.com', is_admin=True, is_active=True)
-            admin.set_password('admin4125')
-            db.session.add(admin)
-            db.session.commit()
-            print("Admin created: Karlmax/admin4125")
+    # Tables are already created at module level; no need to recreate here.
 
     create_templates()
 
