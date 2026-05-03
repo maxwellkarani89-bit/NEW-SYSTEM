@@ -168,15 +168,6 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
 
-    # Create default admin if missing
-    admin = User.query.filter_by(username='Karlmax').first()
-    if not admin:
-        admin = User(username='Karlmax', email='maxwellkarani89@gmail.com',
-                     is_admin=True, is_active=True)
-        admin.set_password('admin4125')
-        db.session.add(admin)
-        db.session.commit()
-
 # -----------------------------
 # CONFIGURATION
 # -----------------------------
@@ -452,22 +443,23 @@ def analyze_currency_econ(currency):
             continue
         if ind.forecast == 0 and ind.actual == 0:
             continue
-        
-        lower_better = any(k.lower() in name.lower() for k in LOWER_BETTER_INDICATORS)
-        
-        # Determine if indicator is bullish or bearish normally
+
+        # Use the database flag (this fixes the heatmap)
+        lower_better = ind.is_lower_better
+
+        # Determine normal bullish/bearish
         if lower_better:
             normal_bullish = (ind.actual < ind.forecast)
             normal_bearish = (ind.actual > ind.forecast)
         else:
             normal_bullish = (ind.actual > ind.forecast)
             normal_bearish = (ind.actual < ind.forecast)
-        
+
         # For BTC, invert Inflation Bias category
         invert = False
         if currency.upper() == "BTC" and ind.category == "Inflation Bias":
             invert = True
-        
+
         if invert:
             # Flip bullish and bearish
             if normal_bullish:
@@ -479,7 +471,7 @@ def analyze_currency_econ(currency):
                 bullish += 1
             elif normal_bearish:
                 bearish += 1
-    
+
     total = bullish + bearish
     if total == 0:
         return 50
