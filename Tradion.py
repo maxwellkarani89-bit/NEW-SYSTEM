@@ -612,6 +612,8 @@ def calculate_currency_strength(results):
 def api_analyze():
     global cached_analysis, cached_heatmap, last_analysis_time, manual_refresh_triggered
     try:
+        # Force fresh calculation – ignore cache
+        manual_refresh_triggered = True
         use_cache = False
         if not manual_refresh_triggered and cached_analysis is not None and last_analysis_time is not None:
             time_diff = (datetime.now() - last_analysis_time).total_seconds()
