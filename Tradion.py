@@ -35,6 +35,7 @@ app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 db = SQLAlchemy(app)
 
+
 # -----------------------------
 # DATABASE MODELS
 # -----------------------------
@@ -251,6 +252,55 @@ def admin_required(f):
         return f(*args, **kwargs)
     return decorated_function
 
+# -----------------------------
+# DEBUG endpoint to check economic surprise calculation
+# -----------------------------
+@app.route('/debug/econ/<currency>')
+@login_required
+def debug_econ(currency):
+    currency = currency.upper()
+    indicators = EconomicIndicator.query.filter_by(currency=currency).all()
+    result = {
+        'currency': currency,
+        'indicators': []
+    }
+    bullish = bearish = 0
+    for ind in indicators:
+        if ind.forecast == 0 and ind.actual == 0:
+            continue
+        if "Employment Change" in ind.indicator_name:
+            continue
+        
+        lower_better = ind.is_lower_better
+        
+        if lower_better:
+            is_bullish = (ind.actual < ind.forecast)
+            is_bearish = (ind.actual > ind.forecast)
+        else:
+            is_bullish = (ind.actual > ind.forecast)
+            is_bearish = (ind.actual < ind.forecast)
+        
+        if is_bullish:
+            bullish += 1
+        elif is_bearish:
+            bearish += 1
+        
+        result['indicators'].append({
+            'name': ind.indicator_name,
+            'forecast': ind.forecast,
+            'actual': ind.actual,
+            'lower_better': lower_better,
+            'is_bullish': is_bullish,
+            'is_bearish': is_bearish
+        })
+    
+    total = bullish + bearish
+    percent = (bullish / total * 100) if total > 0 else 50
+    result['bullish_count'] = bullish
+    result['bearish_count'] = bearish
+    result['percentage'] = round(percent, 1)
+    
+    return jsonify(result)
 # -----------------------------
 # UTILITY FUNCTIONS
 # -----------------------------
