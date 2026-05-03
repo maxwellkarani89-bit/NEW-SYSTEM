@@ -413,17 +413,34 @@ def analyze_currency_econ(currency):
             continue
         if ind.forecast == 0 and ind.actual == 0:
             continue
+        
         lower_better = any(k.lower() in name.lower() for k in LOWER_BETTER_INDICATORS)
+        
+        # Determine if indicator is bullish or bearish normally
         if lower_better:
-            if ind.actual < ind.forecast:
-                bullish += 1
-            elif ind.actual > ind.forecast:
-                bearish += 1
+            normal_bullish = (ind.actual < ind.forecast)
+            normal_bearish = (ind.actual > ind.forecast)
         else:
-            if ind.actual > ind.forecast:
-                bullish += 1
-            elif ind.actual < ind.forecast:
+            normal_bullish = (ind.actual > ind.forecast)
+            normal_bearish = (ind.actual < ind.forecast)
+        
+        # For BTC, invert Inflation Bias category
+        invert = False
+        if currency.upper() == "BTC" and ind.category == "Inflation Bias":
+            invert = True
+        
+        if invert:
+            # Flip bullish and bearish
+            if normal_bullish:
                 bearish += 1
+            elif normal_bearish:
+                bullish += 1
+        else:
+            if normal_bullish:
+                bullish += 1
+            elif normal_bearish:
+                bearish += 1
+    
     total = bullish + bearish
     if total == 0:
         return 50
