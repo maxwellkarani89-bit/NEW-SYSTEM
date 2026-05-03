@@ -1,231 +1,389 @@
 <!DOCTYPE html>
-<html>
-<head><title>Admin - Tradion</title>
+<html><head><title>Admin - Tradion</title>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}
-.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}
-.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}
-.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
-.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
-.main-content{margin-left:280px;padding:20px}
-.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}
-button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}
-button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
-.content-pane{display:none}
-.content-pane.active{display:block}
-table{width:100%;border-collapse:collapse}
-th,td{padding:8px;border-bottom:1px solid #2a3040}
-input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}
-.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}
-.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}
-.status-badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:12px}
-.status-active{background:#00e5a0;color:#000}
-.status-inactive{background:#ff4d6d;color:#fff}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #2a3040;text-align:left}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
+
+/* COT Data Table improvements */
+.cot-table-container {
+    overflow-x: auto;
+    margin-top: 20px;
+    border-radius: 12px;
+    border: 1px solid #2a3040;
+}
+.cot-data-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: #121826;
+    font-size: 14px;
+}
+.cot-data-table th,
+.cot-data-table td {
+    padding: 14px 12px;
+    text-align: left;
+    border-bottom: 1px solid #2a3040;
+    vertical-align: middle;
+}
+.cot-data-table th {
+    background: rgba(0, 229, 255, 0.15);
+    color: #00e5ff;
+    font-weight: 600;
+    font-size: 0.9rem;
+}
+.cot-data-table td {
+    color: #e0e0e0;
+}
+.cot-data-table tr:hover {
+    background: rgba(0, 229, 255, 0.05);
+}
+.inline-edit {
+    background: #1a1f2e;
+    border: 1px solid #3a4055;
+    padding: 8px 10px;
+    border-radius: 6px;
+    color: #fff;
+    width: 120px;
+    font-size: 0.9rem;
+    transition: all 0.2s;
+}
+.inline-edit:focus {
+    outline: none;
+    border-color: #00e5ff;
+    box-shadow: 0 0 0 2px rgba(0,229,255,0.2);
+}
+.save-cot-btn {
+    background: #00e5ff;
+    color: #0B0F1A;
+    border: none;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    font-size: 0.8rem;
+    transition: 0.2s;
+}
+.save-cot-btn:hover {
+    background: #00b8d4;
+    transform: scale(1.02);
+}
+.cot-refresh-btn, .cot-add-btn {
+    background: transparent;
+    border: 1px solid #00e5ff;
+    color: #00e5ff;
+    padding: 6px 12px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: bold;
+    margin-left: 8px;
+}
+.cot-refresh-btn:hover, .cot-add-btn:hover {
+    background: rgba(0,229,255,0.1);
+}
+.cot-title-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 20px;
+    flex-wrap: wrap;
+    gap: 15px;
+}
+.cot-title-bar h2 {
+    color: #00e5ff;
+    font-size: 1.5rem;
+    margin: 0;
+}
 </style>
 </head>
 <body>
 <div class="sidebar">
     <div class="logo">👑 ADMIN PANEL</div>
-    <div class="menu-item" onclick="showPane('cot')">📁 COT Upload</div>
-    <div class="menu-item" onclick="showPane('econ')">📊 Econ Upload</div>
+    <div class="menu-item" onclick="showPane('cotUpload')">📁 COT Upload</div>
+    <div class="menu-item" onclick="showPane('econUpload')">📊 Econ Upload</div>
+    <div class="menu-item" onclick="showPane('econIndicators')">📉 Indicators</div>
+    <div class="menu-item" onclick="showPane('cotData')">📈 COT Data</div>
     <div class="menu-item" onclick="showPane('seasonality')">📅 Seasonality</div>
+    <div class="menu-item" onclick="showPane('sentiment')">💬 Sentiment</div>
     <div class="menu-item" onclick="showPane('users')">👥 Users</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'">⬅ Back to Dashboard</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'">⬅ Dashboard</div>
 </div>
 <div class="main-content">
-    <div id="cotPane" class="content-pane active">
+    <div id="cotUploadPane" class="content-pane active"><div class="card"><h2>Upload COT Data</h2><input type="file" id="cotFile" accept=".xlsx"><button onclick="uploadCOT()">Upload</button><div id="cotStatus" style="margin-top:10px"></div></div></div>
+    <div id="econUploadPane" class="content-pane"><div class="card"><h2>Upload Economic Data</h2><input type="file" id="econFile" accept=".xlsx"><button onclick="uploadEcon()">Upload</button><div id="econStatus" style="margin-top:10px"></div></div></div>
+    <div id="econIndicatorsPane" class="content-pane"><div class="card"><h2>Economic Indicators</h2><label>Currency: <select id="econCurrencySelect" onchange="loadIndicators()"><option value="">-- choose --</option></select></label><div style="margin:15px 0"><button onclick="openIndicatorModal()">+ Add Indicator</button></div><div id="indicatorsList"></div></div></div>
+    
+    <!-- IMPROVED COT DATA PANEL with Add Currency button -->
+    <div id="cotDataPane" class="content-pane">
         <div class="card">
-            <h2>Upload COT Data</h2>
-            <input type="file" id="cotFile" accept=".xlsx">
-            <button onclick="uploadCOT()">Upload</button>
-            <div id="cotStatus" style="margin-top:10px"></div>
+            <div class="cot-title-bar">
+                <h2>📊 COT Data · Non‑Commercial Positions</h2>
+                <div>
+                    <button onclick="addNewCurrency()" class="cot-add-btn">➕ Add Currency</button>
+                    <button onclick="loadCOTData()" class="cot-refresh-btn">🔄 Refresh</button>
+                </div>
+            </div>
+            <div class="cot-table-container">
+                <table class="cot-data-table" id="cotDataTable">
+                    <thead>
+                        <tr><th>Currency</th><th>Longs (contracts)</th><th>Shorts (contracts)</th><th>Net Position</th><th>Weekly Change</th><th>Last Updated</th><th>Actions</th></tr>
+                    </thead>
+                    <tbody id="cotDataList"><tr><td colspan="7" style="text-align:center">Loading...</td></tr></tbody>
+                </table>
+            </div>
         </div>
     </div>
-    <div id="econPane" class="content-pane">
-        <div class="card">
-            <h2>Upload Economic Data</h2>
-            <input type="file" id="econFile" accept=".xlsx">
-            <button onclick="uploadEcon()">Upload</button>
-            <div id="econStatus" style="margin-top:10px"></div>
-        </div>
-    </div>
-    <div id="seasonalityPane" class="content-pane">
-        <div class="card">
-            <h2>Seasonality Configurations</h2>
-            <button onclick="openSeasonModal()">+ Add Seasonality Pattern</button>
-            <div id="seasonList" style="margin-top:20px"></div>
-        </div>
-    </div>
-    <div id="usersPane" class="content-pane">
-        <div class="card">
-            <h2>User Management</h2>
-            <button onclick="loadUsers()">Refresh</button>
-            <div id="usersList" style="margin-top:15px"></div>
-        </div>
-    </div>
+    
+    <div id="seasonalityPane" class="content-pane"><div class="card"><h2>Seasonality Configuration</h2><label>Pair: <select id="seasonPairSelect" onchange="loadSeasonConfig()"><option value="">-- select pair --</option></select></label><h3 style="margin:20px 0 10px">Monthly Bias</h3><div id="monthlyBiasContainer"></div><button onclick="saveMonthlyBiases()" style="margin:10px 0">Save Monthly Biases</button><h3 style="margin:20px 0 10px">Date Ranges</h3><button onclick="addDateRange()">+ Add Date Range</button><div id="dateRangeList" style="margin-top:10px"></div></div></div>
+    <div id="sentimentPane" class="content-pane"><div class="card"><h2>Sentiment Data</h2><div style="margin-bottom:15px"><button onclick="openSentimentModal()">+ Add/Update Sentiment</button></div><div id="sentimentList"></div></div></div>
+    <div id="usersPane" class="content-pane"><div class="card"><h2>User Management</h2><button onclick="loadUsers()">Refresh</button><div id="usersList" style="margin-top:15px"></div></div></div>
 </div>
 
-<!-- Seasonality Modal -->
-<div class="modal" id="seasonModal">
-    <div class="modal-content">
-        <h3 id="modalTitle" style="color:#00e5ff;margin-bottom:20px">Add Seasonality</h3>
-        <form id="seasonForm">
-            <input type="hidden" id="seasonId">
-            <label>Pair</label>
-            <select id="seasonPair" required></select>
-            <label>Description (e.g. "Bullish (70%)")</label>
-            <input type="text" id="seasonDesc" placeholder="Bullish (70%)" required>
-            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
-                <div><label>Start Month</label><input type="number" id="startMonth" min="1" max="12" required></div>
-                <div><label>Start Day</label><input type="number" id="startDay" min="1" max="31" required></div>
-                <div><label>End Month</label><input type="number" id="endMonth" min="1" max="12" required></div>
-                <div><label>End Day</label><input type="number" id="endDay" min="1" max="31" required></div>
-            </div>
-            <label>Score (positive=bullish, negative=bearish)</label>
-            <input type="number" step="0.1" id="seasonScore" placeholder="e.g. 1.5 or -1" required>
-            <div style="display:flex;gap:10px;margin-top:20px">
-                <button type="submit">Save</button>
-                <button type="button" onclick="closeSeasonModal()" class="secondary">Cancel</button>
-            </div>
-        </form>
-    </div>
-</div>
+<!-- Indicator Modal -->
+<div class="modal" id="indicatorModal"><div class="modal-content"><h3 id="indModalTitle" style="color:#00e5ff;margin-bottom:20px">Add Indicator</h3><form id="indicatorForm"><input type="hidden" id="indicatorId"><label>Currency</label><select id="indCurrencySelect" required></select><label>Indicator Name</label><input type="text" id="indName" required><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Forecast</label><input type="number" step="0.1" id="indForecast" required></div><div><label>Actual</label><input type="number" step="0.1" id="indActual" required></div></div><label><input type="checkbox" id="indLowerBetter"> Lower is better</label><label>Category</label><select id="indCategory" required><option value="Technical Bias">Technical Bias</option><option value="Economic Growth Bias">Economic Growth Bias</option><option value="Inflation Bias">Inflation Bias</option><option value="Jobs Market Bias">Jobs Market Bias</option><option value="Crowd Sentiment (COT)">Crowd Sentiment (COT)</option></select><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeIndicatorModal()" class="secondary">Cancel</button></div></form></div></div>
+
+<!-- Sentiment Modal -->
+<div class="modal" id="sentimentModal"><div class="modal-content"><h3 style="color:#00e5ff;margin-bottom:20px">Sentiment Entry</h3><form id="sentimentForm"><label>Pair</label><select id="sentPair" required></select><label>Long %</label><input type="number" step="0.1" id="sentLong" min="0" max="100" required><label>Short %</label><input type="number" step="0.1" id="sentShort" min="0" max="100" required><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button></div></form></div></div>
 
 <script>
-    const allPairs = {{ ALL_PAIRS|tojson }};
-    let seasonData = [];
+const allPairs={{ ALL_PAIRS|tojson }};
+const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC"];
+let seasonCurrentPair='';
 
-    function showPane(pane){
-        document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
-        document.getElementById(pane+'Pane').classList.add('active');
-        if(pane==='users') loadUsers();
-        if(pane==='seasonality') loadSeasonality();
+function showPane(pane){
+    document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById(pane+'Pane').classList.add('active');
+    if(pane==='users') loadUsers();
+    if(pane==='seasonality') populateSeasonPairs();
+    if(pane==='econIndicators') populateCurrencySelects();
+    if(pane==='cotData') loadCOTData();
+    if(pane==='sentiment') loadSentiment();
+}
+
+function populateCurrencySelects(){
+    const s1=document.getElementById('econCurrencySelect');
+    const s2=document.getElementById('indCurrencySelect');
+    [s1,s2].forEach(sel=>{
+        if(!sel) return;
+        sel.innerHTML='<option value="">-- choose --</option>';
+        currencies.forEach(c=>{const o=document.createElement('option');o.value=c;o.text=c;sel.appendChild(o)});
+    });
+}
+
+// --- ADD NEW CURRENCY ---
+async function addNewCurrency(){
+    let currency = prompt("Enter currency code (e.g., EUR, GBP, JPY, AUD, CAD, CHF, NZD):");
+    if(!currency) return;
+    currency = currency.toUpperCase().trim();
+    if(!currencies.includes(currency)){
+        alert("Invalid currency. Use one of: " + currencies.join(", "));
+        return;
     }
-
-    async function uploadCOT(){
-        const file=document.getElementById('cotFile').files[0];
-        if(!file) return;
-        const fd=new FormData(); fd.append('file',file);
-        const res=await fetch('/admin/cot/upload',{method:'POST',body:fd});
-        const data=await res.json();
-        document.getElementById('cotStatus').innerHTML=data.success?'✅ Uploaded successfully':'❌ Error uploading';
+    try{
+        const res = await fetch('/admin/cot_data', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ currency, longs: 0, shorts: 0, weekly_change: 0 })
+        });
+        const result = await res.json();
+        if(result.success){
+            alert(`✅ ${currency} added with default zeros. Edit values and click Save.`);
+            loadCOTData();  // refresh table
+        } else {
+            alert("❌ Failed to add currency. It may already exist.");
+        }
+    } catch(e){
+        alert("Error: " + e.message);
     }
+}
 
-    async function uploadEcon(){
-        const file=document.getElementById('econFile').files[0];
-        if(!file) return;
-        const fd=new FormData(); fd.append('file',file);
-        const res=await fetch('/admin/econ/upload',{method:'POST',body:fd});
-        const data=await res.json();
-        document.getElementById('econStatus').innerHTML=data.success?'✅ Uploaded successfully':'❌ Error uploading';
-    }
+async function loadIndicators(){
+    const cur=document.getElementById('econCurrencySelect').value;
+    if(!cur){document.getElementById('indicatorsList').innerHTML='';return;}
+    const res=await fetch('/admin/econ_indicators?currency='+cur);
+    const data=await res.json();
+    let html='<table><thead><tr><th>Indicator</th><th>Forecast</th><th>Actual</th><th>Category</th><th>Lower</th><th>Actions</th></tr></thead><tbody>';
+    data.forEach(ind=>{html+=`<tr><td>${ind.indicator_name}</td><td>${ind.forecast}</td><td>${ind.actual}</td><td>${ind.category||'General'}</td><td>${ind.is_lower_better?'Yes':'No'}</td><td><button onclick="editIndicator(${ind.id})">Edit</button> <button onclick="deleteIndicator(${ind.id})">Del</button></td></tr>`});
+    html+='</tbody></table>'; document.getElementById('indicatorsList').innerHTML=html;
+}
 
-    async function loadUsers(){
-        const res=await fetch('/admin/users');
+function openIndicatorModal(id=null){
+    document.getElementById('indicatorForm').reset();
+    document.getElementById('indicatorId').value='';
+    if(id){
+        const ind=window._currentIndicators.find(i=>i.id===id);
+        if(!ind) return;
+        document.getElementById('indModalTitle').innerText='Edit Indicator';
+        document.getElementById('indicatorId').value=ind.id;
+        document.getElementById('indCurrencySelect').value=ind.currency||'';
+        document.getElementById('indName').value=ind.indicator_name;
+        document.getElementById('indForecast').value=ind.forecast;
+        document.getElementById('indActual').value=ind.actual;
+        document.getElementById('indLowerBetter').checked=ind.is_lower_better;
+        document.getElementById('indCategory').value=ind.category||'General';
+    } else document.getElementById('indModalTitle').innerText='Add Indicator';
+    document.getElementById('indicatorModal').style.display='flex';
+}
+function closeIndicatorModal(){document.getElementById('indicatorModal').style.display='none';}
+async function editIndicator(id){ const res=await fetch('/admin/econ_indicators?currency='+document.getElementById('econCurrencySelect').value); window._currentIndicators=await res.json(); openIndicatorModal(id); }
+async function deleteIndicator(id){if(confirm('Delete?')){await fetch('/admin/econ_indicators/'+id,{method:'DELETE'});loadIndicators();}}
+document.getElementById('indicatorForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const id=document.getElementById('indicatorId').value;
+    const data={currency:document.getElementById('indCurrencySelect').value,indicator_name:document.getElementById('indName').value,forecast:parseFloat(document.getElementById('indForecast').value),actual:parseFloat(document.getElementById('indActual').value),is_lower_better:document.getElementById('indLowerBetter').checked,category:document.getElementById('indCategory').value};
+    const url=id?'/admin/econ_indicators/'+id:'/admin/econ_indicators';
+    const method=id?'PUT':'POST';
+    await fetch(url,{method,headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    closeIndicatorModal(); loadIndicators();
+});
+
+// --- COT Data inline editing ---
+async function loadCOTData(){
+    const tbody=document.getElementById('cotDataList');
+    tbody.innerHTML='<tr><td colspan="7" style="text-align:center">Loading...</td></tr>';
+    try{
+        const res=await fetch('/admin/cot_data');
         const data=await res.json();
-        let html='<table><tr><th>User</th><th>Email</th><th>Admin</th><th>Status</th><th>Actions</th></tr>';
-        data.users.forEach(u=>{
-            const statusClass = u.is_active ? 'status-active' : 'status-inactive';
-            const statusText = u.is_active ? 'Active' : 'Inactive';
-            const actionBtn = u.is_active ?
-                `<button onclick="deactivateUser(${u.id})" class="secondary">Deactivate</button>` :
-                `<button onclick="activateUser(${u.id})">Activate</button>`;
-            html+=`<tr>
-                <td>${u.username}</td><td>${u.email}</td><td>${u.is_admin?'Yes':'No'}</td>
-                <td><span class="status-badge ${statusClass}">${statusText}</span></td>
-                <td>${actionBtn}</td>
+        if(!data.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center">No data. Click "Add Currency" to create entries.</td></tr>';return;}
+        let html='';
+        data.forEach(cot=>{
+            html+=`<tr data-id="${cot.id}" data-currency="${cot.currency}">
+                <td><strong>${cot.currency}</strong></td>
+                <td><input type="number" step="1" id="longs_${cot.currency}" value="${cot.longs}" class="inline-edit" style="width:120px"></td>
+                <td><input type="number" step="1" id="shorts_${cot.currency}" value="${cot.shorts}" class="inline-edit" style="width:120px"></td>
+                <td id="net_${cot.currency}">${cot.net_position}</td>
+                <td><input type="number" step="1" id="change_${cot.currency}" value="${cot.weekly_change}" class="inline-edit" style="width:100px"></td>
+                <td>${cot.last_updated?new Date(cot.last_updated).toLocaleString():'Never'}</td>
+                <td><button class="save-cot-btn" onclick="saveCOTRow('${cot.currency}')">💾 Save</button></td>
             </tr>`;
         });
-        html+='</table>';
-        document.getElementById('usersList').innerHTML=html;
-    }
+        tbody.innerHTML=html;
+    } catch(e){ tbody.innerHTML='<tr><td colspan="7" style="color:#ff4d6d">Error loading data</td></tr>'; console.error(e); }
+}
+async function saveCOTRow(currency){
+    const longs=parseFloat(document.getElementById(`longs_${currency}`).value);
+    const shorts=parseFloat(document.getElementById(`shorts_${currency}`).value);
+    const weekly_change=parseFloat(document.getElementById(`change_${currency}`).value);
+    if(isNaN(longs)||isNaN(shorts)||isNaN(weekly_change)){ alert("Please enter valid numbers"); return; }
+    try{
+        const res=await fetch('/admin/cot_data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currency,longs,shorts,weekly_change})});
+        const result=await res.json();
+        if(result.success){
+            document.getElementById(`net_${currency}`).innerText=longs-shorts;
+            alert(`✅ ${currency} COT data saved`);
+        } else alert("❌ Save failed");
+    } catch(e){ alert("Error: "+e.message); }
+}
 
-    async function activateUser(id) {
-        await fetch(`/admin/users/${id}/activate`, {method:'POST'});
-        loadUsers();
-    }
-
-    async function deactivateUser(id) {
-        await fetch(`/admin/users/${id}/deactivate`, {method:'POST'});
-        loadUsers();
-    }
-
-    async function loadSeasonality(){
-        const res = await fetch('/admin/seasonality');
-        seasonData = await res.json();
-        let html = '<table><tr><th>Pair</th><th>Description</th><th>Start</th><th>End</th><th>Score</th><th>Actions</th></tr>';
-        seasonData.forEach(c => {
-            html += `<tr><td>${c.pair}</td><td>${c.description}</td><td>${c.start_month}/${c.start_day}</td><td>${c.end_month}/${c.end_day}</td><td>${c.score}</td>
-                <td><button onclick="editSeason(${c.id})">Edit</button> <button onclick="deleteSeason(${c.id})" class="secondary">Del</button></td></tr>`;
-        });
-        html += '</table>';
-        document.getElementById('seasonList').innerHTML = html;
-        const select = document.getElementById('seasonPair');
-        select.innerHTML = '';
-        allPairs.forEach(p => { 
-            const pairStr = p[0]+'/'+p[1];
-            const opt = document.createElement('option'); 
-            opt.value = pairStr; 
-            opt.text = pairStr; 
-            select.appendChild(opt); 
-        });
-    }
-
-    function openSeasonModal(){ 
-        document.getElementById('modalTitle').innerText='Add Seasonality'; 
-        document.getElementById('seasonForm').reset(); 
-        document.getElementById('seasonId').value=''; 
-        document.getElementById('seasonModal').style.display='flex'; 
-    }
-
-    function closeSeasonModal(){ 
-        document.getElementById('seasonModal').style.display='none'; 
-    }
-
-    function editSeason(id){
-        const c = seasonData.find(s => s.id === id);
-        if(!c) return;
-        document.getElementById('modalTitle').innerText='Edit Seasonality';
-        document.getElementById('seasonId').value = c.id;
-        document.getElementById('seasonPair').value = c.pair;
-        document.getElementById('seasonDesc').value = c.description;
-        document.getElementById('startMonth').value = c.start_month;
-        document.getElementById('startDay').value = c.start_day;
-        document.getElementById('endMonth').value = c.end_month;
-        document.getElementById('endDay').value = c.end_day;
-        document.getElementById('seasonScore').value = c.score;
-        document.getElementById('seasonModal').style.display='flex';
-    }
-
-    async function deleteSeason(id){ 
-        if(confirm('Delete this seasonality pattern?')){ 
-            await fetch('/admin/seasonality/'+id,{method:'DELETE'}); 
-            loadSeasonality(); 
-        } 
-    }
-
-    document.getElementById('seasonForm').addEventListener('submit', async (e) => {
-        e.preventDefault();
-        const id = document.getElementById('seasonId').value;
-        const data = {
-            pair: document.getElementById('seasonPair').value,
-            description: document.getElementById('seasonDesc').value,
-            start_month: parseInt(document.getElementById('startMonth').value),
-            start_day: parseInt(document.getElementById('startDay').value),
-            end_month: parseInt(document.getElementById('endMonth').value),
-            end_day: parseInt(document.getElementById('endDay').value),
-            score: parseFloat(document.getElementById('seasonScore').value)
-        };
-        const url = id ? '/admin/seasonality/'+id : '/admin/seasonality';
-        const method = id ? 'PUT' : 'POST';
-        await fetch(url, {method, headers:{'Content-Type':'application/json'}, body:JSON.stringify(data)});
-        closeSeasonModal();
-        loadSeasonality();
+async function uploadCOT(){
+    const file=document.getElementById('cotFile').files[0];
+    if(!file) return;
+    const fd=new FormData(); fd.append('file',file);
+    const res=await fetch('/admin/cot/upload',{method:'POST',body:fd});
+    const data=await res.json();
+    document.getElementById('cotStatus').innerHTML=data.success?'✅ Uploaded':'❌ Error';
+}
+async function uploadEcon(){
+    const file=document.getElementById('econFile').files[0];
+    if(!file) return;
+    const fd=new FormData(); fd.append('file',file);
+    const res=await fetch('/admin/econ/upload',{method:'POST',body:fd});
+    const data=await res.json();
+    document.getElementById('econStatus').innerHTML=data.success?'✅ Uploaded':'❌ Error';
+}
+async function loadUsers(){
+    const res=await fetch('/admin/users');
+    const data=await res.json();
+    let html='<table><thead><tr><th>User</th><th>Email</th><th>Admin</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    data.users.forEach(u=>{
+        const status=u.is_active?'Active':'Inactive';
+        const badgeColor=u.is_active?'#00e5a0':'#ff4d6d';
+        const actionBtn=u.is_active?`<button onclick="deactivateUser(${u.id})" class="secondary">Deactivate</button>`:`<button onclick="activateUser(${u.id})">Activate</button>`;
+        html+=`<tr><td>${u.username}</td><td>${u.email}</td><td>${u.is_admin?'Yes':'No'}</td><td style="color:${badgeColor}">${status}</td><td>${actionBtn}</td></tr>`;
     });
+    html+='</tbody></table>'; document.getElementById('usersList').innerHTML=html;
+}
+async function activateUser(id){await fetch(`/admin/users/${id}/activate`,{method:'POST'});loadUsers();}
+async function deactivateUser(id){await fetch(`/admin/users/${id}/deactivate`,{method:'POST'});loadUsers();}
 
-    loadUsers();
-    loadSeasonality();
+// Seasonality
+function populateSeasonPairs(){
+    const select=document.getElementById('seasonPairSelect');
+    select.innerHTML='<option value="">-- select pair --</option>';
+    allPairs.forEach(p=>{const pairStr=p[0]+'/'+p[1];const opt=document.createElement('option');opt.value=pairStr;opt.textContent=pairStr;select.appendChild(opt)});
+    seasonCurrentPair='';
+    document.getElementById('monthlyBiasContainer').innerHTML='';
+    document.getElementById('dateRangeList').innerHTML='';
+}
+async function loadSeasonConfig(){
+    const pair=document.getElementById('seasonPairSelect').value;
+    if(!pair) return;
+    seasonCurrentPair=pair;
+    const res=await fetch('/admin/seasonality/monthly/'+encodeURIComponent(pair));
+    const biases=await res.json();
+    let html='<div class="month-grid">';
+    for(let m=1;m<=12;m++){
+        const bias=biases[m]||'Neutral';
+        html+=`<div><label>${new Date(2000,m-1).toLocaleString('default',{month:'short'})}</label><select id="month_${m}"><option value="Bullish" ${bias==='Bullish'?'selected':''}>Bullish</option><option value="Bearish" ${bias==='Bearish'?'selected':''}>Bearish</option><option value="Neutral" ${bias==='Neutral'?'selected':''}>Neutral</option></select></div>`;
+    }
+    html+='</div>';
+    document.getElementById('monthlyBiasContainer').innerHTML=html;
+    const res2=await fetch('/admin/seasonality/daterange/'+encodeURIComponent(pair));
+    const ranges=await res2.json();
+    renderDateRanges(ranges);
+}
+async function saveMonthlyBiases(){
+    const pair=seasonCurrentPair;
+    if(!pair) return;
+    const data={};
+    for(let m=1;m<=12;m++){data[m]=document.getElementById('month_'+m).value;}
+    await fetch('/admin/seasonality/monthly/'+encodeURIComponent(pair),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    alert('Monthly biases saved.');
+}
+function renderDateRanges(ranges){
+    let html='<table><thead><tr><th>Start MM/DD</th><th>End MM/DD</th><th>Bias</th><th>Actions</th></tr></thead><tbody>';
+    ranges.forEach(r=>{html+=`<tr><td>${r.start_month}/${r.start_day}</td><td>${r.end_month}/${r.end_day}</td><td>${r.bias}</td><td><button onclick="deleteDateRange(${r.id})">Delete</button></td></tr>`});
+    html+='</tbody></table>'; document.getElementById('dateRangeList').innerHTML=html;
+}
+async function addDateRange(){
+    const pair=seasonCurrentPair;
+    if(!pair) return;
+    const start_month=prompt('Start month (1-12):');
+    const start_day=prompt('Start day:');
+    const end_month=prompt('End month (1-12):');
+    const end_day=prompt('End day:');
+    const bias=prompt('Bias (Bullish/Bearish):','Bullish');
+    if(!start_month||!start_day||!end_month||!end_day) return;
+    const data={start_month,start_day,end_month,end_day,bias};
+    const res=await fetch('/admin/seasonality/daterange/'+encodeURIComponent(pair),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    if(res.ok) loadSeasonConfig();
+}
+async function deleteDateRange(id){ await fetch('/admin/seasonality/daterange/'+id,{method:'DELETE'}); loadSeasonConfig(); }
+
+// Sentiment
+async function loadSentiment(){
+    const res=await fetch('/admin/sentiment');
+    const data=await res.json();
+    let html='<table><thead><tr><th>Pair</th><th>Long %</th><th>Short %</th><th>Actions</th></tr></thead><tbody>';
+    data.forEach(s=>{html+=`<tr><td>${s.pair}</td><td>${s.long_pct}%</td><td>${s.short_pct}%</td><td><button onclick="editSentiment('${s.pair}',${s.long_pct},${s.short_pct})">Edit</button> <button onclick="deleteSentiment(${s.id})">Del</button></td></tr>`});
+    html+='</tbody></table>'; document.getElementById('sentimentList').innerHTML=html;
+}
+function openSentimentModal(){
+    document.getElementById('sentimentForm').reset();
+    document.getElementById('sentimentModal').style.display='flex';
+    const select=document.getElementById('sentPair');
+    select.innerHTML='';
+    allPairs.forEach(p=>{const pairStr=p[0]+'/'+p[1];const opt=document.createElement('option');opt.value=pairStr;opt.textContent=pairStr;select.appendChild(opt)});
+}
+function closeSentimentModal(){document.getElementById('sentimentModal').style.display='none';}
+function editSentiment(pair,long,short){ openSentimentModal(); document.getElementById('sentPair').value=pair; document.getElementById('sentLong').value=long; document.getElementById('sentShort').value=short; }
+async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
+document.getElementById('sentimentForm').addEventListener('submit',async e=>{
+    e.preventDefault();
+    const data={pair:document.getElementById('sentPair').value,long_pct:parseFloat(document.getElementById('sentLong').value),short_pct:parseFloat(document.getElementById('sentShort').value)};
+    await fetch('/admin/sentiment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
+    closeSentimentModal(); loadSentiment();
+});
+
+populateCurrencySelects();
+loadUsers();
 </script>
 </body>
 </html>

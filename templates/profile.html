@@ -1,35 +1,10 @@
 <!DOCTYPE html>
-<html>
-<head><title>Profile - Tradion</title>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}
-body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}
-.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}
-.logo{font-size:24px;color:#00e5ff;margin-bottom:30px}
-.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
-.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
-.main-content{flex:1;margin-left:280px;padding:30px}
-.container{max-width:600px;margin:50px auto;padding:30px;background:#121826;border-radius:20px;border:1px solid #2a3040}
-.container h2{color:#00e5ff;margin-bottom:20px}
-.container div{margin-bottom:20px;font-size:1.1em}
-.btn{display:inline-block;padding:10px 20px;background:#00e5ff;color:#000;text-decoration:none;border-radius:8px;font-weight:bold;margin-top:10px}
-</style>
+<html><head><title>Profile - Tradion</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}.logo{font-size:24px;color:#00e5ff;margin-bottom:30px}.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.main-content{flex:1;margin-left:280px;padding:30px}.container{max-width:600px;margin:50px auto;padding:30px;background:#121826;border-radius:20px;border:1px solid #2a3040}.container h2{color:#00e5ff;margin-bottom:20px}.container div{margin-bottom:20px;font-size:1.1em}.btn{display:inline-block;padding:10px 20px;background:#00e5ff;color:#000;text-decoration:none;border-radius:8px;font-weight:bold;margin-top:10px}</style>
 </head>
 <body>
-<div class="sidebar">
-    <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'">📊 Dashboard</div>
-    <div class="menu-item" onclick="logout()">🚪 Logout</div>
-</div>
-<div class="main-content">
-    <div class="container">
-        <h2>Profile</h2>
-        <div>👤 Username: <strong>{{ username }}</strong></div>
-        <a href="/dashboard" class="btn">← Back to Dashboard</a>
-    </div>
-</div>
-<script>
-function logout(){fetch('/logout').then(()=>window.location.href='/login');}
-</script>
+<div class="sidebar"><div class="logo">⚡ Tradion</div><div class="menu-item" onclick="window.location.href='/dashboard'">📊 Dashboard</div><div class="menu-item" onclick="logout()">🚪 Logout</div></div>
+<div class="main-content"><div class="container"><h2>Profile</h2><div>👤 Username: <strong>{{ username }}</strong></div><a href="/dashboard" class="btn">← Back to Dashboard</a></div></div>
+<script>function logout(){fetch('/logout').then(()=>window.location.href='/login');}</script>
 </body>
 </html>

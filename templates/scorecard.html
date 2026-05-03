@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Asset Scorecard – Tradion</title>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:20px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:10px 12px;margin:3px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:18px;margin-right:10px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:25px 35px;transition:margin-left 0.3s;max-width:1200px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.header h2{color:#00e5ff;font-size:2rem}.symbol-selector select{padding:10px 14px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:1rem;min-width:200px}.scorecard-grid{display:grid;grid-template-columns:1fr 1fr;gap:25px}.gauge-panel{background:#121826;border-radius:16px;padding:25px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3040;position:relative}.gauge-container{position:relative;width:200px;height:100px;overflow:hidden}.gauge-svg{width:100%;height:100%}.gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}.gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}.gauge-needle-group{transition:transform 0.5s ease-out}.needle-body{stroke:#fff;stroke-width:2;fill:none}.needle-tip{fill:#fff;stroke:#fff;stroke-width:1}.gauge-center{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}.gauge-label{font-size:1.4rem;font-weight:bold;color:#00e5ff}.gauge-bias{font-size:1rem;color:#00e5a0}.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.9);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}.loading-overlay.hidden{display:none}.spinner{border:4px solid #2a3040;border-top:4px solid #00e5ff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.score-summary{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:20px}.score-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#1a1f2e;border-radius:10px;font-size:1rem}.score-label{font-weight:600}.score-value{font-weight:bold;padding:3px 10px;border-radius:20px;font-size:0.9rem}.score-value.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.score-value.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.score-value.neutral{background:rgba(255,184,0,0.2);color:#ffb800}.trend-chart{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:15px}.trend-bar{flex:1;background:#2a3040;border-radius:4px 4px 0 0;min-width:8px;transition:height 0.3s}.trend-bar.positive{background:#00e5a0}.trend-bar.negative{background:#ff4d6d}.panel{background:#121826;border-radius:14px;padding:18px;border:1px solid #2a3040;margin-bottom:16px;font-size:0.95rem}.panel h3{color:#00e5ff;font-size:1.1rem;margin-bottom:12px;border-bottom:1px solid #2a3040;padding-bottom:10px}.indicator-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,48,64,0.5);font-size:0.9rem}.indicator-row:last-child{border-bottom:none}.indicator-label{font-size:0.9rem}.indicator-values{display:flex;gap:15px}.value{font-weight:500;width:70px;text-align:right}.value.positive{color:#00e5a0}.value.negative{color:#ff4d6d}.value.neutral{color:#a0b0c0}.surprise{font-size:0.75rem;padding:2px 6px;border-radius:12px}.surprise.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.surprise.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}</style>
+</head>
+<body>
+<div class="sidebar" id="sidebar"><div class="logo"><button class="toggle-btn" onclick="toggleSidebar()">☰</button><span>⚡ Tradion</span></div><div class="menu-item" onclick="window.location.href='/dashboard'"><span class="menu-icon">📊</span><span>Dashboard</span></div><div class="menu-item" onclick="window.location.href='/currencies'"><span class="menu-icon">💱</span><span>COT Data</span></div><div class="menu-item active"><span class="menu-icon">📈</span><span>Asset Scorecard</span></div><div class="menu-item" onclick="window.location.href='/sentiment'"><span class="menu-icon">💬</span><span>Sentiment</span></div><div class="menu-item" onclick="window.location.href='/profile'"><span class="menu-icon">👤</span><span>Profile</span></div><div class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span>Logout</span></div></div>
+<div class="main-content" id="mainContent">
+    <div class="header"><h2>Asset Scorecard</h2><div class="symbol-selector"><select id="symbolSelect" onchange="loadScorecard()"><option value="">Select Currency...</option></select></div></div>
+    <div class="scorecard-grid">
+        <div class="gauge-panel" id="gaugePanel">
+            <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+            <div class="gauge-container">
+                <svg class="gauge-svg" viewBox="0 0 220 110">
+                    <defs><linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff4d6d"/><stop offset="50%" stop-color="#ffb800"/><stop offset="100%" stop-color="#00e5a0"/></linearGradient></defs>
+                    <path class="gauge-bg" d="M20,110 A90,90 0 0,1 200,110"/>
+                    <path id="gaugeFill" class="gauge-fill" d="M20,110 A90,90 0 0,1 200,110" stroke="url(#gaugeGradient)"/>
+                    <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)"><line class="needle-body" x1="110" y1="110" x2="110" y2="30"/><circle class="needle-tip" cx="110" cy="30" r="4"/></g>
+                </svg>
+            </div>
+            <div class="gauge-center"><div class="gauge-label" id="gaugeBias">Neutral</div><div class="gauge-bias" id="gaugeValue">0.0</div></div>
+            <div class="score-summary">
+                <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
+                <div class="score-item"><span class="score-label">Technical (21d SMA)</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
+                <div class="score-item"><span class="score-label">Sentiment + COT</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
+                <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
+            </div>
+            <div class="trend-chart" id="trendChart"></div>
+        </div>
+        <div id="categoryCards"></div>
+    </div>
+</div>
+<script>
+const currencies={{ currencies|tojson }};
+const select=document.getElementById('symbolSelect');
+currencies.forEach(cur=>{const opt=document.createElement('option');opt.value=cur;opt.textContent=cur;select.appendChild(opt)});
+function toggleSidebar(){const sidebar=document.getElementById('sidebar');const main=document.getElementById('mainContent');sidebar.classList.toggle('collapsed');if(sidebar.classList.contains('collapsed')){main.style.marginLeft='80px'}else{main.style.marginLeft='280px'}}
+const CATEGORIES=["Technical Bias","Economic Growth Bias","Inflation Bias","Jobs Market Bias","Crowd Sentiment (COT)"];
+async function loadScorecard(){const symbol=select.value;if(!symbol) return;const overlay=document.getElementById('loadingOverlay');overlay.classList.remove('hidden');try{const res=await fetch('/api/asset_scorecard/'+encodeURIComponent(symbol));const data=await res.json();updateGauge(data.overall.score,data.overall.bias,data.overall.color);updateScores(data);updateTrendChart(data.score_history);renderCategoryCards(data)}catch(e){console.error(e)}finally{overlay.classList.add('hidden')}}
+function updateGauge(score,bias,color){const clampedScore=Math.min(Math.max(score,-10),10);const angle=((clampedScore+10)/20)*180;document.getElementById('gaugeNeedleGroup').setAttribute('transform',`rotate(${angle-90},110,110)`);document.getElementById('gaugeBias').textContent=bias;document.getElementById('gaugeValue').textContent=score.toFixed(1);document.querySelector('.gauge-bias').style.color=color}
+function updateScores(data){setScoreValue('tradionScore',data.tradion_score);setScoreValue('technicalScore',data.technical_score>0?'▲ 1':(data.technical_score<0?'▼ -1':'● 0'));setScoreValue('sentimentCOTScore',data.sentiment_cot_score);setScoreValue('fundamentalsScore',data.fundamentals_score,data.fundamentals_score>0?'positive':(data.fundamentals_score<0?'negative':'neutral'))}
+function setScoreValue(id,text,classNameOverride){const el=document.getElementById(id);el.textContent=text;if(classNameOverride){el.className='score-value '+classNameOverride}else{const val=parseFloat(text);el.className='score-value '+(val>0?'positive':val<0?'negative':'neutral')}}
+function updateTrendChart(history){const container=document.getElementById('trendChart');container.innerHTML='';history.forEach(val=>{const bar=document.createElement('div');bar.className='trend-bar '+(val>=0?'positive':'negative');bar.style.height=Math.abs(val)*5+'px';container.appendChild(bar)})}
+function renderCategoryCards(data) {
+    const container = document.getElementById('categoryCards');
+    container.innerHTML = '';
+
+    // --- Technical Bias card (special: include 21-day SMA score) ---
+    const techCard = document.createElement('div');
+    techCard.className = 'panel';
+    let techHtml = `<h3>Technical Bias</h3>`;
+    // Add the 21-day SMA technical score row
+    const techScore = data.technical_score;
+    const techDirection = techScore > 0 ? 'Bullish ▲' : (techScore < 0 ? 'Bearish ▼' : 'Neutral ●');
+    const techColor = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
+    techHtml += `
+        <div class="indicator-row" style="font-weight:bold;margin-bottom:6px">
+            <span>21-day SMA Trend</span>
+            <span class="value ${techColor}">${techDirection} (${techScore > 0 ? '+' : ''}${techScore})</span>
+        </div>
+    `;
+    // Then show the regular Technical Bias indicators (if any)
+    const techIndicators = data.base_indicators.filter(ind => ind.category === 'Technical Bias');
+    if (techIndicators.length === 0) {
+        techHtml += '<p style="color:#8892b0; margin-top:8px">No economic indicators in Technical Bias.</p>';
+    } else {
+        techIndicators.forEach(ind => {
+            const surprise = ind.actual - ind.forecast;
+            const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
+            const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
+            techHtml += `
+                <div class="indicator-row">
+                    <span class="indicator-label">${ind.name}</span>
+                    <div class="indicator-values">
+                        <span class="value">Actual: ${ind.actual}</span>
+                        <span class="value">Forecast: ${ind.forecast}</span>
+                        <span class="surprise ${colorClass}">${surprise.toFixed(1)}</span>
+                    </div>
+                </div>
+            `;
+        });
+    }
+    techCard.innerHTML = techHtml;
+    container.appendChild(techCard);
+
+    // --- Other categories (unchanged, but skip Technical Bias because we already added it) ---
+    const otherCategories = ["Economic Growth Bias", "Inflation Bias", "Jobs Market Bias", "Crowd Sentiment (COT)"];
+    otherCategories.forEach(category => {
+        const indicators = data.base_indicators.filter(ind => ind.category === category);
+        const biasScore = data.category_bias[category] || 0;
+        const card = document.createElement('div');
+        card.className = 'panel';
+        let html = `<h3>${category}</h3>`;
+        html += `<div class="indicator-row" style="font-weight:bold;margin-bottom:6px">
+                    <span>Bias Score</span>
+                    <span class="value ${biasScore > 0 ? 'positive' : (biasScore < 0 ? 'negative' : 'neutral')}">
+                        ${biasScore > 0 ? '+' : ''}${biasScore}
+                    </span>
+                </div>`;
+        if (indicators.length === 0) {
+            html += '<p style="color:#8892b0">No indicators in this category.</p>';
+        } else {
+            indicators.forEach(ind => {
+                const surprise = ind.actual - ind.forecast;
+                const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
+                const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
+                html += `
+                    <div class="indicator-row">
+                        <span class="indicator-label">${ind.name}</span>
+                        <div class="indicator-values">
+                            <span class="value">Actual: ${ind.actual}</span>
+                            <span class="value">Forecast: ${ind.forecast}</span>
+                            <span class="surprise ${colorClass}">${surprise.toFixed(1)}</span>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+        card.innerHTML = html;
+        container.appendChild(card);
+    });
+}function logout(){fetch('/logout').then(()=>window.location.href='/login')}
+if(currencies.length>0){select.value=currencies[0];loadScorecard()}
+</script>
+</body>
+</html>
