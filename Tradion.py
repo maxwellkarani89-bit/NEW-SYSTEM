@@ -17,8 +17,19 @@ import sqlite3
 import hashlib
 
 app = Flask(__name__)
+# -------- PASTE THE DATABASE CONFIGURATION HERE --------
+import os
+
+database_url = os.environ.get('DATABASE_URL')
+if database_url:
+    if database_url.startswith('postgres://'):
+        database_url = database_url.replace('postgres://', 'postgresql://', 1)
+    app.config['SQLALCHEMY_DATABASE_URI'] = database_url
+else:
+    basedir = os.path.abspath(os.path.dirname(__file__))
+    app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "users.db")}'
+# --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///users.db').replace('postgres://', 'postgresql://')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
@@ -136,40 +147,9 @@ class SeasonalityDateRange(db.Model):
 # DATABASE INITIALIZATION & MIGRATIONS
 # -----------------------------
 with app.app_context():
-    # Create tables if they don't exist
     db.create_all()
-    
-    # ---------- DIRECT DATABASE MIGRATION USING SQLALCHEMY ENGINE ----------
-    try:
-        # Get the engine and connection
-        engine = db.engine
-        with engine.connect() as conn:
-            # Check if cot_data table exists
-            result = conn.execute(db.text("SELECT name FROM sqlite_master WHERE type='table' AND name='cot_data'"))
-            if result.fetchone():
-                # Get existing columns
-                columns_result = conn.execute(db.text("PRAGMA table_info(cot_data)"))
-                existing_columns = [row[1] for row in columns_result]
-                print(f"Existing columns in cot_data: {existing_columns}")
-                
-                if 'longs' not in existing_columns:
-                    conn.execute(db.text("ALTER TABLE cot_data ADD COLUMN longs FLOAT DEFAULT 0"))
-                    print("✅ Added 'longs' column")
-                if 'shorts' not in existing_columns:
-                    conn.execute(db.text("ALTER TABLE cot_data ADD COLUMN shorts FLOAT DEFAULT 0"))
-                    print("✅ Added 'shorts' column")
-                
-                # Update net_position for any existing rows
-                conn.execute(db.text("UPDATE cot_data SET net_position = longs - shorts WHERE longs IS NOT NULL AND shorts IS NOT NULL"))
-                conn.commit()
-            else:
-                print("cot_data table does not exist yet")
-    except Exception as e:
-        print(f"Migration error: {e}")
-        import traceback
-        traceback.print_exc()
 
-    # Add category column to economic_indicator if missing
+    # Add category column to economic_indicator if missing (safe for both SQLite and PostgreSQL)
     try:
         db.session.execute(db.text(
             "ALTER TABLE economic_indicator ADD COLUMN category VARCHAR(50) DEFAULT 'General'"
@@ -177,6 +157,15 @@ with app.app_context():
         db.session.commit()
     except Exception:
         db.session.rollback()
+
+    # Create default admin if missing
+    admin = User.query.filter_by(username='Karlmax').first()
+    if not admin:
+        admin = User(username='Karlmax', email='maxwellkarani89@gmail.com',
+                     is_admin=True, is_active=True)
+        admin.set_password('admin4125')
+        db.session.add(admin)
+        db.session.commit()
 
     # Create default admin if missing
     admin = User.query.filter_by(username='Karlmax').first()
