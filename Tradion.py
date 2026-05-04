@@ -527,35 +527,64 @@ def calculate_currency_composite_score(currency):
     return round(composite * 10, 2)
 
 def get_econ_pair_bias(base, quote):
-    # Normal calculation
+    # Get heatmap percentages (0-100)
     base_pct = analyze_currency_econ(base)
     quote_pct = analyze_currency_econ(quote)
-    base_comp = calculate_currency_composite_score(base)
-    quote_comp = calculate_currency_composite_score(quote)
-    combined_diff = (base_comp - quote_comp)
-
-    # Invert if pair is XAU/USD (gold moves opposite to USD)
+    
+    # Difference = base% - quote% (positive means base more bullish)
+    diff = base_pct - quote_pct
+    
+    # Invert for XAU/USD and BTC/USD (these pairs move opposite to USD)
     if (base == "XAU" and quote == "USD") or (base == "BTC" and quote == "USD"):
-        combined_diff = -combined_diff   # flip the polarity
-
-    abs_diff = abs(combined_diff)
-    if abs_diff > 6: econ_score = 4
-    elif abs_diff > 3: econ_score = 3
-    elif abs_diff > 1.5: econ_score = 2
-    elif abs_diff > 0: econ_score = 1
-    else: econ_score = 0
-    if combined_diff < 0: econ_score = -econ_score
-
-    if combined_diff > 6: bias, sym = "EXTREME BULLISH", "▲▲▲"
-    elif combined_diff > 3: bias, sym = "VERY BULLISH", "▲▲"
-    elif combined_diff > 1.5: bias, sym = "BULLISH", "▲"
-    elif combined_diff > 0: bias, sym = "SLIGHTLY BULLISH", "▲"
-    elif combined_diff > -1.5: bias, sym = "SLIGHTLY BEARISH", "▼"
-    elif combined_diff > -3: bias, sym = "BEARISH", "▼"
-    elif combined_diff > -6: bias, sym = "VERY BEARISH", "▼▼"
-    else: bias, sym = "EXTREME BEARISH", "▼▼▼"
-
-    return bias, sym, combined_diff, econ_score
+        diff = -diff
+    
+    # Map absolute difference to score (0 to 4, with sign)
+    abs_diff = abs(diff)
+    if abs_diff > 60:
+        econ_score = 4
+    elif abs_diff > 40:
+        econ_score = 3
+    elif abs_diff > 20:
+        econ_score = 2
+    elif abs_diff > 0:
+        econ_score = 1
+    else:
+        econ_score = 0
+    
+    # Apply sign
+    if diff < 0:
+        econ_score = -econ_score
+    
+    # Generate bias string and symbol (for display)
+    if econ_score >= 4:
+        bias = "EXTREME BULLISH"
+        sym = "▲▲▲"
+    elif econ_score >= 3:
+        bias = "VERY BULLISH"
+        sym = "▲▲"
+    elif econ_score >= 2:
+        bias = "BULLISH"
+        sym = "▲"
+    elif econ_score >= 1:
+        bias = "SLIGHTLY BULLISH"
+        sym = "▲"
+    elif econ_score <= -4:
+        bias = "EXTREME BEARISH"
+        sym = "▼▼▼"
+    elif econ_score <= -3:
+        bias = "VERY BEARISH"
+        sym = "▼▼"
+    elif econ_score <= -2:
+        bias = "BEARISH"
+        sym = "▼"
+    elif econ_score <= -1:
+        bias = "SLIGHTLY BEARISH"
+        sym = "▼"
+    else:
+        bias = "NEUTRAL"
+        sym = "●"
+    
+    return bias, sym, diff, econ_score
 
 # -----------------------------
 # SCORING FUNCTION
