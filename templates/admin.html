@@ -91,9 +91,87 @@
     font-size: 1.5rem;
     margin: 0;
 }
-</style>
+/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar">
     <div class="logo">👑 ADMIN PANEL</div>
     <div class="menu-item" onclick="showPane('cotUpload')">📁 COT Upload</div>
@@ -140,8 +218,22 @@
 <div class="modal" id="indicatorModal"><div class="modal-content"><h3 id="indModalTitle" style="color:#00e5ff;margin-bottom:20px">Add Indicator</h3><form id="indicatorForm"><input type="hidden" id="indicatorId"><label>Currency</label><select id="indCurrencySelect" required></select><label>Indicator Name</label><input type="text" id="indName" required><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Forecast</label><input type="number" step="0.1" id="indForecast" required></div><div><label>Actual</label><input type="number" step="0.1" id="indActual" required></div></div><label><input type="checkbox" id="indLowerBetter"> Lower is better</label><label>Category</label><select id="indCategory" required><option value="Technical Bias">Technical Bias</option><option value="Economic Growth Bias">Economic Growth Bias</option><option value="Inflation Bias">Inflation Bias</option><option value="Jobs Market Bias">Jobs Market Bias</option><option value="Crowd Sentiment (COT)">Crowd Sentiment (COT)</option></select><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeIndicatorModal()" class="secondary">Cancel</button></div></form></div></div>
 
 <!-- Sentiment Modal -->
-<div class="modal" id="sentimentModal"><div class="modal-content"><h3 style="color:#00e5ff;margin-bottom:20px">Sentiment Entry</h3><form id="sentimentForm"><label>Pair</label><select id="sentPair" required></select><label>Long %</label><input type="number" step="0.1" id="sentLong" min="0" max="100" required><label>Short %</label><input type="number" step="0.1" id="sentShort" min="0" max="100" required><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button></div></form></div></div>
-
+<div class="modal" id="sentimentModal">
+  <div class="modal-content">
+    <h3 style="color:#00e5ff;margin-bottom:20px">Sentiment Entry</h3>
+    <form id="sentimentForm">
+      <label>Pair</label>
+      <select id="sentPair" required></select>
+      <label>Long % (0-100)</label>
+      <input type="number" step="0.1" id="sentLong" min="0" max="100" required>
+      <small>Short % will be automatically calculated as 100 - Long %</small>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button type="submit">Save</button>
+        <button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 <script>
 const allPairs={{ ALL_PAIRS|tojson }};
 const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC"];
@@ -373,11 +465,21 @@ function openSentimentModal(){
     allPairs.forEach(p=>{const pairStr=p[0]+'/'+p[1];const opt=document.createElement('option');opt.value=pairStr;opt.textContent=pairStr;select.appendChild(opt)});
 }
 function closeSentimentModal(){document.getElementById('sentimentModal').style.display='none';}
-function editSentiment(pair,long,short){ openSentimentModal(); document.getElementById('sentPair').value=pair; document.getElementById('sentLong').value=long; document.getElementById('sentShort').value=short; }
-async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
+function editSentiment(pair, long, short){
+    openSentimentModal();
+    document.getElementById('sentPair').value=pair;
+    document.getElementById('sentLong').value=long;
+    // Short is not shown, but we store it in a data attribute if needed? Not necessary.
+}async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
 document.getElementById('sentimentForm').addEventListener('submit',async e=>{
     e.preventDefault();
-    const data={pair:document.getElementById('sentPair').value,long_pct:parseFloat(document.getElementById('sentLong').value),short_pct:parseFloat(document.getElementById('sentShort').value)};
+    const long_pct = parseFloat(document.getElementById('sentLong').value);
+    const short_pct = 100 - long_pct;
+    const data={
+        pair:document.getElementById('sentPair').value,
+        long_pct: long_pct,
+        short_pct: short_pct
+    };
     await fetch('/admin/sentiment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     closeSentimentModal(); loadSentiment();
 });

@@ -1340,9 +1340,87 @@ def create_templates():
     with open('templates/dashboard.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:20px;margin-right:12px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}table{width:100%;border-collapse:collapse;margin-top:20px;background:#121826;font-size:13px;border-radius:12px;overflow:hidden}th,td{padding:12px 8px;text-align:center;border-bottom:1px solid #2a3040}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}.currency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;margin-top:20px}.currency-card{background:#121826;border-radius:16px;padding:20px 15px;text-align:center;transition:all 0.2s;border:1px solid #2a3040;cursor:pointer;position:relative}.currency-card:hover{transform:translateY(-5px);border-color:#00e5ff;box-shadow:0 10px 25px rgba(0,229,255,0.1)}.favorite-star{position:absolute;top:10px;right:10px;font-size:20px;cursor:pointer;color:#ffb800;opacity:0.6;transition:all 0.2s}.favorite-star.active{opacity:1;text-shadow:0 0 10px #ffb800}.gauge-wrapper{position:relative;width:120px;height:120px;margin:15px auto}.gauge-svg{transform:rotate(-90deg);width:100%;height:100%}.gauge-bg-circle{stroke:#2a3040;stroke-width:10;fill:none}.gauge-fill-circle{stroke-width:10;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.8s}.gauge-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}.gauge-value{font-size:22px;font-weight:bold;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:600px;border:1px solid #2a3040;max-height:80vh;overflow-y:auto}.loading-skeleton{background:linear-gradient(90deg,#1a1f2e,#2a3040,#1a1f2e);background-size:200% 100%;animation:shimmer 1.5s infinite}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.search-box{width:100%;max-width:300px;padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;margin-bottom:15px}.clickable-pair{cursor:pointer;text-decoration:underline dotted #00e5ff}.detail-row{display:flex;justify-content:space-between;margin-bottom:8px}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:24px;cursor:pointer;margin-right:10px}.indicator-table{width:100%;margin-top:10px;background:#1a1f2e;border-radius:8px}.indicator-table th,.indicator-table td{padding:8px;text-align:left;border-bottom:1px solid #2a3040;font-size:0.9rem}.indicator-table th{background:rgba(0,229,255,0.1);color:#00e5ff}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:20px;margin-right:12px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}table{width:100%;border-collapse:collapse;margin-top:20px;background:#121826;font-size:13px;border-radius:12px;overflow:hidden}th,td{padding:12px 8px;text-align:center;border-bottom:1px solid #2a3040}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}.currency-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:20px;margin-top:20px}.currency-card{background:#121826;border-radius:16px;padding:20px 15px;text-align:center;transition:all 0.2s;border:1px solid #2a3040;cursor:pointer;position:relative}.currency-card:hover{transform:translateY(-5px);border-color:#00e5ff;box-shadow:0 10px 25px rgba(0,229,255,0.1)}.favorite-star{position:absolute;top:10px;right:10px;font-size:20px;cursor:pointer;color:#ffb800;opacity:0.6;transition:all 0.2s}.favorite-star.active{opacity:1;text-shadow:0 0 10px #ffb800}.gauge-wrapper{position:relative;width:120px;height:120px;margin:15px auto}.gauge-svg{transform:rotate(-90deg);width:100%;height:100%}.gauge-bg-circle{stroke:#2a3040;stroke-width:10;fill:none}.gauge-fill-circle{stroke-width:10;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.8s}.gauge-center{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center}.gauge-value{font-size:22px;font-weight:bold;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:600px;border:1px solid #2a3040;max-height:80vh;overflow-y:auto}.loading-skeleton{background:linear-gradient(90deg,#1a1f2e,#2a3040,#1a1f2e);background-size:200% 100%;animation:shimmer 1.5s infinite}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.search-box{width:100%;max-width:300px;padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;margin-bottom:15px}.clickable-pair{cursor:pointer;text-decoration:underline dotted #00e5ff}.detail-row{display:flex;justify-content:space-between;margin-bottom:8px}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:24px;cursor:pointer;margin-right:10px}.indicator-table{width:100%;margin-top:10px;background:#1a1f2e;border-radius:8px}.indicator-table th,.indicator-table td{padding:8px;text-align:left;border-bottom:1px solid #2a3040;font-size:0.9rem}.indicator-table th{background:rgba(0,229,255,0.1);color:#00e5ff}/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar" id="sidebar">
     <div class="logo"><button class="toggle-btn" onclick="toggleSidebar()">☰</button><span>⚡ Tradion</span></div>
     <div class="menu-item active" onclick="showPane('analysis')"><span class="menu-icon">📊</span><span>Analysis</span></div>
@@ -1369,11 +1447,87 @@ def create_templates():
 <div class="modal" id="detailModal"><div class="modal-content"><h3 style="color:#00e5ff;margin-bottom:20px" id="modalPairTitle">EUR/USD Details</h3><div id="modalDetailContent">Loading...</div><div style="margin-top:20px;text-align:right"><button onclick="closeDetailModal()" class="secondary">Close</button></div></div></div>
 <script>
 let currentData=null,heatmapData=null,favorites={{ favorites|safe }},currentResults=[];
-function toggleSidebar(){const sidebar=document.getElementById('sidebar');const main=document.getElementById('mainContent');sidebar.classList.toggle('collapsed');if(sidebar.classList.contains('collapsed')){main.style.marginLeft='80px'}else{main.style.marginLeft='280px'}}
-function showPane(pane){document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));document.getElementById(pane+'Pane').classList.add('active');document.querySelectorAll('.menu-item').forEach(item=>{item.classList.remove('active');const onclick=item.getAttribute('onclick');if(onclick&&onclick.includes(`'${pane}'`)){item.classList.add('active')}});if(pane==='history') loadHistory()}
-async function loadAnalysis(){document.getElementById('loading').style.display='block';try{const res=await fetch('/api/analyze',{method:'POST'});if(!res.ok) throw new Error((await res.json()).error);const data=await res.json();currentData=data.results;heatmapData=data.heatmap;currentResults=data.results;displayResults(data.results);displayHeatmap(data.heatmap);document.getElementById('lastUpdateTime').innerHTML='Updated: '+new Date().toLocaleTimeString()}catch(e){document.getElementById('results').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ '+e.message+'</div>'}finally{document.getElementById('loading').style.display='none'}}
-async function refreshAnalysis(){await fetch('/admin/refresh',{method:'POST'});loadAnalysis()}
-function filterResults(){
+
+// Client-side cache (sessionStorage)
+function saveAnalysisToCache(results, heatmap) {
+    const cacheData = {
+        results: results,
+        heatmap: heatmap,
+        timestamp: Date.now()
+    };
+    sessionStorage.setItem('dashboardAnalysis', JSON.stringify(cacheData));
+}
+
+function getCachedAnalysis() {
+    const cached = sessionStorage.getItem('dashboardAnalysis');
+    if (!cached) return null;
+    const data = JSON.parse(cached);
+    // Cache valid for 2 minutes (120000 ms)
+    if (Date.now() - data.timestamp < 120000) {
+        return data;
+    }
+    sessionStorage.removeItem('dashboardAnalysis');
+    return null;
+}
+
+// Mobile sidebar toggle (slide in/out)
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (on mobile)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});function showPane(pane){document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));document.getElementById(pane+'Pane').classList.add('active');document.querySelectorAll('.menu-item').forEach(item=>{item.classList.remove('active');const onclick=item.getAttribute('onclick');if(onclick&&onclick.includes(`'${pane}'`)){item.classList.add('active')}});if(pane==='history') loadHistory()}
+async function loadAnalysis(forceRefresh = false) {
+    document.getElementById('loading').style.display = 'block';
+    
+    // Check client-side cache first (unless forced)
+    if (!forceRefresh) {
+        const cached = getCachedAnalysis();
+        if (cached) {
+            console.log('Using cached analysis');
+            currentData = cached.results;
+            heatmapData = cached.heatmap;
+            currentResults = cached.results;
+            displayResults(cached.results);
+            displayHeatmap(cached.heatmap);
+            document.getElementById('lastUpdateTime').innerHTML = 'Cached: ' + new Date(cached.timestamp).toLocaleTimeString();
+            document.getElementById('loading').style.display = 'none';
+            return;
+        }
+    }
+    
+    // No cache or forced refresh – call server
+    try {
+        const res = await fetch('/api/analyze', { method: 'POST' });
+        if (!res.ok) throw new Error((await res.json()).error);
+        const data = await res.json();
+        currentData = data.results;
+        heatmapData = data.heatmap;
+        currentResults = data.results;
+        displayResults(data.results);
+        displayHeatmap(data.heatmap);
+        document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+        // Save to client cache
+        saveAnalysisToCache(data.results, data.heatmap);
+    } catch (e) {
+        document.getElementById('results').innerHTML = '<div style="color:#ff4d6d;padding:20px">❌ ' + e.message + '</div>';
+    } finally {
+        document.getElementById('loading').style.display = 'none';
+    }
+}
+async function refreshAnalysis() {
+    await fetch('/admin/refresh', { method: 'POST' });
+    // Clear client cache before loading fresh
+    sessionStorage.removeItem('dashboardAnalysis');
+    await loadAnalysis(true);
+}function filterResults(){
     const term=document.getElementById('searchInput').value.toLowerCase();
     const filtered=currentResults.filter(r=>r.pair.toLowerCase().includes(term));
     filtered.sort((a, b) => b.overall.score - a.overall.score);
@@ -1382,14 +1536,50 @@ function filterResults(){
     // Sort by overall score (highest first)
     data.sort((a, b) => b.overall.score - a.overall.score);
     
-    let html='<div style="overflow-x:auto"><table><thead><th>Pair</th><th>COT</th><th>Momentum</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Sentiment</th><th>Overall</th></thead><tbody>';data.forEach(item=>{const isFav=favorites.includes(item.pair);html+=`<tr><td style="font-weight:bold"><span class="clickable-pair" onclick="showPairDetail('${item.pair}')">${item.pair}</span><span class="favorite-star ${isFav?'active':''}" onclick="toggleFavorite('${item.pair}',this);event.stopPropagation();">⭐</span></td><td style="color:${item.cot.bias==='Bullish'?'#00e5a0':(item.cot.bias==='Bearish'?'#ff4d6d':'#ffb800')}">${item.cot.symbol} ${item.cot.bias}<br><small>[${item.cot.score}]</small></td><td style="color:${item.cot.momentum==='Bullish'?'#00e5a0':(item.cot.momentum==='Bearish'?'#ff4d6d':'#ffb800')}">${item.cot.mom_symbol} ${item.cot.momentum}<br><small>[${item.cot.momentum_score}]</small></td><td style="color:${item.economic.bias.includes('BULLISH')?'#00e5a0':(item.economic.bias.includes('BEARISH')?'#ff4d6d':'#ffb800')}">${item.economic.symbol}<br><small>[${item.economic.score}]</small></td><td style="color:${item.trend.bias==='Bullish'?'#00e5a0':(item.trend.bias==='Bearish'?'#ff4d6d':'#ffb800')}">${item.trend.symbol}<br><small>[${item.trend.score}]</small></td><td>${item.seasonality.bias}<br><small>[${item.seasonality.score}]</small></td><td style="color:${(item.sentiment&&item.sentiment.bias==='Bullish')?'#00e5a0':((item.sentiment&&item.sentiment.bias==='Bearish')?'#ff4d6d':'#ffb800')}">${item.sentiment?item.sentiment.bias:'N/A'}<br><small>[${item.sentiment?item.sentiment.score:'0'}]</small></td><td style="color:${item.overall.color};font-weight:bold">${item.overall.symbol} ${item.overall.bias}<br><strong>[${item.overall.score}]</strong></td></tr>`});html+='</tbody></table></div>';document.getElementById('results').innerHTML=html;document.getElementById('searchInput').addEventListener('input',filterResults)}
-function displayHeatmap(heatmap){if(!heatmap) return;let html='<div class="currency-grid">';heatmap.ranking.forEach(curr=>{let currency=curr[0],score=curr[1],econPct=heatmap.econ_data[currency]||50;let scoreColor=score>3?'#00e5a0':(score>1.5?'#66ffb3':(score>0.5?'#99ffcc':(score>-0.5?'#ffb800':(score>-1.5?'#ffb3c1':(score>-3?'#ff8099':'#ff4d6d')))));let circumference=2*Math.PI*50;let dashOffset=circumference*(1-econPct/100);let gaugeColor=econPct>=70?'#00e5a0':(econPct>=55?'#66ffb3':(econPct>=45?'#ffb800':(econPct>=30?'#ff8099':'#ff4d6d')));html+=`<div class="currency-card" style="border-top:3px solid ${scoreColor}" onclick="showCurrencyDetail('${currency}')"><strong style="color:${scoreColor}">${currency}</strong><div class="gauge-wrapper"><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="gauge-bg-circle" cx="60" cy="60" r="50"></circle><circle class="gauge-fill-circle" cx="60" cy="60" r="50" style="stroke:${gaugeColor};stroke-dasharray:${circumference};stroke-dashoffset:${dashOffset}"></circle></svg><div class="gauge-center"><div class="gauge-value">${econPct.toFixed(1)}%</div></div></div><div>Score: ${score.toFixed(2)}</div></div>`});html+='</div>';document.getElementById('heatmapContent').innerHTML=html}
+    let html = '<div style="overflow-x:auto"><table><thead><tr><th>Pair</th><th>COT</th><th>Momentum</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Sentiment</th><th>Overall</th></tr></thead><tbody>';
+    
+    data.forEach(item => {
+        const isFav = favorites.includes(item.pair);
+        const score = item.overall.score;
+        
+        // Heatmap background colour based on score
+        let rowColor = '';
+        if (score >= 6) rowColor = 'background: rgba(0, 229, 160, 0.3);';
+        else if (score >= 4) rowColor = 'background: rgba(0, 229, 160, 0.2);';
+        else if (score >= 2) rowColor = 'background: rgba(0, 229, 160, 0.1);';
+        else if (score <= -6) rowColor = 'background: rgba(255, 77, 109, 0.3);';
+        else if (score <= -4) rowColor = 'background: rgba(255, 77, 109, 0.2);';
+        else if (score <= -2) rowColor = 'background: rgba(255, 77, 109, 0.1);';
+        
+        html += `<tr style="${rowColor}">
+            <td style="font-weight:bold"><span class="clickable-pair" onclick="showPairDetail('${item.pair}')">${item.pair}</span>
+            <span class="favorite-star ${isFav ? 'active' : ''}" onclick="toggleFavorite('${item.pair}',this);event.stopPropagation();">⭐</span></td>
+            <td style="color:${item.cot.bias === 'Bullish' ? '#00e5a0' : (item.cot.bias === 'Bearish' ? '#ff4d6d' : '#ffb800')}">${item.cot.symbol} ${item.cot.bias}<br><small>[${item.cot.score}]</small></td>
+            <td style="color:${item.cot.momentum === 'Bullish' ? '#00e5a0' : (item.cot.momentum === 'Bearish' ? '#ff4d6d' : '#ffb800')}">${item.cot.mom_symbol} ${item.cot.momentum}<br><small>[${item.cot.momentum_score}]</small></td>
+            <td style="color:${item.economic.bias.includes('BULLISH') ? '#00e5a0' : (item.economic.bias.includes('BEARISH') ? '#ff4d6d' : '#ffb800')}">${item.economic.symbol}<br><small>[${item.economic.score}]</small></td>
+            <td style="color:${item.trend.bias === 'Bullish' ? '#00e5a0' : (item.trend.bias === 'Bearish' ? '#ff4d6d' : '#ffb800')}">${item.trend.symbol}<br><small>[${item.trend.score}]</small></td>
+            <td>${item.seasonality.bias}<br><small>[${item.seasonality.score}]</small></td>
+            <td style="color:${(item.sentiment && item.sentiment.bias === 'Bullish') ? '#00e5a0' : ((item.sentiment && item.sentiment.bias === 'Bearish') ? '#ff4d6d' : '#ffb800')}">${item.sentiment ? item.sentiment.bias : 'N/A'}<br><small>[${item.sentiment ? item.sentiment.score : '0'}]</small></td>
+            <td style="color:${item.overall.color}; font-weight:bold">${item.overall.symbol} ${item.overall.bias}<br><strong>[${item.overall.score}]</strong></td>
+        </tr>`;
+    });
+    
+    html += '</tbody></table></div>';
+    document.getElementById('results').innerHTML = html;
+    document.getElementById('searchInput').addEventListener('input', filterResults);
+}function displayHeatmap(heatmap){if(!heatmap) return;let html='<div class="currency-grid">';heatmap.ranking.forEach(curr=>{let currency=curr[0],score=curr[1],econPct=heatmap.econ_data[currency]||50;let scoreColor=score>3?'#00e5a0':(score>1.5?'#66ffb3':(score>0.5?'#99ffcc':(score>-0.5?'#ffb800':(score>-1.5?'#ffb3c1':(score>-3?'#ff8099':'#ff4d6d')))));let circumference=2*Math.PI*50;let dashOffset=circumference*(1-econPct/100);let gaugeColor=econPct>=70?'#00e5a0':(econPct>=55?'#66ffb3':(econPct>=45?'#ffb800':(econPct>=30?'#ff8099':'#ff4d6d')));html+=`<div class="currency-card" style="border-top:3px solid ${scoreColor}" onclick="showCurrencyDetail('${currency}')"><strong style="color:${scoreColor}">${currency}</strong><div class="gauge-wrapper"><svg class="gauge-svg" viewBox="0 0 120 120"><circle class="gauge-bg-circle" cx="60" cy="60" r="50"></circle><circle class="gauge-fill-circle" cx="60" cy="60" r="50" style="stroke:${gaugeColor};stroke-dasharray:${circumference};stroke-dashoffset:${dashOffset}"></circle></svg><div class="gauge-center"><div class="gauge-value">${econPct.toFixed(1)}%</div></div></div><div>Score: ${score.toFixed(2)}</div></div>`});html+='</div>';document.getElementById('heatmapContent').innerHTML=html}
 function toggleFavorite(pair,el){const idx=favorites.indexOf(pair);if(idx>-1) favorites.splice(idx,1);else favorites.push(pair);fetch('/api/favorites',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({favorites})});el.classList.toggle('active')}
 async function showPairDetail(pair){document.getElementById('modalPairTitle').innerText=pair+' Details';document.getElementById('modalDetailContent').innerHTML='<div class="loading-skeleton" style="height:150px"></div>';document.getElementById('detailModal').style.display='flex';try{const res=await fetch('/api/pair_detail/'+encodeURIComponent(pair));const data=await res.json();let html=`<div style="background:#1a1f2e;padding:15px;border-radius:8px;margin-bottom:15px"><h4 style="color:#00e5ff">${data.base.currency}</h4><div class="detail-row"><span>COT Net Position:</span><span style="color:${data.base.cot_net>=0?'#00e5a0':'#ff4d6d'}">${data.base.cot_net.toLocaleString()}</span></div><div class="detail-row"><span>COT Weekly Change:</span><span style="color:${data.base.cot_change>=0?'#00e5a0':'#ff4d6d'}">${data.base.cot_change.toLocaleString()}</span></div><div class="detail-row"><span>Economic Sentiment:</span><span>${data.base.econ_pct.toFixed(1)}%</span></div>${buildIndicatorTable(data.base.indicators,'base')}</div><div style="background:#1a1f2e;padding:15px;border-radius:8px"><h4 style="color:#00e5ff">${data.quote.currency}</h4><div class="detail-row"><span>COT Net Position:</span><span style="color:${data.quote.cot_net>=0?'#00e5a0':'#ff4d6d'}">${data.quote.cot_net.toLocaleString()}</span></div><div class="detail-row"><span>COT Weekly Change:</span><span style="color:${data.quote.cot_change>=0?'#00e5a0':'#ff4d6d'}">${data.quote.cot_change.toLocaleString()}</span></div><div class="detail-row"><span>Economic Sentiment:</span><span>${data.quote.econ_pct.toFixed(1)}%</span></div>${buildIndicatorTable(data.quote.indicators,'quote')}</div>`;document.getElementById('modalDetailContent').innerHTML=html}catch(e){document.getElementById('modalDetailContent').innerHTML='<p style="color:#ff4d6d">Error loading details</p>'}}
 function buildIndicatorTable(indicators,section){if(!indicators||indicators.length===0) return '<p style="margin-top:10px;color:#8892b0">No economic indicators.</p>';let html='<table class="indicator-table"><thead><tr><th>Indicator</th><th>Forecast</th><th>Actual</th><th>Lower Better?</th></tr></thead><tbody>';indicators.forEach(ind=>{const color=ind.actual>ind.forecast?(ind.is_lower_better?'#ff4d6d':'#00e5a0'):(ind.actual<ind.forecast?(ind.is_lower_better?'#00e5a0':'#ff4d6d'):'#ffb800');html+=`<tr><td>${ind.name}</td><td>${ind.forecast}</td><td style="color:${color};font-weight:bold">${ind.actual}</td><td>${ind.is_lower_better?'Yes':'No'}</td></tr>`});html+='</tbody></table>';return html}
 function closeDetailModal(){document.getElementById('detailModal').style.display='none'}
 async function loadHistory(){const r=await fetch('/api/history');const d=await r.json();let html='<table><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';d.forEach(i=>{html+=`<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td></tr>`});html+='</tbody></table>';document.getElementById('historyContent').innerHTML=html}
 function logout(){fetch('/logout').then(()=>window.location.href='/login')}
+
+window.addEventListener('pageshow', function(event) {
+    if (event.persisted) {
+        console.log('Page restored from bfcache, using existing data');
+    }
+});
 loadAnalysis();
 </script>
 </body>
@@ -1400,9 +1590,87 @@ loadAnalysis();
         f.write('''<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Asset Scorecard – Tradion</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:20px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:10px 12px;margin:3px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:18px;margin-right:10px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:25px 35px;transition:margin-left 0.3s;max-width:1200px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.header h2{color:#00e5ff;font-size:2rem}.symbol-selector select{padding:10px 14px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:1rem;min-width:200px}.scorecard-grid{display:grid;grid-template-columns:1fr 1fr;gap:25px}.gauge-panel{background:#121826;border-radius:16px;padding:25px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3040;position:relative}.gauge-container{position:relative;width:200px;height:100px;overflow:hidden}.gauge-svg{width:100%;height:100%}.gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}.gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}.gauge-needle-group{transition:transform 0.5s ease-out}.needle-body{stroke:#fff;stroke-width:2;fill:none}.needle-tip{fill:#fff;stroke:#fff;stroke-width:1}.gauge-center{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}.gauge-label{font-size:1.4rem;font-weight:bold;color:#00e5ff}.gauge-bias{font-size:1rem;color:#00e5a0}.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.9);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}.loading-overlay.hidden{display:none}.spinner{border:4px solid #2a3040;border-top:4px solid #00e5ff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.score-summary{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:20px}.score-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#1a1f2e;border-radius:10px;font-size:1rem}.score-label{font-weight:600}.score-value{font-weight:bold;padding:3px 10px;border-radius:20px;font-size:0.9rem}.score-value.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.score-value.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.score-value.neutral{background:rgba(255,184,0,0.2);color:#ffb800}.trend-chart{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:15px}.trend-bar{flex:1;background:#2a3040;border-radius:4px 4px 0 0;min-width:8px;transition:height 0.3s}.trend-bar.positive{background:#00e5a0}.trend-bar.negative{background:#ff4d6d}.panel{background:#121826;border-radius:14px;padding:18px;border:1px solid #2a3040;margin-bottom:16px;font-size:0.95rem}.panel h3{color:#00e5ff;font-size:1.1rem;margin-bottom:12px;border-bottom:1px solid #2a3040;padding-bottom:10px}.indicator-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,48,64,0.5);font-size:0.9rem}.indicator-row:last-child{border-bottom:none}.indicator-label{font-size:0.9rem}.indicator-values{display:flex;gap:15px}.value{font-weight:500;width:70px;text-align:right}.value.positive{color:#00e5a0}.value.negative{color:#ff4d6d}.value.neutral{color:#a0b0c0}.surprise{font-size:0.75rem;padding:2px 6px;border-radius:12px}.surprise.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.surprise.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:20px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:10px 12px;margin:3px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:18px;margin-right:10px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:25px 35px;transition:margin-left 0.3s;max-width:1200px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.header h2{color:#00e5ff;font-size:2rem}.symbol-selector select{padding:10px 14px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:1rem;min-width:200px}.scorecard-grid{display:grid;grid-template-columns:1fr 1fr;gap:25px}.gauge-panel{background:#121826;border-radius:16px;padding:25px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3040;position:relative}.gauge-container{position:relative;width:200px;height:100px;overflow:hidden}.gauge-svg{width:100%;height:100%}.gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}.gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}.gauge-needle-group{transition:transform 0.5s ease-out}.needle-body{stroke:#fff;stroke-width:2;fill:none}.needle-tip{fill:#fff;stroke:#fff;stroke-width:1}.gauge-center{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}.gauge-label{font-size:1.4rem;font-weight:bold;color:#00e5ff}.gauge-bias{font-size:1rem;color:#00e5a0}.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.9);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}.loading-overlay.hidden{display:none}.spinner{border:4px solid #2a3040;border-top:4px solid #00e5ff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.score-summary{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:20px}.score-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#1a1f2e;border-radius:10px;font-size:1rem}.score-label{font-weight:600}.score-value{font-weight:bold;padding:3px 10px;border-radius:20px;font-size:0.9rem}.score-value.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.score-value.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.score-value.neutral{background:rgba(255,184,0,0.2);color:#ffb800}.trend-chart{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:15px}.trend-bar{flex:1;background:#2a3040;border-radius:4px 4px 0 0;min-width:8px;transition:height 0.3s}.trend-bar.positive{background:#00e5a0}.trend-bar.negative{background:#ff4d6d}.panel{background:#121826;border-radius:14px;padding:18px;border:1px solid #2a3040;margin-bottom:16px;font-size:0.95rem}.panel h3{color:#00e5ff;font-size:1.1rem;margin-bottom:12px;border-bottom:1px solid #2a3040;padding-bottom:10px}.indicator-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,48,64,0.5);font-size:0.9rem}.indicator-row:last-child{border-bottom:none}.indicator-label{font-size:0.9rem}.indicator-values{display:flex;gap:15px}.value{font-weight:500;width:70px;text-align:right}.value.positive{color:#00e5a0}.value.negative{color:#ff4d6d}.value.neutral{color:#a0b0c0}.surprise{font-size:0.75rem;padding:2px 6px;border-radius:12px}.surprise.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.surprise.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar" id="sidebar"><div class="logo"><button class="toggle-btn" onclick="toggleSidebar()">☰</button><span>⚡ Tradion</span></div><div class="menu-item" onclick="window.location.href='/dashboard'"><span class="menu-icon">📊</span><span>Dashboard</span></div><div class="menu-item" onclick="window.location.href='/currencies'"><span class="menu-icon">💱</span><span>COT Data</span></div><div class="menu-item active"><span class="menu-icon">📈</span><span>Asset Scorecard</span></div><div class="menu-item" onclick="window.location.href='/sentiment'"><span class="menu-icon">💬</span><span>Sentiment</span></div><div class="menu-item" onclick="window.location.href='/profile'"><span class="menu-icon">👤</span><span>Profile</span></div><div class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span>Logout</span></div></div>
 <div class="main-content" id="mainContent">
     <div class="header"><h2>Asset Scorecard</h2><div class="symbol-selector"><select id="symbolSelect" onchange="loadScorecard()"><option value="">Select Currency...</option></select></div></div>
@@ -1433,8 +1701,20 @@ loadAnalysis();
 const currencies={{ currencies|tojson }};
 const select=document.getElementById('symbolSelect');
 currencies.forEach(cur=>{const opt=document.createElement('option');opt.value=cur;opt.textContent=cur;select.appendChild(opt)});
-function toggleSidebar(){const sidebar=document.getElementById('sidebar');const main=document.getElementById('mainContent');sidebar.classList.toggle('collapsed');if(sidebar.classList.contains('collapsed')){main.style.marginLeft='80px'}else{main.style.marginLeft='280px'}}
-const CATEGORIES=["Technical Bias","Economic Growth Bias","Inflation Bias","Jobs Market Bias","Crowd Sentiment (COT)"];
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (optional)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});const CATEGORIES=["Technical Bias","Economic Growth Bias","Inflation Bias","Jobs Market Bias","Crowd Sentiment (COT)"];
 async function loadScorecard(){const symbol=select.value;if(!symbol) return;const overlay=document.getElementById('loadingOverlay');overlay.classList.remove('hidden');try{const res=await fetch('/api/asset_scorecard/'+encodeURIComponent(symbol));const data=await res.json();updateGauge(data.overall.score,data.overall.bias,data.overall.color);updateScores(data);updateTrendChart(data.score_history);renderCategoryCards(data)}catch(e){console.error(e)}finally{overlay.classList.add('hidden')}}
 function updateGauge(score,bias,color){const clampedScore=Math.min(Math.max(score,-10),10);const angle=((clampedScore+10)/20)*180;document.getElementById('gaugeNeedleGroup').setAttribute('transform',`rotate(${angle-90},110,110)`);document.getElementById('gaugeBias').textContent=bias;document.getElementById('gaugeValue').textContent=score.toFixed(1);document.querySelector('.gauge-bias').style.color=color}
 function updateScores(data){setScoreValue('tradionScore',data.tradion_score);setScoreValue('technicalScore',data.technical_score>0?'▲ 1':(data.technical_score<0?'▼ -1':'● 0'));setScoreValue('sentimentCOTScore',data.sentiment_cot_score);setScoreValue('fundamentalsScore',data.fundamentals_score,data.fundamentals_score>0?'positive':(data.fundamentals_score<0?'negative':'neutral'))}
@@ -1529,9 +1809,87 @@ if(currencies.length>0){select.value=currencies[0];loadScorecard()}
         f.write('''<!DOCTYPE html>
 <html><head><title>COT Data - Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:22px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:18px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:20px;margin-right:12px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}table{width:100%;border-collapse:collapse;margin-top:20px;background:#121826;font-size:14px;border-radius:12px;overflow:hidden}th,td{padding:14px 12px;text-align:center;border-bottom:1px solid #2a3040}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}.gauge-bar{width:100px;height:8px;background:#2a3040;border-radius:4px;overflow:hidden;margin:0 auto}.gauge-fill{height:100%;border-radius:4px;transition:width 0.3s}.positive{color:#00e5a0}.negative{color:#ff4d6d}.neutral{color:#ffb800}.loading-skeleton{background:linear-gradient(90deg,#1a1f2e,#2a3040,#1a1f2e);background-size:200% 100%;animation:shimmer 1.5s infinite}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}.chart-container{background:#121826;border-radius:16px;padding:20px;margin-top:30px;border:1px solid #2a3040}.chart-container h3{color:#00e5ff;margin-bottom:15px;font-size:1.2rem}canvas{max-height:400px;width:100%}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:22px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:18px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:20px;margin-right:12px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}table{width:100%;border-collapse:collapse;margin-top:20px;background:#121826;font-size:14px;border-radius:12px;overflow:hidden}th,td{padding:14px 12px;text-align:center;border-bottom:1px solid #2a3040}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}.gauge-bar{width:100px;height:8px;background:#2a3040;border-radius:4px;overflow:hidden;margin:0 auto}.gauge-fill{height:100%;border-radius:4px;transition:width 0.3s}.positive{color:#00e5a0}.negative{color:#ff4d6d}.neutral{color:#ffb800}.loading-skeleton{background:linear-gradient(90deg,#1a1f2e,#2a3040,#1a1f2e);background-size:200% 100%;animation:shimmer 1.5s infinite}@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}.chart-container{background:#121826;border-radius:16px;padding:20px;margin-top:30px;border:1px solid #2a3040}.chart-container h3{color:#00e5ff;margin-bottom:15px;font-size:1.2rem}canvas{max-height:400px;width:100%}/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar" id="sidebar"><div class="logo"><button class="toggle-btn" onclick="toggleSidebar()">☰</button><span>⚡ Tradion</span></div><div class="menu-item" onclick="window.location.href='/dashboard'"><div class="menu-icon">📊</div><span>Dashboard</span></div><div class="menu-item active" onclick="window.location.href='/currencies'"><div class="menu-icon">💱</div><span>COT Data</span></div><div class="menu-item" onclick="window.location.href='/scorecard'"><span class="menu-icon">📈</span><span>Asset Scorecard</span></div><div class="menu-item" onclick="window.location.href='/sentiment'"><span class="menu-icon">💬</span><span>Sentiment</span></div>{% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><div class="menu-icon">👑</div><span>Admin</span></div>{% endif %}<div class="menu-item" onclick="window.location.href='/profile'"><div class="menu-icon">👤</div><span>Profile</span></div><div class="menu-item" onclick="logout()"><div class="menu-icon">🚪</div><span>Logout</span></div></div>
 <div class="main-content" id="mainContent">
     <div class="navbar"><div class="navbar-title">COT Data · Economic Sentiment & Non‑Commercial Positions</div><div><button onclick="loadCurrencies()" class="secondary">🔄 Refresh</button></div></div>
@@ -1541,8 +1899,20 @@ if(currencies.length>0){select.value=currencies[0];loadScorecard()}
 </div>
 <script>
 let currentCurrencies = [];
-function toggleSidebar(){const sidebar=document.getElementById('sidebar');const main=document.getElementById('mainContent');sidebar.classList.toggle('collapsed');if(sidebar.classList.contains('collapsed')){main.style.marginLeft='80px'}else{main.style.marginLeft='280px'}}
-async function loadCurrencies(){document.getElementById('loading').style.display='block';document.getElementById('currencyTable').innerHTML='';try{const res=await fetch('/api/currencies');if(!res.ok) throw new Error('Failed to load');const data=await res.json();currentCurrencies = data.currencies;displayCurrencies(currentCurrencies);renderBarChart(currentCurrencies);}catch(e){document.getElementById('currencyTable').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ Error loading currency data</div>'}finally{document.getElementById('loading').style.display='none'}}
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (optional)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});async function loadCurrencies(){document.getElementById('loading').style.display='block';document.getElementById('currencyTable').innerHTML='';try{const res=await fetch('/api/currencies');if(!res.ok) throw new Error('Failed to load');const data=await res.json();currentCurrencies = data.currencies;displayCurrencies(currentCurrencies);renderBarChart(currentCurrencies);}catch(e){document.getElementById('currencyTable').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ Error loading currency data</div>'}finally{document.getElementById('loading').style.display='none'}}
 function displayCurrencies(currencies){let html='<table><thead><tr><th>Currency</th><th>Economic Sentiment</th><th>COT Net Position</th><th>COT Weekly Change</th><th>Longs (Contracts)</th><th>Shorts (Contracts)</th></tr></thead><tbody>';currencies.forEach(c=>{const econColor=c.econ_pct>=55?'#00e5a0':(c.econ_pct<=45?'#ff4d6d':'#ffb800');const netClass=c.cot_net>=0?'positive':'negative';const changeClass=c.cot_change>=0?'positive':'negative';html+=`<tr><td style="font-weight:bold;font-size:1.1em">${c.currency}</td><td><div style="display:flex;align-items:center;justify-content:center;gap:8px"><span style="color:${econColor};font-weight:bold">${c.econ_pct.toFixed(1)}%</span><div class="gauge-bar"><div class="gauge-fill" style="width:${c.econ_pct}%;background:${econColor}"></div></div></div></td><td class="${netClass}">${c.cot_net.toLocaleString()}</td><td class="${changeClass}">${c.cot_change.toLocaleString()}</td><td>${c.longs.toLocaleString()}</td><td>${c.shorts.toLocaleString()}</td></tr>`});html+='</tbody></table>';document.getElementById('currencyTable').innerHTML=html}
 function renderBarChart(currencies){const ctx=document.getElementById('cotBarChart').getContext('2d');const labels=currencies.map(c=>c.currency);const longPcts=currencies.map(c=>c.long_pct);const shortPcts=currencies.map(c=>c.short_pct);if(window.barChart) window.barChart.destroy();window.barChart=new Chart(ctx,{type:'bar',data:{labels:labels,datasets:[{label:'Long %',data:longPcts,backgroundColor:'rgba(0,229,160,0.7)',borderColor:'#00e5a0',borderWidth:1},{label:'Short %',data:shortPcts,backgroundColor:'rgba(255,77,109,0.7)',borderColor:'#ff4d6d',borderWidth:1}]},options:{responsive:true,maintainAspectRatio:true,scales:{x:{title:{display:true,text:'Currency',color:'#a0b0c0'},ticks:{color:'#fff'}},y:{title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},ticks:{color:'#fff',beginAtZero:true,max:100}}},plugins:{legend:{labels:{color:'#fff'},position:'top'},tooltip:{callbacks:{label:function(context){return `${context.dataset.label}: ${context.raw.toFixed(1)}%`}}}}}})}
 function logout(){fetch('/logout').then(()=>window.location.href='/login')}
@@ -1556,9 +1926,87 @@ loadCurrencies();
         f.write('''<!DOCTYPE html>
 <html><head><title>Sentiment – Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}.sidebar .logo{font-size:22px;color:#00e5ff;text-align:center;margin-bottom:30px}.sidebar .menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A}.main-content{flex:1;margin-left:280px;padding:20px 30px}.header h2{color:#00e5ff;margin-bottom:20px}.search-box{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:350px;margin-bottom:20px}.sentiment-table{width:100%;border-collapse:collapse;background:#121826;border-radius:12px;overflow:hidden}.sentiment-table th,.sentiment-table td{padding:12px 15px;border-bottom:1px solid #2a3040;text-align:left}.sentiment-table th{background:rgba(0,229,255,0.1);color:#00e5ff}.sentiment-table td{padding:12px 15px}.bar-container{display:flex;align-items:center;gap:10px}.bar-wrapper{flex:1;height:24px;background:#1a1f2e;border-radius:12px;overflow:hidden;display:flex}.bar-long{background:#00e5a0;height:100%;display:flex;align-items:center;justify-content:center;color:#0B0F1A;font-weight:bold;font-size:0.8rem;transition:width 0.3s}.bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}.percentage-col{width:80px;text-align:right}.pair-col{font-weight:bold;width:120px}
-</style>
+/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar"><div class="logo">📊 Tradion</div><div class="menu-item" onclick="window.location.href='/dashboard'">Dashboard</div><div class="menu-item" onclick="window.location.href='/currencies'">COT Data</div><div class="menu-item" onclick="window.location.href='/scorecard'">Scorecard</div><div class="menu-item active" onclick="window.location.href='/sentiment'">Sentiment</div><div class="menu-item" onclick="window.location.href='/profile'">Profile</div><div class="menu-item" onclick="logout()">Logout</div></div>
 <div class="main-content">
     <div class="header"><h2>Market Sentiment</h2></div>
@@ -1566,6 +2014,20 @@ loadCurrencies();
     <table class="sentiment-table" id="sentimentTable"><thead><tr><th>Pair</th><th>Sentiment Bar</th><th>Long %</th><th>Short %</th></tr></thead><tbody></tbody></table>
 </div>
 <script>
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (optional)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});
 async function loadSentiment(){const res=await fetch('/api/sentiment');const data=await res.json();renderSentiment(data)}
 function renderSentiment(data){const tbody=document.querySelector('#sentimentTable tbody');tbody.innerHTML='';data.forEach(s=>{const long=s.long_pct,short=s.short_pct;const row=document.createElement('tr');row.innerHTML=`<td class="pair-col">${s.pair}</td><td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td><td class="percentage-col" style="color:#00e5a0">${long}%</td><td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;tbody.appendChild(row)})}
 document.getElementById('searchSentiment').addEventListener('input',function(){const term=this.value.toLowerCase();const rows=document.querySelectorAll('#sentimentTable tbody tr');rows.forEach(row=>{const pair=row.querySelector('.pair-col').textContent.toLowerCase();row.style.display=pair.includes(term)?'':'none'})});
@@ -1579,12 +2041,105 @@ loadSentiment();
     with open('templates/profile.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Profile - Tradion</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}.logo{font-size:24px;color:#00e5ff;margin-bottom:30px}.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.main-content{flex:1;margin-left:280px;padding:30px}.container{max-width:600px;margin:50px auto;padding:30px;background:#121826;border-radius:20px;border:1px solid #2a3040}.container h2{color:#00e5ff;margin-bottom:20px}.container div{margin-bottom:20px;font-size:1.1em}.btn{display:inline-block;padding:10px 20px;background:#00e5ff;color:#000;text-decoration:none;border-radius:8px;font-weight:bold;margin-top:10px}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed}.logo{font-size:24px;color:#00e5ff;margin-bottom:30px}.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.main-content{flex:1;margin-left:280px;padding:30px}.container{max-width:600px;margin:50px auto;padding:30px;background:#121826;border-radius:20px;border:1px solid #2a3040}.container h2{color:#00e5ff;margin-bottom:20px}.container div{margin-bottom:20px;font-size:1.1em}.btn{display:inline-block;padding:10px 20px;background:#00e5ff;color:#000;text-decoration:none;border-radius:8px;font-weight:bold;margin-top:10px}/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar"><div class="logo">⚡ Tradion</div><div class="menu-item" onclick="window.location.href='/dashboard'">📊 Dashboard</div><div class="menu-item" onclick="logout()">🚪 Logout</div></div>
 <div class="main-content"><div class="container"><h2>Profile</h2><div>👤 Username: <strong>{{ username }}</strong></div><a href="/dashboard" class="btn">← Back to Dashboard</a></div></div>
-<script>function logout(){fetch('/logout').then(()=>window.location.href='/login');}</script>
+<script>
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (optional)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});
+function logout(){fetch('/logout').then(()=>window.location.href='/login');}</script>
 </body>
 </html>''')
 
@@ -1683,9 +2238,87 @@ loadSentiment();
     font-size: 1.5rem;
     margin: 0;
 }
-</style>
+/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar">
     <div class="logo">👑 ADMIN PANEL</div>
     <div class="menu-item" onclick="showPane('cotUpload')">📁 COT Upload</div>
@@ -1732,8 +2365,22 @@ loadSentiment();
 <div class="modal" id="indicatorModal"><div class="modal-content"><h3 id="indModalTitle" style="color:#00e5ff;margin-bottom:20px">Add Indicator</h3><form id="indicatorForm"><input type="hidden" id="indicatorId"><label>Currency</label><select id="indCurrencySelect" required></select><label>Indicator Name</label><input type="text" id="indName" required><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Forecast</label><input type="number" step="0.1" id="indForecast" required></div><div><label>Actual</label><input type="number" step="0.1" id="indActual" required></div></div><label><input type="checkbox" id="indLowerBetter"> Lower is better</label><label>Category</label><select id="indCategory" required><option value="Technical Bias">Technical Bias</option><option value="Economic Growth Bias">Economic Growth Bias</option><option value="Inflation Bias">Inflation Bias</option><option value="Jobs Market Bias">Jobs Market Bias</option><option value="Crowd Sentiment (COT)">Crowd Sentiment (COT)</option></select><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeIndicatorModal()" class="secondary">Cancel</button></div></form></div></div>
 
 <!-- Sentiment Modal -->
-<div class="modal" id="sentimentModal"><div class="modal-content"><h3 style="color:#00e5ff;margin-bottom:20px">Sentiment Entry</h3><form id="sentimentForm"><label>Pair</label><select id="sentPair" required></select><label>Long %</label><input type="number" step="0.1" id="sentLong" min="0" max="100" required><label>Short %</label><input type="number" step="0.1" id="sentShort" min="0" max="100" required><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button></div></form></div></div>
-
+<div class="modal" id="sentimentModal">
+  <div class="modal-content">
+    <h3 style="color:#00e5ff;margin-bottom:20px">Sentiment Entry</h3>
+    <form id="sentimentForm">
+      <label>Pair</label>
+      <select id="sentPair" required></select>
+      <label>Long % (0-100)</label>
+      <input type="number" step="0.1" id="sentLong" min="0" max="100" required>
+      <small>Short % will be automatically calculated as 100 - Long %</small>
+      <div style="display:flex;gap:10px;margin-top:20px">
+        <button type="submit">Save</button>
+        <button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button>
+      </div>
+    </form>
+  </div>
+</div>
 <script>
 const allPairs={{ ALL_PAIRS|tojson }};
 const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC"];
@@ -1965,11 +2612,21 @@ function openSentimentModal(){
     allPairs.forEach(p=>{const pairStr=p[0]+'/'+p[1];const opt=document.createElement('option');opt.value=pairStr;opt.textContent=pairStr;select.appendChild(opt)});
 }
 function closeSentimentModal(){document.getElementById('sentimentModal').style.display='none';}
-function editSentiment(pair,long,short){ openSentimentModal(); document.getElementById('sentPair').value=pair; document.getElementById('sentLong').value=long; document.getElementById('sentShort').value=short; }
-async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
+function editSentiment(pair, long, short){
+    openSentimentModal();
+    document.getElementById('sentPair').value=pair;
+    document.getElementById('sentLong').value=long;
+    // Short is not shown, but we store it in a data attribute if needed? Not necessary.
+}async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
 document.getElementById('sentimentForm').addEventListener('submit',async e=>{
     e.preventDefault();
-    const data={pair:document.getElementById('sentPair').value,long_pct:parseFloat(document.getElementById('sentLong').value),short_pct:parseFloat(document.getElementById('sentShort').value)};
+    const long_pct = parseFloat(document.getElementById('sentLong').value);
+    const short_pct = 100 - long_pct;
+    const data={
+        pair:document.getElementById('sentPair').value,
+        long_pct: long_pct,
+        short_pct: short_pct
+    };
     await fetch('/admin/sentiment',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(data)});
     closeSentimentModal(); loadSentiment();
 });

@@ -1,9 +1,87 @@
 <!DOCTYPE html>
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>Asset Scorecard – Tradion</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:20px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:10px 12px;margin:3px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:18px;margin-right:10px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:25px 35px;transition:margin-left 0.3s;max-width:1200px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.header h2{color:#00e5ff;font-size:2rem}.symbol-selector select{padding:10px 14px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:1rem;min-width:200px}.scorecard-grid{display:grid;grid-template-columns:1fr 1fr;gap:25px}.gauge-panel{background:#121826;border-radius:16px;padding:25px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3040;position:relative}.gauge-container{position:relative;width:200px;height:100px;overflow:hidden}.gauge-svg{width:100%;height:100%}.gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}.gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}.gauge-needle-group{transition:transform 0.5s ease-out}.needle-body{stroke:#fff;stroke-width:2;fill:none}.needle-tip{fill:#fff;stroke:#fff;stroke-width:1}.gauge-center{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}.gauge-label{font-size:1.4rem;font-weight:bold;color:#00e5ff}.gauge-bias{font-size:1rem;color:#00e5a0}.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.9);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}.loading-overlay.hidden{display:none}.spinner{border:4px solid #2a3040;border-top:4px solid #00e5ff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.score-summary{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:20px}.score-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#1a1f2e;border-radius:10px;font-size:1rem}.score-label{font-weight:600}.score-value{font-weight:bold;padding:3px 10px;border-radius:20px;font-size:0.9rem}.score-value.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.score-value.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.score-value.neutral{background:rgba(255,184,0,0.2);color:#ffb800}.trend-chart{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:15px}.trend-bar{flex:1;background:#2a3040;border-radius:4px 4px 0 0;min-width:8px;transition:height 0.3s}.trend-bar.positive{background:#00e5a0}.trend-bar.negative{background:#ff4d6d}.panel{background:#121826;border-radius:14px;padding:18px;border:1px solid #2a3040;margin-bottom:16px;font-size:0.95rem}.panel h3{color:#00e5ff;font-size:1.1rem;margin-bottom:12px;border-bottom:1px solid #2a3040;padding-bottom:10px}.indicator-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,48,64,0.5);font-size:0.9rem}.indicator-row:last-child{border-bottom:none}.indicator-label{font-size:0.9rem}.indicator-values{display:flex;gap:15px}.value{font-weight:500;width:70px;text-align:right}.value.positive{color:#00e5a0}.value.negative{color:#ff4d6d}.value.neutral{color:#a0b0c0}.surprise{font-size:0.75rem;padding:2px 6px;border-radius:12px}.surprise.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.surprise.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:20px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:10px 12px;margin:3px 0;border-radius:8px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{font-size:18px;margin-right:10px}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:25px 35px;transition:margin-left 0.3s;max-width:1200px}.header{display:flex;justify-content:space-between;align-items:center;margin-bottom:25px}.header h2{color:#00e5ff;font-size:2rem}.symbol-selector select{padding:10px 14px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:1rem;min-width:200px}.scorecard-grid{display:grid;grid-template-columns:1fr 1fr;gap:25px}.gauge-panel{background:#121826;border-radius:16px;padding:25px;display:flex;flex-direction:column;align-items:center;border:1px solid #2a3040;position:relative}.gauge-container{position:relative;width:200px;height:100px;overflow:hidden}.gauge-svg{width:100%;height:100%}.gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}.gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}.gauge-needle-group{transition:transform 0.5s ease-out}.needle-body{stroke:#fff;stroke-width:2;fill:none}.needle-tip{fill:#fff;stroke:#fff;stroke-width:1}.gauge-center{position:absolute;bottom:0;left:50%;transform:translateX(-50%);text-align:center}.gauge-label{font-size:1.4rem;font-weight:bold;color:#00e5ff}.gauge-bias{font-size:1rem;color:#00e5a0}.loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.9);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}.loading-overlay.hidden{display:none}.spinner{border:4px solid #2a3040;border-top:4px solid #00e5ff;border-radius:50%;width:36px;height:36px;animation:spin 1s linear infinite}@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}.score-summary{display:flex;flex-direction:column;gap:10px;width:100%;margin-top:20px}.score-item{display:flex;justify-content:space-between;align-items:center;padding:10px 14px;background:#1a1f2e;border-radius:10px;font-size:1rem}.score-label{font-weight:600}.score-value{font-weight:bold;padding:3px 10px;border-radius:20px;font-size:0.9rem}.score-value.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.score-value.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.score-value.neutral{background:rgba(255,184,0,0.2);color:#ffb800}.trend-chart{display:flex;align-items:flex-end;gap:6px;height:60px;margin-top:15px}.trend-bar{flex:1;background:#2a3040;border-radius:4px 4px 0 0;min-width:8px;transition:height 0.3s}.trend-bar.positive{background:#00e5a0}.trend-bar.negative{background:#ff4d6d}.panel{background:#121826;border-radius:14px;padding:18px;border:1px solid #2a3040;margin-bottom:16px;font-size:0.95rem}.panel h3{color:#00e5ff;font-size:1.1rem;margin-bottom:12px;border-bottom:1px solid #2a3040;padding-bottom:10px}.indicator-row{display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid rgba(42,48,64,0.5);font-size:0.9rem}.indicator-row:last-child{border-bottom:none}.indicator-label{font-size:0.9rem}.indicator-values{display:flex;gap:15px}.value{font-weight:500;width:70px;text-align:right}.value.positive{color:#00e5a0}.value.negative{color:#ff4d6d}.value.neutral{color:#a0b0c0}.surprise{font-size:0.75rem;padding:2px 6px;border-radius:12px}.surprise.positive{background:rgba(0,229,160,0.2);color:#00e5a0}.surprise.negative{background:rgba(255,77,109,0.2);color:#ff4d6d}.toggle-btn{background:none;border:none;color:#00e5ff;font-size:22px;cursor:pointer;margin-right:8px}/* ===== Mobile / Responsive Styles ===== */
+.hamburger {
+    display: none;
+    font-size: 28px;
+    cursor: pointer;
+    color: #00e5ff;
+    position: fixed;
+    top: 15px;
+    left: 20px;
+    z-index: 1100;
+    background: #121826;
+    padding: 8px 12px;
+    border-radius: 8px;
+    border: 1px solid #2a3040;
+}
+
+@media (max-width: 768px) {
+    .sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+        width: 260px;
+        z-index: 1050;
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 100%;
+        background: #121826;
+    }
+    .sidebar.open {
+        transform: translateX(0);
+    }
+    .main-content {
+        margin-left: 0 !important;
+        padding: 60px 15px 20px 15px !important;
+        width: 100%;
+    }
+    .hamburger {
+        display: block;
+    }
+    .navbar {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 10px 15px;
+    }
+    table, .currency-grid, .gauge-panel, .scorecard-grid {
+        font-size: 12px;
+    }
+    th, td {
+        padding: 8px 4px;
+    }
+    .currency-card {
+        padding: 12px;
+    }
+    .gauge-wrapper {
+        width: 90px;
+        height: 90px;
+    }
+    .gauge-value {
+        font-size: 18px;
+    }
+    .scorecard-grid {
+        grid-template-columns: 1fr;
+        gap: 15px;
+    }
+    .panel {
+        padding: 12px;
+    }
+    .cot-data-table th, .cot-data-table td {
+        padding: 8px 6px;
+        font-size: 12px;
+    }
+    .inline-edit {
+        width: 80px;
+        padding: 4px 6px;
+        font-size: 0.75rem;
+    }
+}</style>
 </head>
 <body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar" id="sidebar"><div class="logo"><button class="toggle-btn" onclick="toggleSidebar()">☰</button><span>⚡ Tradion</span></div><div class="menu-item" onclick="window.location.href='/dashboard'"><span class="menu-icon">📊</span><span>Dashboard</span></div><div class="menu-item" onclick="window.location.href='/currencies'"><span class="menu-icon">💱</span><span>COT Data</span></div><div class="menu-item active"><span class="menu-icon">📈</span><span>Asset Scorecard</span></div><div class="menu-item" onclick="window.location.href='/sentiment'"><span class="menu-icon">💬</span><span>Sentiment</span></div><div class="menu-item" onclick="window.location.href='/profile'"><span class="menu-icon">👤</span><span>Profile</span></div><div class="menu-item" onclick="logout()"><span class="menu-icon">🚪</span><span>Logout</span></div></div>
 <div class="main-content" id="mainContent">
     <div class="header"><h2>Asset Scorecard</h2><div class="symbol-selector"><select id="symbolSelect" onchange="loadScorecard()"><option value="">Select Currency...</option></select></div></div>
@@ -34,8 +112,20 @@
 const currencies={{ currencies|tojson }};
 const select=document.getElementById('symbolSelect');
 currencies.forEach(cur=>{const opt=document.createElement('option');opt.value=cur;opt.textContent=cur;select.appendChild(opt)});
-function toggleSidebar(){const sidebar=document.getElementById('sidebar');const main=document.getElementById('mainContent');sidebar.classList.toggle('collapsed');if(sidebar.classList.contains('collapsed')){main.style.marginLeft='80px'}else{main.style.marginLeft='280px'}}
-const CATEGORIES=["Technical Bias","Economic Growth Bias","Inflation Bias","Jobs Market Bias","Crowd Sentiment (COT)"];
+// Toggle mobile sidebar
+function toggleSidebar() {
+    const sidebar = document.getElementById('sidebar');
+    sidebar.classList.toggle('open');
+}
+
+// Close sidebar when clicking outside (optional)
+document.addEventListener('click', function(event) {
+    const sidebar = document.getElementById('sidebar');
+    const hamburger = document.querySelector('.hamburger');
+    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+        sidebar.classList.remove('open');
+    }
+});const CATEGORIES=["Technical Bias","Economic Growth Bias","Inflation Bias","Jobs Market Bias","Crowd Sentiment (COT)"];
 async function loadScorecard(){const symbol=select.value;if(!symbol) return;const overlay=document.getElementById('loadingOverlay');overlay.classList.remove('hidden');try{const res=await fetch('/api/asset_scorecard/'+encodeURIComponent(symbol));const data=await res.json();updateGauge(data.overall.score,data.overall.bias,data.overall.color);updateScores(data);updateTrendChart(data.score_history);renderCategoryCards(data)}catch(e){console.error(e)}finally{overlay.classList.add('hidden')}}
 function updateGauge(score,bias,color){const clampedScore=Math.min(Math.max(score,-10),10);const angle=((clampedScore+10)/20)*180;document.getElementById('gaugeNeedleGroup').setAttribute('transform',`rotate(${angle-90},110,110)`);document.getElementById('gaugeBias').textContent=bias;document.getElementById('gaugeValue').textContent=score.toFixed(1);document.querySelector('.gauge-bias').style.color=color}
 function updateScores(data){setScoreValue('tradionScore',data.tradion_score);setScoreValue('technicalScore',data.technical_score>0?'▲ 1':(data.technical_score<0?'▼ -1':'● 0'));setScoreValue('sentimentCOTScore',data.sentiment_cot_score);setScoreValue('fundamentalsScore',data.fundamentals_score,data.fundamentals_score>0?'positive':(data.fundamentals_score<0?'negative':'neutral'))}
