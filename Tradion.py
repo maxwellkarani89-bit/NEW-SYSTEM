@@ -1460,26 +1460,153 @@ def calculate_currency_strength(results):
 @app.route('/api/detailed_analysis')
 @login_required
 def detailed_analysis():
+    # Prefetch all economic indicator scores for each currency
+    all_indicators = EconomicIndicator.query.all()
+    currency_scores = {}
+    for ind in all_indicators:
+        if ind.forecast == 0 and ind.actual == 0:
+            continue
+        if "Employment Change" in ind.indicator_name:
+            continue
+        curr = ind.currency.upper()
+        if curr not in currency_scores:
+            currency_scores[curr] = {}
+        # compute directional score (1,0,-1)
+        if ind.indicator_name == "Interest Rate Decision":
+            score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        else:
+            if ind.is_lower_better:
+                score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+            else:
+                score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        currency_scores[curr][ind.indicator_name] = score
+
+    # Prefetch COT data
+    cot_records = COTData.query.all()
+    cot_dict = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+
+    # Prefetch retail sentiment (myfxbook fallback only)
+    sentiment_dict = {s.pair: s for s in SentimentData.query.all()}
+
+    # Helper to get retail sentiment score
+    def get_retail_score(pair):
+        sent = sentiment_dict.get(pair)
+        if sent:
+            if sent.short_pct > sent.long_pct:
+                return 1
+            elif sent.long_pct > sent.short_pct:
+                return -1
+        return 0
+
+    # Prefetch COT alignment for pairs (net + momentum direction)
+    def get_cot_alignment(base, quote):
+        base_cot = cot_dict.get(base, {'net':0, 'change':0})
+        quote_cot = cot_dict.get(quote, {'net':0, 'change':0})
+        base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+        base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
+        quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
+        quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
+        pair_net = base_net_dir - quote_net_dir
+        pair_mom = base_mom_dir - quote_mom_dir
+        if pair_net > 0 and pair_mom > 0:
+            return 2
+        elif pair_net < 0 and pair_mom < 0:
+            return -2
+        return 0
+
+    # Helper to get weighted score for a pair (used in normal pair logic)
+    def weighted_pair_score(base, quote, pair):
+        # Economic indicators
+        base_eco = currency_scores.get(base, {})
+        quote_eco = currency_scores.get(quote, {})
+        def ind_pair_norm(ind_name):
+            b = base_eco.get(ind_name, 0)
+            q = quote_eco.get(ind_name, 0)
+            return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
+        gdp = ind_pair_norm("GDP Growth Rate QoQ (%)")
+        m_pmi = ind_pair_norm("Manufacturing PMI")
+        s_pmi = ind_pair_norm("Services PMI")
+        retail = ind_pair_norm("Retail Sales MoM (%)")
+        cons_conf = ind_pair_norm("Consumer Confidence")
+        cpi = ind_pair_norm("CPI YoY (%)")
+        ppi = ind_pair_norm("PPI YoY (%)")
+        pce = ind_pair_norm("PCE YoY (%)")
+        interest = ind_pair_norm("Interest Rate Decision")
+        nfp = ind_pair_norm("NFP (K)")
+        avg_hrly = ind_pair_norm("Average Hourly Earnings")
+        unemp_rate = ind_pair_norm("Unemployment Rate (%)")
+        unemp_claims = ind_pair_norm("Unemployment Claims (K)")
+        adp = ind_pair_norm("ADP (K)")
+        jolts = ind_pair_norm("JOLTS Job Openings (M)")
+        cot_align = get_cot_alignment(base, quote)
+        crowd = get_retail_score(pair)
+        yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
+        trend = get_technical_directional_score(yf_symbol)
+        season = get_seasonality_directional_score(pair)
+        total = (gdp + m_pmi + s_pmi + retail + cons_conf + cpi + ppi + pce + interest +
+                 nfp + avg_hrly + unemp_rate + unemp_claims + adp + jolts +
+                 cot_align + crowd + trend + season)
+        return total
+
+    # Standalone asset helper (XAU/BTC)
+    def standalone_score(base, pair):
+        base_eco = currency_scores.get(base, {})
+        def raw_score(ind_name):
+            return base_eco.get(ind_name, 0)
+        gdp = raw_score("GDP Growth Rate QoQ (%)")
+        m_pmi = raw_score("Manufacturing PMI")
+        s_pmi = raw_score("Services PMI")
+        retail = raw_score("Retail Sales MoM (%)")
+        cons_conf = raw_score("Consumer Confidence")
+        cpi = raw_score("CPI YoY (%)")
+        ppi = raw_score("PPI YoY (%)")
+        pce = raw_score("PCE YoY (%)")
+        interest = raw_score("Interest Rate Decision")
+        nfp = raw_score("NFP (K)")
+        avg_hrly = raw_score("Average Hourly Earnings")
+        unemp_rate = raw_score("Unemployment Rate (%)")
+        unemp_claims = raw_score("Unemployment Claims (K)")
+        adp = raw_score("ADP (K)")
+        jolts = raw_score("JOLTS Job Openings (M)")
+        base_cot = cot_dict.get(base, {'net':0, 'change':0})
+        cot_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+        cot_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
+        cot_align = 2 if (cot_net_dir > 0 and cot_mom_dir > 0) else (-2 if (cot_net_dir < 0 and cot_mom_dir < 0) else 0)
+        crowd = get_retail_score(pair)
+        yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
+        trend = get_technical_directional_score(yf_symbol)
+        season = get_seasonality_directional_score(pair)
+        total = (gdp + m_pmi + s_pmi + retail + cons_conf + cpi + ppi + pce + interest +
+                 nfp + avg_hrly + unemp_rate + unemp_claims + adp + jolts +
+                 cot_align + crowd + trend + season)
+        return total
+
+    # Generate results for all pairs
     results = []
     for base, quote in ALL_PAIRS:
         pair = f"{base}/{quote}"
-        
-        # Check if this is a standalone asset (XAU or BTC)
         is_standalone = base in ["XAU", "BTC"] and quote == "USD"
-        
         try:
             if is_standalone:
-                # ----- STANDALONE LOGIC FOR XAU/BTC -----
-                # For standalone assets, don't subtract USD scores
-                
-                # Get asset's own economic scores only (no USD comparison)
-                base_scores = get_currency_indicator_scores(base)
-                
-                # Economic indicators - use raw base scores (not normalized against USD)
+                total_score = standalone_score(base, pair)
+            else:
+                total_score = weighted_pair_score(base, quote, pair)
+            total_score = max(-20, min(20, total_score))
+            overall_bias, _, _, _ = classify_bias(total_score)
+            # For simplicity, we only need the fields used in the frontend table.
+            # The frontend expects the same structure as before.
+            # We'll reuse the same helper functions for the individual indicator scores
+            # but we already computed them inside the helpers. For brevity, we can compute
+            # the detailed breakdown similarly or reuse the existing logic from your old code
+            # but without repeated DB calls. However, the frontend expects all those 22 columns.
+            # Let's compute them similarly to your original code but using pre-fetched data.
+            # To avoid massive code duplication, I'll keep the same structure as your original
+            # but using the precomputed dictionaries. The following block mimics your original
+            # but uses the pre-fetched currency_scores and cot_dict.
+            if is_standalone:
+                base_scores = currency_scores.get(base, {})
                 def get_raw_ind_score(ind_name):
-                    # Returns 1, 0, -1 based on the asset's own indicator surprise
                     return base_scores.get(ind_name, 0)
-                
                 gdp = get_raw_ind_score("GDP Growth Rate QoQ (%)")
                 m_pmi = get_raw_ind_score("Manufacturing PMI")
                 s_pmi = get_raw_ind_score("Services PMI")
@@ -1495,33 +1622,14 @@ def detailed_analysis():
                 unemp_claims = get_raw_ind_score("Unemployment Claims (K)")
                 adp = get_raw_ind_score("ADP (K)")
                 jolts = get_raw_ind_score("JOLTS Job Openings (M)")
-                
-                # COT: Use asset's own COT only (no USD subtraction)
-                base_cot = COTData.query.filter_by(currency=base).first()
-                cot_net_dir = 1 if (base_cot.net_position if base_cot else 0) > 0 else (-1 if (base_cot.net_position if base_cot else 0) < 0 else 0)
-                cot_mom_dir = 1 if (base_cot.weekly_change if base_cot else 0) > 0 else (-1 if (base_cot.weekly_change if base_cot else 0) < 0 else 0)
+                base_cot = cot_dict.get(base, {'net':0, 'change':0})
+                cot_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+                cot_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
                 cot_align = 2 if (cot_net_dir > 0 and cot_mom_dir > 0) else (-2 if (cot_net_dir < 0 and cot_mom_dir < 0) else 0)
-                
-                # Retail sentiment (already standalone)
-                crowd = get_retail_sentiment_score(pair)
-                
-                # Technical (already standalone)
+                crowd = get_retail_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
-                
-                # Seasonality (already standalone)
                 season = get_seasonality_directional_score(pair)
-                
-                # Calculate total score (sum of all contributions, no USD subtraction)
-                total_score = (gdp + m_pmi + s_pmi + retail + consumer_conf + 
-                              cpi + ppi + pce + interest + nfp + avg_hourly + 
-                              unemp_rate + unemp_claims + adp + jolts + 
-                              cot_align + crowd + trend + season)
-                
-                # Clamp to ±20
-                total_score = max(-20, min(20, total_score))
-                overall_bias, _, _, _ = classify_bias(total_score)
-                
                 results.append({
                     "symbol": pair,
                     "bias": overall_bias,
@@ -1546,21 +1654,13 @@ def detailed_analysis():
                     "adp": adp,
                     "jolts": jolts
                 })
-                
             else:
-                # ----- NORMAL PAIR LOGIC (existing code) -----
-                weighted = calculate_weighted_pair_score(pair, base, quote)
-                total_score = weighted["total_raw"]
-                overall_bias, _, _, _ = classify_bias(total_score)
-
-                base_scores = get_currency_indicator_scores(base)
-                quote_scores = get_currency_indicator_scores(quote)
-
+                base_eco = currency_scores.get(base, {})
+                quote_eco = currency_scores.get(quote, {})
                 def ind_pair_norm(ind_name):
-                    b = base_scores.get(ind_name, 0)
-                    q = quote_scores.get(ind_name, 0)
-                    return normalize_pair_score(b, q)
-
+                    b = base_eco.get(ind_name, 0)
+                    q = quote_eco.get(ind_name, 0)
+                    return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
                 gdp = ind_pair_norm("GDP Growth Rate QoQ (%)")
                 m_pmi = ind_pair_norm("Manufacturing PMI")
                 s_pmi = ind_pair_norm("Services PMI")
@@ -1576,13 +1676,11 @@ def detailed_analysis():
                 unemp_claims = ind_pair_norm("Unemployment Claims (K)")
                 adp = ind_pair_norm("ADP (K)")
                 jolts = ind_pair_norm("JOLTS Job Openings (M)")
-
-                cot_align = get_cot_alignment_score(base, quote)
-                crowd = get_retail_sentiment_score(pair)
+                cot_align = get_cot_alignment(base, quote)
+                crowd = get_retail_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
                 season = get_seasonality_directional_score(pair)
-
                 results.append({
                     "symbol": pair,
                     "bias": overall_bias,
@@ -1607,7 +1705,6 @@ def detailed_analysis():
                     "adp": adp,
                     "jolts": jolts
                 })
-                
         except Exception as e:
             print(f"Error processing {pair}: {e}")
             results.append({
