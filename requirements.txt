@@ -1,5 +1,6 @@
 Flask
 Flask-SQLAlchemy
+APScheduler
 pandas
 numpy
 yfinance
