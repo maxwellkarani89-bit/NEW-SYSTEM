@@ -1,96 +1,58 @@
 <!DOCTYPE html>
 <html><head><title>Admin - Tradion</title>
+<script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}table{width:100%;border-collapse:collapse}th,td{padding:8px;border-bottom:1px solid #2a3040;text-align:left}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
 
-/* COT Data Table improvements */
-.cot-table-container {
+/* ===== Clean Tables (shared) ===== */
+.table-container {
     overflow-x: auto;
     margin-top: 20px;
     border-radius: 12px;
     border: 1px solid #2a3040;
 }
-.cot-data-table {
+.clean-table {
     width: 100%;
     border-collapse: collapse;
     background: #121826;
     font-size: 14px;
 }
-.cot-data-table th,
-.cot-data-table td {
-    padding: 14px 12px;
+.clean-table th,
+.clean-table td {
+    padding: 12px 10px;
     text-align: left;
     border-bottom: 1px solid #2a3040;
     vertical-align: middle;
 }
-.cot-data-table th {
+.clean-table th {
     background: rgba(0, 229, 255, 0.15);
     color: #00e5ff;
     font-weight: 600;
     font-size: 0.9rem;
+    position: sticky;
+    top: 0;
 }
-.cot-data-table td {
+.clean-table td {
     color: #e0e0e0;
 }
-.cot-data-table tr:hover {
+.clean-table tr:hover {
     background: rgba(0, 229, 255, 0.05);
 }
-.inline-edit {
-    background: #1a1f2e;
-    border: 1px solid #3a4055;
-    padding: 8px 10px;
-    border-radius: 6px;
-    color: #fff;
-    width: 120px;
-    font-size: 0.9rem;
-    transition: all 0.2s;
-}
-.inline-edit:focus {
-    outline: none;
-    border-color: #00e5ff;
-    box-shadow: 0 0 0 2px rgba(0,229,255,0.2);
-}
-.save-cot-btn {
-    background: #00e5ff;
-    color: #0B0F1A;
-    border: none;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    font-size: 0.8rem;
-    transition: 0.2s;
-}
-.save-cot-btn:hover {
-    background: #00b8d4;
-    transform: scale(1.02);
-}
-.cot-refresh-btn, .cot-add-btn {
-    background: transparent;
-    border: 1px solid #00e5ff;
-    color: #00e5ff;
-    padding: 6px 12px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-weight: bold;
-    margin-left: 8px;
-}
-.cot-refresh-btn:hover, .cot-add-btn:hover {
-    background: rgba(0,229,255,0.1);
-}
-.cot-title-bar {
+
+/* COT specific */
+.form-row {
     display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 20px;
-    flex-wrap: wrap;
     gap: 15px;
+    align-items: flex-end;
+    flex-wrap: wrap;
 }
-.cot-title-bar h2 {
-    color: #00e5ff;
-    font-size: 1.5rem;
-    margin: 0;
+.form-group {
+    flex: 1;
+    min-width: 120px;
 }
+.positive { color: #00e5a0; }
+.negative { color: #ff4d6d; }
+
 /* ===== Mobile / Responsive Styles ===== */
 .hamburger {
     display: none;
@@ -136,86 +98,151 @@
         gap: 10px;
         padding: 10px 15px;
     }
-    table, .currency-grid, .gauge-panel, .scorecard-grid {
-        font-size: 12px;
-    }
-    th, td {
-        padding: 8px 4px;
-    }
-    .currency-card {
-        padding: 12px;
-    }
-    .gauge-wrapper {
-        width: 90px;
-        height: 90px;
-    }
-    .gauge-value {
-        font-size: 18px;
-    }
-    .scorecard-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-    .panel {
-        padding: 12px;
-    }
-    .cot-data-table th, .cot-data-table td {
+    .clean-table th, .clean-table td {
         padding: 8px 6px;
         font-size: 12px;
     }
-    .inline-edit {
-        width: 80px;
-        padding: 4px 6px;
-        font-size: 0.75rem;
+    .form-row {
+        flex-direction: column;
+        gap: 10px;
     }
-}</style>
+}
+</style>
 </head>
 <body>
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
 <div class="sidebar">
     <div class="logo">👑 ADMIN PANEL</div>
-    <div class="menu-item" onclick="showPane('cotUpload')">📁 COT Upload</div>
-    <div class="menu-item" onclick="showPane('econUpload')">📊 Econ Upload</div>
-    <div class="menu-item" onclick="showPane('econIndicators')">📉 Indicators</div>
-    <div class="menu-item" onclick="showPane('cotData')">📈 COT Data</div>
-    <div class="menu-item" onclick="showPane('seasonality')">📅 Seasonality</div>
-    <div class="menu-item" onclick="showPane('sentiment')">💬 Sentiment</div>
-    <div class="menu-item" onclick="showPane('users')">👥 Users</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'">⬅ Dashboard</div>
+    <div class="menu-item" onclick="showPane('cotUpload')"><i data-lucide="folder-open" class="menu-icon"></i> COT Upload</div>
+    <div class="menu-item" onclick="showPane('econUpload')"><i data-lucide="file-spreadsheet" class="menu-icon"></i> Econ Upload</div>
+    <div class="menu-item" onclick="showPane('econIndicators')"><i data-lucide="bar-chart-2" class="menu-icon"></i> Indicators</div>
+    <div class="menu-item" onclick="showPane('cotData')"><i data-lucide="database" class="menu-icon"></i> COT Data</div>
+    <div class="menu-item" onclick="showPane('seasonality')"><i data-lucide="calendar" class="menu-icon"></i> Seasonality</div>
+    <div class="menu-item" onclick="showPane('sentiment')"><i data-lucide="message-circle" class="menu-icon"></i> Sentiment</div>
+    <div class="menu-item" onclick="showPane('users')"><i data-lucide="users" class="menu-icon"></i> Users</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="arrow-left" class="menu-icon"></i> Dashboard</div>
 </div>
 <div class="main-content">
-    <div id="cotUploadPane" class="content-pane active"><div class="card"><h2>Upload COT Data</h2><input type="file" id="cotFile" accept=".xlsx"><button onclick="uploadCOT()">Upload</button><div id="cotStatus" style="margin-top:10px"></div></div></div>
-    <div id="econUploadPane" class="content-pane"><div class="card"><h2>Upload Economic Data</h2><input type="file" id="econFile" accept=".xlsx"><button onclick="uploadEcon()">Upload</button><div id="econStatus" style="margin-top:10px"></div></div></div>
-    <div id="econIndicatorsPane" class="content-pane"><div class="card"><h2>Economic Indicators</h2><label>Currency: <select id="econCurrencySelect" onchange="loadIndicators()"><option value="">-- choose --</option></select></label><div style="margin:15px 0"><button onclick="openIndicatorModal()">+ Add Indicator</button></div><div id="indicatorsList"></div></div></div>
+    <div id="cotUploadPane" class="content-pane active"><div class="card"><h2>Upload COT Data</h2><input type="file" id="cotFile" accept=".xlsx"><button onclick="uploadCOT()"><i data-lucide="upload" style="width:16px;height:16px;margin-right:6px"></i> Upload</button><div id="cotStatus" style="margin-top:10px"></div></div></div>
+    <div id="econUploadPane" class="content-pane"><div class="card"><h2>Upload Economic Data</h2><input type="file" id="econFile" accept=".xlsx"><button onclick="uploadEcon()"><i data-lucide="upload" style="width:16px;height:16px;margin-right:6px"></i> Upload</button><div id="econStatus" style="margin-top:10px"></div></div></div>
     
-    <!-- IMPROVED COT DATA PANEL with Add Currency button -->
+    <!-- Economic Indicators (with clean table) -->
+    <div id="econIndicatorsPane" class="content-pane">
+        <div class="card">
+            <h2>Economic Indicators</h2>
+            <label>Currency: <select id="econCurrencySelect" onchange="loadIndicators()"><option value="">-- choose --</option></select></label>
+            <div style="margin:15px 0"><button onclick="openIndicatorModal()"><i data-lucide="plus" style="width:16px;height:16px;margin-right:6px"></i> Add Indicator</button></div>
+            <div id="indicatorsList"></div>
+        </div>
+    </div>
+    
+    <!-- ========== HISTORICAL COT DATA PANE ========== -->
     <div id="cotDataPane" class="content-pane">
         <div class="card">
-            <div class="cot-title-bar">
-                <h2>📊 COT Data · Non‑Commercial Positions</h2>
+            <h2>Manage Historical COT Data</h2>
+            <div style="display:flex; gap:15px; flex-wrap:wrap; align-items:flex-end; margin-bottom:20px">
+                <div style="flex:1; min-width:150px">
+                    <label>Currency</label>
+                    <select id="cotCurrency" onchange="loadHistoryForCurrency()">
+                        <option value="">-- Select --</option>
+                        <option value="EUR">EUR</option>
+                        <option value="USD">USD</option>
+                        <option value="AUD">AUD</option>
+                        <option value="CHF">CHF</option>
+                        <option value="GBP">GBP</option>
+                        <option value="JPY">JPY</option>
+                        <option value="CAD">CAD</option>
+                        <option value="NZD">NZD</option>
+                        <option value="XAU">XAU</option>
+                        <option value="BTC">BTC</option>
+                    </select>
+                </div>
                 <div>
-                    <button onclick="addNewCurrency()" class="cot-add-btn">➕ Add Currency</button>
-                    <button onclick="loadCOTData()" class="cot-refresh-btn">🔄 Refresh</button>
+                    <button onclick="loadHistoryForCurrency()" class="secondary"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button>
                 </div>
             </div>
-            <div class="cot-table-container">
-                <table class="cot-data-table" id="cotDataTable">
+
+            <!-- Form to add new record -->
+            <div style="background:#1a1f2e; padding:15px; border-radius:8px; margin-bottom:20px">
+                <h3>Add New Weekly COT Record</h3>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Date (Friday)</label>
+                        <input type="date" id="newReportDate" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Longs (Contracts)</label>
+                        <input type="number" step="1" id="newLongs" placeholder="e.g. 150000">
+                    </div>
+                    <div class="form-group">
+                        <label>Shorts (Contracts)</label>
+                        <input type="number" step="1" id="newShorts" placeholder="e.g. 120000">
+                    </div>
+                    <div class="form-group">
+                        <label>Δ Longs</label>
+                        <input type="number" step="1" id="newChangeLongs" placeholder="Change in Longs">
+                    </div>
+                    <div class="form-group">
+                        <label>Δ Shorts</label>
+                        <input type="number" step="1" id="newChangeShorts" placeholder="Change in Shorts">
+                    </div>
+                </div>
+                <div class="form-row">
+                    <div class="form-group">
+                        <label>Net Position (auto)</label>
+                        <input type="text" id="newNet" readonly disabled>
+                    </div>
+                    <div class="form-group">
+                        <label>Weekly Change (auto)</label>
+                        <input type="text" id="newWeeklyChange" readonly disabled>
+                    </div>
+                    <div>
+                        <button onclick="addHistoricalRecord()"><i data-lucide="plus" style="width:16px;height:16px;margin-right:6px"></i> Add Record</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Table of existing records -->
+            <h3>Historical Records</h3>
+            <div class="table-container">
+                <table class="clean-table">
                     <thead>
-                        <tr><th>Currency</th><th>Longs (contracts)</th><th>Shorts (contracts)</th><th>Net Position</th><th>Weekly Change</th><th>Last Updated</th><th>Actions</th></tr>
+                        <tr>
+                            <th>Date</th>
+                            <th>Longs</th>
+                            <th>Shorts</th>
+                            <th>Net Position</th>
+                            <th>Δ Longs</th>
+                            <th>Δ Shorts</th>
+                            <th>Weekly Change</th>
+                            <th>Actions</th>
+                        </tr>
                     </thead>
-                    <tbody id="cotDataList"><tr><td colspan="7" style="text-align:center">Loading...</td></tr></tbody>
+                    <tbody id="cotHistoryTableBody">
+                        <tr><td colspan="8" style="text-align:center">Select a currency to view records</tbody>
+                    </tbody>
                 </table>
             </div>
         </div>
     </div>
+    <!-- ========== END COT DATA PANE ========== -->
     
-    <div id="seasonalityPane" class="content-pane"><div class="card"><h2>Seasonality Configuration</h2><label>Pair: <select id="seasonPairSelect" onchange="loadSeasonConfig()"><option value="">-- select pair --</option></select></label><h3 style="margin:20px 0 10px">Monthly Bias</h3><div id="monthlyBiasContainer"></div><button onclick="saveMonthlyBiases()" style="margin:10px 0">Save Monthly Biases</button><h3 style="margin:20px 0 10px">Date Ranges</h3><button onclick="addDateRange()">+ Add Date Range</button><div id="dateRangeList" style="margin-top:10px"></div></div></div>
-    <div id="sentimentPane" class="content-pane"><div class="card"><h2>Sentiment Data</h2><div style="margin-bottom:15px"><button onclick="openSentimentModal()">+ Add/Update Sentiment</button></div><div id="sentimentList"></div></div></div>
-    <div id="usersPane" class="content-pane"><div class="card"><h2>User Management</h2><button onclick="loadUsers()">Refresh</button><div id="usersList" style="margin-top:15px"></div></div></div>
+    <div id="seasonalityPane" class="content-pane"><div class="card"><h2>Seasonality Configuration</h2><label>Pair: <select id="seasonPairSelect" onchange="loadSeasonConfig()"><option value="">-- select pair --</option></select></label><h3 style="margin:20px 0 10px">Monthly Bias</h3><div id="monthlyBiasContainer"></div><button onclick="saveMonthlyBiases()"><i data-lucide="save" style="width:16px;height:16px;margin-right:6px"></i> Save Monthly Biases</button><h3 style="margin:20px 0 10px">Date Ranges</h3><button onclick="addDateRange()"><i data-lucide="plus" style="width:16px;height:16px;margin-right:6px"></i> Add Date Range</button><div id="dateRangeList" style="margin-top:10px"></div></div></div>
+    
+    <!-- Sentiment Data (with clean table) -->
+    <div id="sentimentPane" class="content-pane">
+        <div class="card">
+            <h2>Sentiment Data</h2>
+            <div style="margin-bottom:15px"><button onclick="openSentimentModal()"><i data-lucide="plus" style="width:16px;height:16px;margin-right:6px"></i> Add/Update Sentiment</button></div>
+            <div id="sentimentList"></div>
+        </div>
+    </div>
+    
+    <div id="usersPane" class="content-pane"><div class="card"><h2>User Management</h2><button onclick="loadUsers()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button><div id="usersList" style="margin-top:15px"></div></div></div>
 </div>
 
 <!-- Indicator Modal -->
-<div class="modal" id="indicatorModal"><div class="modal-content"><h3 id="indModalTitle" style="color:#00e5ff;margin-bottom:20px">Add Indicator</h3><form id="indicatorForm"><input type="hidden" id="indicatorId"><label>Currency</label><select id="indCurrencySelect" required></select><label>Indicator Name</label><input type="text" id="indName" required><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Forecast</label><input type="number" step="0.1" id="indForecast" required></div><div><label>Actual</label><input type="number" step="0.1" id="indActual" required></div></div><label><input type="checkbox" id="indLowerBetter"> Lower is better</label><label>Category</label><select id="indCategory" required><option value="Technical Bias">Technical Bias</option><option value="Economic Growth Bias">Economic Growth Bias</option><option value="Inflation Bias">Inflation Bias</option><option value="Jobs Market Bias">Jobs Market Bias</option><option value="Crowd Sentiment (COT)">Crowd Sentiment (COT)</option></select><div style="display:flex;gap:10px;margin-top:20px"><button type="submit">Save</button><button type="button" onclick="closeIndicatorModal()" class="secondary">Cancel</button></div></form></div></div>
+<div class="modal" id="indicatorModal"><div class="modal-content"><h3 id="indModalTitle" style="color:#00e5ff;margin-bottom:20px">Add Indicator</h3><form id="indicatorForm"><input type="hidden" id="indicatorId"><label>Currency</label><select id="indCurrencySelect" required></select><label>Indicator Name</label><input type="text" id="indName" required><div style="display:grid;grid-template-columns:1fr 1fr;gap:10px"><div><label>Forecast</label><input type="number" step="0.1" id="indForecast" required></div><div><label>Actual</label><input type="number" step="0.1" id="indActual" required></div></div><label><input type="checkbox" id="indLowerBetter"> Lower is better</label><label>Category</label><select id="indCategory" required><option value="Technical Bias">Technical Bias</option><option value="Economic Growth Bias">Economic Growth Bias</option><option value="Inflation Bias">Inflation Bias</option><option value="Jobs Market Bias">Jobs Market Bias</option><option value="Crowd Sentiment (COT)">Crowd Sentiment (COT)</option></select><div style="display:flex;gap:10px;margin-top:20px"><button type="submit"><i data-lucide="save" style="width:16px;height:16px;margin-right:6px"></i> Save</button><button type="button" onclick="closeIndicatorModal()" class="secondary">Cancel</button></div></form></div></div>
 
 <!-- Sentiment Modal -->
 <div class="modal" id="sentimentModal">
@@ -228,16 +255,22 @@
       <input type="number" step="0.1" id="sentLong" min="0" max="100" required>
       <small>Short % will be automatically calculated as 100 - Long %</small>
       <div style="display:flex;gap:10px;margin-top:20px">
-        <button type="submit">Save</button>
+        <button type="submit"><i data-lucide="save" style="width:16px;height:16px;margin-right:6px"></i> Save</button>
         <button type="button" onclick="closeSentimentModal()" class="secondary">Cancel</button>
       </div>
     </form>
   </div>
 </div>
+
 <script>
 const allPairs={{ ALL_PAIRS|tojson }};
 const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC"];
 let seasonCurrentPair='';
+let currentHistory = [];
+
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
 
 function showPane(pane){
     document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
@@ -245,7 +278,7 @@ function showPane(pane){
     if(pane==='users') loadUsers();
     if(pane==='seasonality') populateSeasonPairs();
     if(pane==='econIndicators') populateCurrencySelects();
-    if(pane==='cotData') loadCOTData();
+    if(pane==='cotData') loadHistoryForCurrency();
     if(pane==='sentiment') loadSentiment();
 }
 
@@ -259,41 +292,32 @@ function populateCurrencySelects(){
     });
 }
 
-// --- ADD NEW CURRENCY ---
-async function addNewCurrency(){
-    let currency = prompt("Enter currency code (e.g., EUR, GBP, JPY, AUD, CAD, CHF, NZD):");
-    if(!currency) return;
-    currency = currency.toUpperCase().trim();
-    if(!currencies.includes(currency)){
-        alert("Invalid currency. Use one of: " + currencies.join(", "));
-        return;
-    }
-    try{
-        const res = await fetch('/admin/cot_data', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ currency, longs: 0, shorts: 0, weekly_change: 0 })
-        });
-        const result = await res.json();
-        if(result.success){
-            alert(`✅ ${currency} added with default zeros. Edit values and click Save.`);
-            loadCOTData();  // refresh table
-        } else {
-            alert("❌ Failed to add currency. It may already exist.");
-        }
-    } catch(e){
-        alert("Error: " + e.message);
-    }
-}
-
 async function loadIndicators(){
     const cur=document.getElementById('econCurrencySelect').value;
-    if(!cur){document.getElementById('indicatorsList').innerHTML='';return;}
+    if(!cur){
+        document.getElementById('indicatorsList').innerHTML='';
+        return;
+    }
     const res=await fetch('/admin/econ_indicators?currency='+cur);
     const data=await res.json();
-    let html='<table><thead><tr><th>Indicator</th><th>Forecast</th><th>Actual</th><th>Category</th><th>Lower</th><th>Actions</th></tr></thead><tbody>';
-    data.forEach(ind=>{html+=`<tr><td>${ind.indicator_name}</td><td>${ind.forecast}</td><td>${ind.actual}</td><td>${ind.category||'General'}</td><td>${ind.is_lower_better?'Yes':'No'}</td><td><button onclick="editIndicator(${ind.id})">Edit</button> <button onclick="deleteIndicator(${ind.id})">Del</button></td></tr>`});
-    html+='</tbody></table>'; document.getElementById('indicatorsList').innerHTML=html;
+    if(!data.length){
+        document.getElementById('indicatorsList').innerHTML='<div class="table-container"><div style="padding:20px;text-align:center">No indicators for this currency.</div></div>';
+        return;
+    }
+    let html='<div class="table-container"><table class="clean-table"><thead><tr><th>Indicator</th><th>Forecast</th><th>Actual</th><th>Category</th><th>Lower</th><th>Actions</th><tr></thead><tbody>';
+    data.forEach(ind=>{
+        html+=`<tr>
+            <td>${ind.indicator_name}</td>
+            <td>${ind.forecast}</td>
+            <td>${ind.actual}</td>
+            <td>${ind.category||'General'}</td>
+            <td>${ind.is_lower_better?'Yes':'No'}</td>
+            <td><button onclick="editIndicator(${ind.id})"><i data-lucide="edit-2" style="width:14px;height:14px;margin-right:4px"></i>Edit</button> <button onclick="deleteIndicator(${ind.id})"><i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px"></i>Del</button></td>
+        </tr>`;
+    });
+    html+='</tbody></table></div>';
+    document.getElementById('indicatorsList').innerHTML=html;
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
 }
 
 function openIndicatorModal(id=null){
@@ -326,43 +350,143 @@ document.getElementById('indicatorForm').addEventListener('submit',async e=>{
     closeIndicatorModal(); loadIndicators();
 });
 
-// --- COT Data inline editing ---
-async function loadCOTData(){
-    const tbody=document.getElementById('cotDataList');
-    tbody.innerHTML='<tr><td colspan="7" style="text-align:center">Loading...</td></tr>';
-    try{
-        const res=await fetch('/admin/cot_data');
-        const data=await res.json();
-        if(!data.length){tbody.innerHTML='<tr><td colspan="7" style="text-align:center">No data. Click "Add Currency" to create entries.</td></tr>';return;}
-        let html='';
-        data.forEach(cot=>{
-            html+=`<tr data-id="${cot.id}" data-currency="${cot.currency}">
-                <td><strong>${cot.currency}</strong></td>
-                <td><input type="number" step="1" id="longs_${cot.currency}" value="${cot.longs}" class="inline-edit" style="width:120px"></td>
-                <td><input type="number" step="1" id="shorts_${cot.currency}" value="${cot.shorts}" class="inline-edit" style="width:120px"></td>
-                <td id="net_${cot.currency}">${cot.net_position}</td>
-                <td><input type="number" step="1" id="change_${cot.currency}" value="${cot.weekly_change}" class="inline-edit" style="width:100px"></td>
-                <td>${cot.last_updated?new Date(cot.last_updated).toLocaleString():'Never'}</td>
-                <td><button class="save-cot-btn" onclick="saveCOTRow('${cot.currency}')">💾 Save</button></td>
+// ========== COT HISTORICAL MANAGEMENT ==========
+async function loadHistoryForCurrency() {
+    const currency = document.getElementById('cotCurrency').value;
+    if (!currency) {
+        document.getElementById('cotHistoryTableBody').innerHTML = '<tr><td colspan="8">Select a currency</tbody>';
+        return;
+    }
+    const tbody = document.getElementById('cotHistoryTableBody');
+    tbody.innerHTML = '<tr><td colspan="8">Loading...</tbody>';
+    try {
+        const res = await fetch(`/api/cot/history/${currency}`);
+        if (!res.ok) throw new Error('Failed to load');
+        const data = await res.json();
+        currentHistory = data.history || [];
+        if (!currentHistory.length) {
+            tbody.innerHTML = '<tr><td colspan="8">No records yet. Add your first record below.</tbody>';
+            return;
+        }
+        let html = '';
+        currentHistory.sort((a,b) => new Date(b.date) - new Date(a.date));
+        currentHistory.forEach(rec => {
+            const date = rec.date.split('T')[0];
+            const longs = rec.longs?.toLocaleString() || 0;
+            const shorts = rec.shorts?.toLocaleString() || 0;
+            const net = rec.net?.toLocaleString() || 0;
+            const netClass = rec.net > 0 ? 'positive' : (rec.net < 0 ? 'negative' : '');
+            const changeLongs = (rec.change_longs !== undefined && rec.change_longs !== null) ? 
+                (rec.change_longs > 0 ? '+' : '') + rec.change_longs.toLocaleString() : '-';
+            const changeShorts = (rec.change_shorts !== undefined && rec.change_shorts !== null) ? 
+                (rec.change_shorts > 0 ? '+' : '') + rec.change_shorts.toLocaleString() : '-';
+            const weeklyChange = (rec.change_net !== undefined && rec.change_net !== null) ? 
+                (rec.change_net > 0 ? '+' : '') + rec.change_net.toLocaleString() : '-';
+            const chlClass = (rec.change_longs > 0) ? 'positive' : (rec.change_longs < 0 ? 'negative' : '');
+            const chsClass = (rec.change_shorts > 0) ? 'positive' : (rec.change_shorts < 0 ? 'negative' : '');
+            const chnClass = (rec.change_net > 0) ? 'positive' : (rec.change_net < 0 ? 'negative' : '');
+            html += `<tr>
+                <td>${date}</td>
+                <td>${longs}</td>
+                <td>${shorts}</td>
+                <td class="${netClass}">${net}</td>
+                <td class="${chlClass}">${changeLongs}</td>
+                <td class="${chsClass}">${changeShorts}</td>
+                <td class="${chnClass}">${weeklyChange}</td>
+                <td><button class="secondary" onclick="deleteRecord(${rec.id})"><i data-lucide="trash-2" style="width:14px;height:14px"></i> Delete</button></td>
             </tr>`;
         });
-        tbody.innerHTML=html;
-    } catch(e){ tbody.innerHTML='<tr><td colspan="7" style="color:#ff4d6d">Error loading data</td></tr>'; console.error(e); }
+        tbody.innerHTML = html;
+        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
+    } catch (err) {
+        tbody.innerHTML = `<tr><td colspan="8">Error: ${err.message}</tbody>`;
+    }
 }
-async function saveCOTRow(currency){
-    const longs=parseFloat(document.getElementById(`longs_${currency}`).value);
-    const shorts=parseFloat(document.getElementById(`shorts_${currency}`).value);
-    const weekly_change=parseFloat(document.getElementById(`change_${currency}`).value);
-    if(isNaN(longs)||isNaN(shorts)||isNaN(weekly_change)){ alert("Please enter valid numbers"); return; }
-    try{
-        const res=await fetch('/admin/cot_data',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({currency,longs,shorts,weekly_change})});
-        const result=await res.json();
-        if(result.success){
-            document.getElementById(`net_${currency}`).innerText=longs-shorts;
-            alert(`✅ ${currency} COT data saved`);
-        } else alert("❌ Save failed");
-    } catch(e){ alert("Error: "+e.message); }
+
+async function addHistoricalRecord() {
+    const currency = document.getElementById('cotCurrency').value;
+    if (!currency) {
+        alert('Please select a currency first.');
+        return;
+    }
+    const reportDate = document.getElementById('newReportDate').value;
+    const longs = parseFloat(document.getElementById('newLongs').value);
+    const shorts = parseFloat(document.getElementById('newShorts').value);
+    const changeLongs = parseFloat(document.getElementById('newChangeLongs').value);
+    const changeShorts = parseFloat(document.getElementById('newChangeShorts').value);
+    if (!reportDate || isNaN(longs) || isNaN(shorts) || isNaN(changeLongs) || isNaN(changeShorts)) {
+        alert('Please fill all fields (Date, Longs, Shorts, Δ Longs, Δ Shorts).');
+        return;
+    }
+    const data = {
+        currency: currency,
+        report_date: reportDate,
+        longs: longs,
+        shorts: shorts,
+        change_longs: changeLongs,
+        change_shorts: changeShorts
+    };
+    try {
+        const res = await fetch('/admin/cot_history', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify(data)
+        });
+        const result = await res.json();
+        if (result.success) {
+            alert(`Record for ${currency} added. Current COT data updated.`);
+            document.getElementById('newReportDate').value = '';
+            document.getElementById('newLongs').value = '';
+            document.getElementById('newShorts').value = '';
+            document.getElementById('newChangeLongs').value = '';
+            document.getElementById('newChangeShorts').value = '';
+            document.getElementById('newNet').value = '';
+            document.getElementById('newWeeklyChange').value = '';
+            loadHistoryForCurrency();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown'));
+        }
+    } catch(err) {
+        alert('Request failed: ' + err.message);
+    }
 }
+
+async function deleteRecord(recordId) {
+    if (!confirm('Delete this record?')) return;
+    try {
+        const res = await fetch(`/admin/cot_history/${recordId}`, {method: 'DELETE'});
+        const result = await res.json();
+        if (result.success) {
+            alert('Record deleted');
+            loadHistoryForCurrency();
+        } else {
+            alert('Error: ' + (result.error || 'Unknown'));
+        }
+    } catch(err) {
+        alert('Request failed: ' + err.message);
+    }
+}
+
+function updatePreview() {
+    const longs = parseFloat(document.getElementById('newLongs').value) || 0;
+    const shorts = parseFloat(document.getElementById('newShorts').value) || 0;
+    const changeLongs = parseFloat(document.getElementById('newChangeLongs').value) || 0;
+    const changeShorts = parseFloat(document.getElementById('newChangeShorts').value) || 0;
+    const net = longs - shorts;
+    const weeklyChange = changeLongs - changeShorts;
+    document.getElementById('newNet').value = net;
+    document.getElementById('newWeeklyChange').value = (weeklyChange > 0 ? '+' : '') + weeklyChange;
+}
+document.getElementById('newLongs').addEventListener('input', updatePreview);
+document.getElementById('newShorts').addEventListener('input', updatePreview);
+document.getElementById('newChangeLongs').addEventListener('input', updatePreview);
+document.getElementById('newChangeShorts').addEventListener('input', updatePreview);
+document.getElementById('cotCurrency').addEventListener('change', () => {
+    loadHistoryForCurrency();
+    updatePreview();
+});
+
+// ========== END COT HISTORICAL MANAGEMENT ==========
 
 async function uploadCOT(){
     const file=document.getElementById('cotFile').files[0];
@@ -383,19 +507,27 @@ async function uploadEcon(){
 async function loadUsers(){
     const res=await fetch('/admin/users');
     const data=await res.json();
-    let html='<table><thead><tr><th>User</th><th>Email</th><th>Admin</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
+    let html='<div class="table-container"><table class="clean-table"><thead><tr><th>User</th><th>Email</th><th>Admin</th><th>Status</th><th>Actions</th></tr></thead><tbody>';
     data.users.forEach(u=>{
         const status=u.is_active?'Active':'Inactive';
         const badgeColor=u.is_active?'#00e5a0':'#ff4d6d';
-        const actionBtn=u.is_active?`<button onclick="deactivateUser(${u.id})" class="secondary">Deactivate</button>`:`<button onclick="activateUser(${u.id})">Activate</button>`;
-        html+=`<tr><td>${u.username}</td><td>${u.email}</td><td>${u.is_admin?'Yes':'No'}</td><td style="color:${badgeColor}">${status}</td><td>${actionBtn}</td></tr>`;
+        const actionBtn=u.is_active?`<button onclick="deactivateUser(${u.id})" class="secondary"><i data-lucide="user-x" style="width:14px;height:14px;margin-right:4px"></i>Deactivate</button>`:`<button onclick="activateUser(${u.id})"><i data-lucide="user-check" style="width:14px;height:14px;margin-right:4px"></i>Activate</button>`;
+        html+=`<tr>
+            <td>${u.username}</td>
+            <td>${u.email}</td>
+            <td>${u.is_admin?'Yes':'No'}</td>
+            <td style="color:${badgeColor}">${status}</td>
+            <td>${actionBtn}</td>
+        </tr>`;
     });
-    html+='</tbody></table>'; document.getElementById('usersList').innerHTML=html;
+    html+='</tbody></table></div>';
+    document.getElementById('usersList').innerHTML=html;
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
 }
 async function activateUser(id){await fetch(`/admin/users/${id}/activate`,{method:'POST'});loadUsers();}
 async function deactivateUser(id){await fetch(`/admin/users/${id}/deactivate`,{method:'POST'});loadUsers();}
 
-// Seasonality
+// Seasonality (unchanged)
 function populateSeasonPairs(){
     const select=document.getElementById('seasonPairSelect');
     select.innerHTML='<option value="">-- select pair --</option>';
@@ -430,9 +562,16 @@ async function saveMonthlyBiases(){
     alert('Monthly biases saved.');
 }
 function renderDateRanges(ranges){
-    let html='<table><thead><tr><th>Start MM/DD</th><th>End MM/DD</th><th>Bias</th><th>Actions</th></tr></thead><tbody>';
-    ranges.forEach(r=>{html+=`<tr><td>${r.start_month}/${r.start_day}</td><td>${r.end_month}/${r.end_day}</td><td>${r.bias}</td><td><button onclick="deleteDateRange(${r.id})">Delete</button></td></tr>`});
-    html+='</tbody></table>'; document.getElementById('dateRangeList').innerHTML=html;
+    let html='<div class="table-container"><table class="clean-table"><thead><tr><th>Start MM/DD</th><th>End MM/DD</th><th>Bias</th><th>Actions</th></tr></thead><tbody>';
+    ranges.forEach(r=>{html+=`<tr>
+        <td>${r.start_month}/${r.start_day}</td>
+        <td>${r.end_month}/${r.end_day}</td>
+        <td>${r.bias}</td>
+        <td><button onclick="deleteDateRange(${r.id})"><i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px"></i>Delete</button></td>
+    </tr>`});
+    html+='</tbody></table></div>';
+    document.getElementById('dateRangeList').innerHTML=html;
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
 }
 async function addDateRange(){
     const pair=seasonCurrentPair;
@@ -449,13 +588,26 @@ async function addDateRange(){
 }
 async function deleteDateRange(id){ await fetch('/admin/seasonality/daterange/'+id,{method:'DELETE'}); loadSeasonConfig(); }
 
-// Sentiment
+// Sentiment (with clean table)
 async function loadSentiment(){
     const res=await fetch('/admin/sentiment');
     const data=await res.json();
-    let html='<table><thead><tr><th>Pair</th><th>Long %</th><th>Short %</th><th>Actions</th></tr></thead><tbody>';
-    data.forEach(s=>{html+=`<tr><td>${s.pair}</td><td>${s.long_pct}%</td><td>${s.short_pct}%</td><td><button onclick="editSentiment('${s.pair}',${s.long_pct},${s.short_pct})">Edit</button> <button onclick="deleteSentiment(${s.id})">Del</button></td></tr>`});
-    html+='</tbody></table>'; document.getElementById('sentimentList').innerHTML=html;
+    if(!data.length){
+        document.getElementById('sentimentList').innerHTML='<div class="table-container"><div style="padding:20px;text-align:center">No sentiment entries.</div></div>';
+        return;
+    }
+    let html='<div class="table-container"><table class="clean-table"><thead><tr><th>Pair</th><th>Long %</th><th>Short %</th><th>Actions</th></td></thead><tbody>';
+    data.forEach(s=>{
+        html+=`<tr>
+            <td>${s.pair}</td>
+            <td>${s.long_pct}%</td>
+            <td>${s.short_pct}%</td>
+            <td><button onclick="editSentiment('${s.pair}',${s.long_pct},${s.short_pct})"><i data-lucide="edit-2" style="width:14px;height:14px;margin-right:4px"></i>Edit</button> <button onclick="deleteSentiment(${s.id})"><i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px"></i>Del</button></td>
+        </tr>`;
+    });
+    html+='</tbody></table></div>';
+    document.getElementById('sentimentList').innerHTML=html;
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 50);
 }
 function openSentimentModal(){
     document.getElementById('sentimentForm').reset();
@@ -469,8 +621,8 @@ function editSentiment(pair, long, short){
     openSentimentModal();
     document.getElementById('sentPair').value=pair;
     document.getElementById('sentLong').value=long;
-    // Short is not shown, but we store it in a data attribute if needed? Not necessary.
-}async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
+}
+async function deleteSentiment(id){ if(confirm('Delete?')){await fetch('/admin/sentiment/'+id,{method:'DELETE'});loadSentiment();} }
 document.getElementById('sentimentForm').addEventListener('submit',async e=>{
     e.preventDefault();
     const long_pct = parseFloat(document.getElementById('sentLong').value);
@@ -484,8 +636,10 @@ document.getElementById('sentimentForm').addEventListener('submit',async e=>{
     closeSentimentModal(); loadSentiment();
 });
 
+// Initialisation
 populateCurrencySelects();
 loadUsers();
+setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
 </html>

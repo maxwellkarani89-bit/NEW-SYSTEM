@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Asset Scorecard – Tradion</title>
+    <title>Forex Scorecard - Tradion</title>
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -16,15 +16,15 @@
         .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}  /* reduced top/bottom padding */
-        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}  /* reduced margin */
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
-        .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}  /* reduced gap */
+        .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
             background:#121826;
             border-radius:16px;
-            padding:12px 12px 16px 12px;  /* reduced padding */
+            padding:12px 12px 16px 12px;
             display:flex;
             flex-direction:column;
             align-items:center;
@@ -33,7 +33,7 @@
         }
         .gauge-container{
             position:relative;
-            width:160px;   /* slightly smaller */
+            width:160px;
             height:90px;
             margin-bottom:8px;
         }
@@ -57,7 +57,7 @@
         .loading-overlay.hidden{display:none}
         .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}  /* reduced gap */
+        .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
         .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
         .score-label{font-weight:500;font-size:0.85rem}
         .score-value{font-weight:bold;padding:2px 8px;border-radius:20px;font-size:0.75rem}
@@ -65,12 +65,12 @@
         .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
         /* Right column cards */
-        .right-col{display:flex;flex-direction:column;gap:10px}  /* reduced gap */
+        .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .panel{
             background:#121826;
             border-radius:12px;
-            padding:10px;  /* reduced padding */
+            padding:10px;
             border:1px solid #2a3040;
         }
         .panel h3{
@@ -130,7 +130,7 @@
         }
         .chart-wrapper {
             position: relative;
-            height: 240px;  /* reduced height to fit without scroll */
+            height: 240px;
             width: 100%;
         }
         @media (max-width:768px){
@@ -150,18 +150,18 @@
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
 <div class="main-content">
     <div class="header">
-        <h2>Asset Scorecard</h2>
+        <h2>Forex Scorecard</h2>
         <div class="symbol-selector">
             <select id="symbolSelect" onchange="loadScorecard()">
-                <option value="">Select Currency...</option>
+                <option value="">Select Forex Pair...</option>
             </select>
         </div>
     </div>
@@ -169,27 +169,13 @@
     <div class="scorecard-grid">
         <div>
             <div class="gauge-panel" id="gaugePanel">
-                <div class="loading-overlay" id="loadingOverlay">
-                    <div class="spinner"></div>
-                </div>
+                <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
                 <div class="gauge-container">
                     <svg class="gauge-svg" viewBox="0 0 220 110">
-                        <defs>
-                            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#ff4d6d"/>
-                                <stop offset="50%" stop-color="#ffb800"/>
-                                <stop offset="100%" stop-color="#00e5a0"/>
-                            </linearGradient>
-                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
-                            </filter>
-                        </defs>
+                        <defs><linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff4d6d"/><stop offset="50%" stop-color="#ffb800"/><stop offset="100%" stop-color="#00e5a0"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/></filter></defs>
                         <path class="gauge-bg" d="M20,110 A90,90 0 0,1 200,110"/>
                         <path id="gaugeFill" class="gauge-fill" d="M20,110 A90,90 0 0,1 200,110" stroke="url(#gaugeGradient)"/>
-                        <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)" filter="url(#shadow)">
-                            <line class="needle-body" x1="110" y1="110" x2="110" y2="30"/>
-                            <circle class="needle-tip" cx="110" cy="30" r="4"/>
-                        </g>
+                        <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)" filter="url(#shadow)"><line class="needle-body" x1="110" y1="110" x2="110" y2="30"/><circle class="needle-tip" cx="110" cy="30" r="4"/></g>
                     </svg>
                 </div>
                 <div class="gauge-center">
@@ -217,16 +203,18 @@
 </div>
 
 <script>
-    const currencies = {{ currencies|tojson }};
+    const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
-    currencies.forEach(cur => {
+    allPairs.forEach(pair => {
+        const pairStr = pair[0] + '/' + pair[1];
         const opt = document.createElement('option');
-        opt.value = cur;
-        opt.textContent = cur;
+        opt.value = pairStr;
+        opt.textContent = pairStr;
         select.appendChild(opt);
     });
+    const standaloneAssets = ['XAU', 'BTC'];
 
-    // Order of categories on the right side (as per screenshot)
+    // Order of categories on the right side (matching the screenshot)
     const CATEGORY_ORDER = [
         "Crowd Sentiment (COT)",
         "Technical Bias",
@@ -244,17 +232,24 @@
         overlay.classList.remove('hidden');
         try {
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            console.log('API response received. COT Alignment:', data.base_indicators.find(i => i.name === 'COT Alignment'));
-            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-            updateScores(data);
-            renderCategoryCards(data);
-            setTimeout(() => loadScoreHistory(symbol), 100);
-        } catch(e) {
-            console.error(e);
-        } finally {
-            overlay.classList.add('hidden');
-        }
+            const baseCurr = data.base;
+            const quoteCurr = data.quote;
+            const isStandalone = standaloneAssets.includes(baseCurr) && quoteCurr === 'USD';
+            if (isStandalone) {
+                updateGauge(data.overall.score, data.overall.bias, data.overall.color);
+                updateScores(data);
+                renderCategoryCards(data);
+            } else {
+                // For forex pairs, use the same data (technical_score from API is already correct)
+                updateGauge(data.overall.score, data.overall.bias, data.overall.color);
+                updateScores(data);
+                renderCategoryCards(data);
+            }
+            loadScoreHistory(symbol);
+        } catch(e) { console.error(e); document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`; }
+        finally { overlay.classList.add('hidden'); }
     }
 
     async function loadScoreHistory(asset) {
@@ -271,7 +266,6 @@
         const canvas = document.getElementById('scoreHistoryChart');
         const ctx = canvas.getContext('2d');
         if (historyChart) historyChart.destroy();
-
         if (!history || history.length === 0) {
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             ctx.font = "12px 'Segoe UI'";
@@ -280,10 +274,8 @@
             ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
             return;
         }
-
         const labels = history.map(h => h.date);
         const scores = history.map(h => h.score);
-
         historyChart = new Chart(ctx, {
             type: 'bar',
             data: {
@@ -338,16 +330,14 @@
         setScoreValue('tradionScore', data.tradion_score);
         setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
         setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score,
-                      data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
+        setScoreValue('fundamentalsScore', data.fundamentals_score, data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
     }
 
     function setScoreValue(id, text, classNameOverride) {
         const el = document.getElementById(id);
         el.textContent = text;
-        if (classNameOverride) {
-            el.className = 'score-value ' + classNameOverride;
-        } else {
+        if (classNameOverride) el.className = 'score-value ' + classNameOverride;
+        else {
             const val = parseFloat(text);
             el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
         }
@@ -360,7 +350,7 @@
         return { label: 'Neutral', className: 'neutral' };
     }
 
-    // Build an HTML string for a standard table with 5 columns (Indicator, Signal, Actual, Forecast, Surprise)
+    // Build full table with 5 columns
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
@@ -416,7 +406,7 @@
         return html;
     }
 
-    // For Crowd Sentiment (COT) card we only need two columns (Indicator, Signal) and only the COT Alignment row
+    // Simplified table for Crowd Sentiment (COT) – only Indicator and Signal
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -429,7 +419,7 @@
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
                         <tbody>
-                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td>
                         </tbody>
                     </table>
                 </div>`;
@@ -439,17 +429,15 @@
         const container = document.getElementById('categoryCards');
         container.innerHTML = '';
 
-        // Separate the first two cards (Crowd Sentiment and Technical Bias) to be side by side
-        const firstTwo = CATEGORY_ORDER.slice(0,2);   // ["Crowd Sentiment (COT)", "Technical Bias"]
+        // First two cards: Crowd Sentiment (COT) and Technical Bias side by side
+        const firstTwo = CATEGORY_ORDER.slice(0,2);
         const rest = CATEGORY_ORDER.slice(2);
 
-        // Create a wrapper for the two columns
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
-        // Crowd Sentiment (COT) card – simplified table
+        // Crowd Sentiment (COT) card
         const crowdCategory = firstTwo[0];
-        const crowdIndicators = data.base_indicators.filter(ind => ind.category === crowdCategory);
         const crowdBiasScore = data.category_bias[crowdCategory] || 0;
         const crowdBiasObj = getBiasLabelAndClass(crowdBiasScore);
         const crowdCard = document.createElement('div');
@@ -466,13 +454,16 @@
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card – full table
+        // Technical Bias card - use the 21-day SMA from data.technical_score
         const techCategory = firstTwo[1];
-        const techIndicators = data.base_indicators.filter(ind => ind.category === techCategory);
         const techBiasScore = data.category_bias[techCategory] || 0;
         const techBiasObj = getBiasLabelAndClass(techBiasScore);
         const techCard = document.createElement('div');
         techCard.className = 'panel';
+        // Compute signal based on data.technical_score (which is +/-1 or 0)
+        const techScore = data.technical_score || 0;
+        const techSignal = techScore > 0 ? 'Bullish' : (techScore < 0 ? 'Bearish' : 'Neutral');
+        const techSignalClass = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${techCategory}</h3>
                             <span class="value ${techBiasObj.class}" style="background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:20px; font-size:0.7rem;">${techBiasObj.label}</span>
@@ -480,17 +471,21 @@
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
                             <span>Bias Score</span>
                             <span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span>
+                        </div>
+                        <div class="indicator-row">
+                            <span class="indicator-label">21-day SMA Trend</span>
+                            <div class="indicator-values">
+                                <span class="value ${techSignalClass}">${techSignal}</span>
+                                <span class="value">-</span>
+                                <span class="value">-</span>
+                                <span class="value">-</span>
+                            </div>
                         </div>`;
-        if (techIndicators.length === 0) {
-            techHtml += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
-        } else {
-            techHtml += buildFullTable(techIndicators, data);
-        }
         techCard.innerHTML = techHtml;
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Now render the remaining cards (Economic Growth, Inflation, Jobs Market)
+        // Remaining cards: Economic Growth, Inflation, Jobs Market
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
@@ -515,12 +510,8 @@
         });
     }
 
-    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
-
-    if (currencies.length > 0) {
-        select.value = currencies[0];
-        loadScorecard();
-    }
+    function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+    if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>

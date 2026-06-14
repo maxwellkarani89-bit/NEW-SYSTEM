@@ -1,6 +1,27 @@
 <!DOCTYPE html>
 <html><head><title>Sentiment – Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}.sidebar .logo{font-size:22px;color:#00e5ff;text-align:center;margin-bottom:30px}.sidebar .menu-item{padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A}.main-content{flex:1;margin-left:280px;padding:20px 30px}.header h2{color:#00e5ff;margin-bottom:20px}.search-box{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:350px;margin-bottom:20px}.sentiment-table{width:100%;border-collapse:collapse;background:#121826;border-radius:12px;overflow:hidden}.sentiment-table th,.sentiment-table td{padding:12px 15px;border-bottom:1px solid #2a3040;text-align:left}.sentiment-table th{background:rgba(0,229,255,0.1);color:#00e5ff}.sentiment-table td{padding:12px 15px}.bar-container{display:flex;align-items:center;gap:10px}.bar-wrapper{flex:1;height:24px;background:#1a1f2e;border-radius:12px;overflow:hidden;display:flex}.bar-long{background:#00e5a0;height:100%;display:flex;align-items:center;justify-content:center;color:#0B0F1A;font-weight:bold;font-size:0.8rem;transition:width 0.3s}.bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}.percentage-col{width:80px;text-align:right}.pair-col{font-weight:bold;width:120px}
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+.sidebar .logo{font-size:22px;color:#00e5ff;text-align:center;margin-bottom:30px}
+.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
+.sidebar .menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
+.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A}
+.sidebar .menu-icon{font-size:20px;margin-right:12px}
+.sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+.main-content{flex:1;margin-left:280px;padding:20px 30px}
+.header h2{color:#00e5ff;margin-bottom:20px}
+.search-box{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:350px;margin-bottom:20px}
+.sentiment-table{width:100%;border-collapse:collapse;background:#121826;border-radius:12px;overflow:hidden}
+.sentiment-table th,.sentiment-table td{padding:12px 15px;border-bottom:1px solid #2a3040;text-align:left}
+.sentiment-table th{background:rgba(0,229,255,0.1);color:#00e5ff}
+.bar-container{display:flex;align-items:center;gap:10px}
+.bar-wrapper{flex:1;height:24px;background:#1a1f2e;border-radius:12px;overflow:hidden;display:flex}
+.bar-long{background:#00e5a0;height:100%;display:flex;align-items:center;justify-content:center;color:#0B0F1A;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
+.bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
+.percentage-col{width:80px;text-align:right}
+.pair-col{font-weight:bold;width:120px}
 /* ===== Mobile / Responsive Styles ===== */
 .hamburger {
     display: none;
@@ -78,11 +99,20 @@
         padding: 4px 6px;
         font-size: 0.75rem;
     }
-}</style>
+}
+</style>
 </head>
 <body>
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar"><div class="logo">📊 Tradion</div><div class="menu-item" onclick="window.location.href='/dashboard'">Dashboard</div><div class="menu-item" onclick="window.location.href='/currencies'">COT Data</div><div class="menu-item" onclick="window.location.href='/scorecard'">Scorecard</div><div class="menu-item active" onclick="window.location.href='/sentiment'">Sentiment</div><div class="menu-item" onclick="window.location.href='/profile'">Profile</div><div class="menu-item" onclick="logout()">Logout</div></div>
+<div class="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Scorecard</span></div>
+    <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
 <div class="main-content">
     <div class="header"><h2>Market Sentiment</h2></div>
     <input type="text" id="searchSentiment" class="search-box" placeholder="Search pair...">
@@ -108,6 +138,11 @@ function renderSentiment(data){const tbody=document.querySelector('#sentimentTab
 document.getElementById('searchSentiment').addEventListener('input',function(){const term=this.value.toLowerCase();const rows=document.querySelectorAll('#sentimentTable tbody tr');rows.forEach(row=>{const pair=row.querySelector('.pair-col').textContent.toLowerCase();row.style.display=pair.includes(term)?'':'none'})});
 function logout(){fetch('/logout').then(()=>window.location.href='/login')}
 loadSentiment();
+
+// Initialise Lucide icons after page loads
+setTimeout(() => {
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}, 100);
 </script>
 </body>
 </html>
