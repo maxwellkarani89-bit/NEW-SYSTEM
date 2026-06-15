@@ -1460,16 +1460,17 @@ def calculate_currency_strength(results):
 @app.route('/api/detailed_analysis')
 @login_required
 def detailed_analysis():
-    # ---------- PREFETCH ECONOMIC INDICATORS ----------
+    # ---------- PREFETCH ALL DATA (ONCE PER REQUEST) ----------
+    # 1. Economic indicators: {currency: {indicator_name: directional_score}}
     all_indicators = EconomicIndicator.query.all()
-    indicator_cache = {}  # {currency: {indicator_name: directional_score}}
+    econ_cache = {}
     for ind in all_indicators:
         if ind.forecast == 0 and ind.actual == 0:
             continue
         if "Employment Change" in ind.indicator_name:
             continue
         curr = ind.currency.upper()
-        # Compute directional score (1,0,-1) same as original
+        # compute directional score (same as get_indicator_directional_score)
         if ind.indicator_name == "Interest Rate Decision":
             score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
         else:
@@ -1477,23 +1478,37 @@ def detailed_analysis():
                 score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
             else:
                 score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
-        indicator_cache.setdefault(curr, {})[ind.indicator_name] = score
+        econ_cache.setdefault(curr, {})[ind.indicator_name] = score
 
-    # Helper to get economic score for a currency (returns 0 if not found)
-    def get_econ_score(currency, ind_name):
-        return indicator_cache.get(currency, {}).get(ind_name, 0)
+    # 2. COT data: {currency: {'net': net, 'change': change}}
+    cot_records = COTData.query.all()
+    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
 
-    # ---------- MAIN LOOP (all pairs) ----------
+    # Helper for COT alignment (uses the cache)
+    def get_cot_align(base, quote):
+        base_cot = cot_cache.get(base, {'net':0, 'change':0})
+        quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
+        base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+        base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
+        quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
+        quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
+        pair_net = base_net_dir - quote_net_dir
+        pair_mom = base_mom_dir - quote_mom_dir
+        if pair_net > 0 and pair_mom > 0:
+            return 2
+        elif pair_net < 0 and pair_mom < 0:
+            return -2
+        return 0
+
     results = []
     for base, quote in ALL_PAIRS:
         pair = f"{base}/{quote}"
         is_standalone = base in ["XAU", "BTC"] and quote == "USD"
-
         try:
             if is_standalone:
-                # Standalone logic – use raw scores (no subtraction)
-                def raw(ind_name):
-                    return get_econ_score(base, ind_name)
+                base_scores = econ_cache.get(base, {})
+                def raw(name):
+                    return base_scores.get(name, 0)
                 gdp = raw("GDP Growth Rate QoQ (%)")
                 m_pmi = raw("Manufacturing PMI")
                 s_pmi = raw("Services PMI")
@@ -1510,59 +1525,38 @@ def detailed_analysis():
                 adp = raw("ADP (K)")
                 jolts = raw("JOLTS Job Openings (M)")
 
-                # COT (original function – works)
-                base_cot = COTData.query.filter_by(currency=base).first()
-                cot_net_dir = 1 if base_cot and base_cot.net_position > 0 else (-1 if base_cot and base_cot.net_position < 0 else 0)
-                cot_mom_dir = 1 if base_cot and base_cot.weekly_change > 0 else (-1 if base_cot and base_cot.weekly_change < 0 else 0)
+                base_cot = cot_cache.get(base, {'net':0, 'change':0})
+                cot_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+                cot_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
                 cot_align = 2 if (cot_net_dir > 0 and cot_mom_dir > 0) else (-2 if (cot_net_dir < 0 and cot_mom_dir < 0) else 0)
 
-                # Retail sentiment (original function – uses Myfxbook)
                 crowd = get_retail_sentiment_score(pair)
-
-                # Technical & seasonality (same as before)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
                 season = get_seasonality_directional_score(pair)
 
-                total_score = (gdp + m_pmi + s_pmi + retail + consumer_conf +
-                               cpi + ppi + pce + interest + nfp + avg_hourly +
-                               unemp_rate + unemp_claims + adp + jolts +
-                               cot_align + crowd + trend + season)
-                total_score = max(-20, min(20, total_score))
-                overall_bias, _, _, _ = classify_bias(total_score)
+                total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
+                         cpi + ppi + pce + interest + nfp + avg_hourly +
+                         unemp_rate + unemp_claims + adp + jolts +
+                         cot_align + crowd + trend + season)
+                total = max(-20, min(20, total))
+                bias, _, _, _ = classify_bias(total)
 
                 results.append({
-                    "symbol": pair,
-                    "bias": overall_bias,
-                    "score": round(total_score, 1),
-                    "trend": trend,
-                    "seasonality": season,
-                    "cot": cot_align,
-                    "crowd": crowd,
-                    "gdp": gdp,
-                    "m_pmi": m_pmi,
-                    "s_pmi": s_pmi,
-                    "retail": retail,
-                    "consumer_conf": consumer_conf,
-                    "cpi": cpi,
-                    "ppi": ppi,
-                    "pce": pce,
-                    "interest": interest,
-                    "nfp": nfp,
-                    "avg_hourly_earnings": avg_hourly,
-                    "unemp_rate": unemp_rate,
-                    "unemp_claims": unemp_claims,
-                    "adp": adp,
-                    "jolts": jolts
+                    "symbol": pair, "bias": bias, "score": round(total,1),
+                    "trend": trend, "seasonality": season, "cot": cot_align, "crowd": crowd,
+                    "gdp": gdp, "m_pmi": m_pmi, "s_pmi": s_pmi, "retail": retail,
+                    "consumer_conf": consumer_conf, "cpi": cpi, "ppi": ppi, "pce": pce,
+                    "interest": interest, "nfp": nfp, "avg_hourly_earnings": avg_hourly,
+                    "unemp_rate": unemp_rate, "unemp_claims": unemp_claims, "adp": adp, "jolts": jolts
                 })
-
             else:
-                # Normal pair logic – subtract quote scores
-                def norm(ind_name):
-                    b = get_econ_score(base, ind_name)
-                    q = get_econ_score(quote, ind_name)
+                base_scores = econ_cache.get(base, {})
+                quote_scores = econ_cache.get(quote, {})
+                def norm(name):
+                    b = base_scores.get(name, 0)
+                    q = quote_scores.get(name, 0)
                     return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
-
                 gdp = norm("GDP Growth Rate QoQ (%)")
                 m_pmi = norm("Manufacturing PMI")
                 s_pmi = norm("Services PMI")
@@ -1579,62 +1573,37 @@ def detailed_analysis():
                 adp = norm("ADP (K)")
                 jolts = norm("JOLTS Job Openings (M)")
 
-                # COT alignment (original function)
-                cot_align = get_cot_alignment_score(base, quote)
-
-                # Retail sentiment (original)
+                cot_align = get_cot_align(base, quote)
                 crowd = get_retail_sentiment_score(pair)
-
-                # Technical & seasonality
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
                 season = get_seasonality_directional_score(pair)
 
-                total_score = (gdp + m_pmi + s_pmi + retail + consumer_conf +
-                               cpi + ppi + pce + interest + nfp + avg_hourly +
-                               unemp_rate + unemp_claims + adp + jolts +
-                               cot_align + crowd + trend + season)
-                total_score = max(-20, min(20, total_score))
-                overall_bias, _, _, _ = classify_bias(total_score)
+                total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
+                         cpi + ppi + pce + interest + nfp + avg_hourly +
+                         unemp_rate + unemp_claims + adp + jolts +
+                         cot_align + crowd + trend + season)
+                total = max(-20, min(20, total))
+                bias, _, _, _ = classify_bias(total)
 
                 results.append({
-                    "symbol": pair,
-                    "bias": overall_bias,
-                    "score": round(total_score, 1),
-                    "trend": trend,
-                    "seasonality": season,
-                    "cot": cot_align,
-                    "crowd": crowd,
-                    "gdp": gdp,
-                    "m_pmi": m_pmi,
-                    "s_pmi": s_pmi,
-                    "retail": retail,
-                    "consumer_conf": consumer_conf,
-                    "cpi": cpi,
-                    "ppi": ppi,
-                    "pce": pce,
-                    "interest": interest,
-                    "nfp": nfp,
-                    "avg_hourly_earnings": avg_hourly,
-                    "unemp_rate": unemp_rate,
-                    "unemp_claims": unemp_claims,
-                    "adp": adp,
-                    "jolts": jolts
+                    "symbol": pair, "bias": bias, "score": round(total,1),
+                    "trend": trend, "seasonality": season, "cot": cot_align, "crowd": crowd,
+                    "gdp": gdp, "m_pmi": m_pmi, "s_pmi": s_pmi, "retail": retail,
+                    "consumer_conf": consumer_conf, "cpi": cpi, "ppi": ppi, "pce": pce,
+                    "interest": interest, "nfp": nfp, "avg_hourly_earnings": avg_hourly,
+                    "unemp_rate": unemp_rate, "unemp_claims": unemp_claims, "adp": adp, "jolts": jolts
                 })
-
         except Exception as e:
             print(f"Error processing {pair}: {e}")
             results.append({
-                "symbol": pair,
-                "bias": "ERROR",
-                "score": 0,
+                "symbol": pair, "bias": "ERROR", "score": 0,
                 "trend": 0, "seasonality": 0, "cot": 0, "crowd": 0,
                 "gdp": 0, "m_pmi": 0, "s_pmi": 0, "retail": 0, "consumer_conf": 0,
                 "cpi": 0, "ppi": 0, "pce": 0, "interest": 0,
                 "nfp": 0, "avg_hourly_earnings": 0, "unemp_rate": 0,
                 "unemp_claims": 0, "adp": 0, "jolts": 0
             })
-
     return jsonify(results)
 
 @app.route('/api/analyze', methods=['POST'])
@@ -1763,6 +1732,31 @@ def api_analyze():
 
     except Exception as e:
         return jsonify({'error': str(e), 'trace': traceback.format_exc()}), 500
+
+
+@app.route('/debug/indicator_cache/<currency>')
+@login_required
+@admin_required
+def debug_indicator_cache(currency):
+    currency = currency.upper()
+    indicators = EconomicIndicator.query.filter_by(currency=currency).all()
+    cache = {}
+    for ind in indicators:
+        if ind.forecast == 0 and ind.actual == 0:
+            continue
+        if "Employment Change" in ind.indicator_name:
+            continue
+        if ind.indicator_name == "Interest Rate Decision":
+            score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        else:
+            if ind.is_lower_better:
+                score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+            else:
+                score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        cache[ind.indicator_name] = {'forecast': ind.forecast, 'actual': ind.actual, 'score': score}
+    return jsonify(cache)
+
+
 
 @app.route('/api/asset_scorecard/<path:symbol>')
 @login_required
