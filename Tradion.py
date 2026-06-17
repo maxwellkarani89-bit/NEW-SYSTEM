@@ -345,15 +345,24 @@ def admin_required(f):
 @login_required
 @admin_required
 def debug_save_all_now():
+    results = {
+        'currencies': [],
+        'pairs': [],
+        'errors': []
+    }
     with app.app_context():
         # Save currencies
         for currency in MAJOR_CURRENCIES:
             try:
                 score = get_asset_score(currency)
                 save_asset_score_history(currency, score)
+                results['currencies'].append({'asset': currency, 'score': score})
                 print(f"Saved currency {currency}: {score}")
             except Exception as e:
+                error_msg = f"Currency {currency}: {str(e)}"
+                results['errors'].append(error_msg)
                 print(f"Error {currency}: {e}")
+
         # Save forex pairs
         for base, quote in ALL_PAIRS:
             pair = f"{base}/{quote}"
@@ -361,10 +370,18 @@ def debug_save_all_now():
                 weighted = calculate_weighted_pair_score(pair, base, quote)
                 total_score = weighted["total_raw"]
                 save_asset_score_history(pair, total_score)
+                results['pairs'].append({'pair': pair, 'score': total_score})
                 print(f"Saved pair {pair}: {total_score}")
             except Exception as e:
+                error_msg = f"Pair {pair}: {str(e)}"
+                results['errors'].append(error_msg)
                 print(f"Error {pair}: {e}")
-    return jsonify({'success': True, 'message': 'All scores saved (currencies + pairs)'})
+
+    return jsonify({
+        'success': True,
+        'message': 'All scores saved (currencies + pairs)',
+        'details': results
+    })
 
 # -----------------------------
 # DEBUG endpoint to check economic surprise calculation
