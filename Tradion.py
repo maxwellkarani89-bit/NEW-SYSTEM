@@ -1461,7 +1461,6 @@ def calculate_currency_strength(results):
 @login_required
 def detailed_analysis():
     # ---------- PREFETCH ALL DATA (ONCE PER REQUEST) ----------
-    # 1. Economic indicators: {currency: {indicator_name: directional_score}}
     all_indicators = EconomicIndicator.query.all()
     econ_cache = {}
     for ind in all_indicators:
@@ -1470,7 +1469,6 @@ def detailed_analysis():
         if "Employment Change" in ind.indicator_name:
             continue
         curr = ind.currency.upper()
-        # compute directional score (same as get_indicator_directional_score)
         if ind.indicator_name == "Interest Rate Decision":
             score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
         else:
@@ -1480,11 +1478,10 @@ def detailed_analysis():
                 score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
         econ_cache.setdefault(curr, {})[ind.indicator_name] = score
 
-    # 2. COT data: {currency: {'net': net, 'change': change}}
     cot_records = COTData.query.all()
     cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
 
-    # Helper for COT alignment (uses the cache)
+    # ---------- NEW COT ALIGNMENT (sum‑difference, clamped) ----------
     def get_cot_align(base, quote):
         base_cot = cot_cache.get(base, {'net':0, 'change':0})
         quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
@@ -1492,13 +1489,15 @@ def detailed_analysis():
         base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
         quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
         quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
-        pair_net = base_net_dir - quote_net_dir
-        pair_mom = base_mom_dir - quote_mom_dir
-        if pair_net > 0 and pair_mom > 0:
+        base_score = base_net_dir + base_mom_dir
+        quote_score = quote_net_dir + quote_mom_dir
+        raw_diff = base_score - quote_score
+        if raw_diff > 2:
             return 2
-        elif pair_net < 0 and pair_mom < 0:
+        elif raw_diff < -2:
             return -2
-        return 0
+        else:
+            return raw_diff
 
     results = []
     for base, quote in ALL_PAIRS:
@@ -1573,7 +1572,7 @@ def detailed_analysis():
                 adp = norm("ADP (K)")
                 jolts = norm("JOLTS Job Openings (M)")
 
-                cot_align = get_cot_align(base, quote)
+                cot_align = get_cot_align(base, quote)   # NEW function used here
                 crowd = get_retail_sentiment_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
