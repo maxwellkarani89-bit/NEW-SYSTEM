@@ -961,6 +961,109 @@ def get_asset_score(asset: str) -> float:
 
     return overall_score
 
+def save_all_asset_scores():
+    """Save scores for all currencies and forex pairs using optimized prefetch."""
+    with app.app_context():
+        # ---------- PREFETCH ALL DATA (ONCE) ----------
+        # 1. Economic indicators: {currency: {indicator_name: directional_score}}
+        all_indicators = EconomicIndicator.query.all()
+        econ_cache = {}
+        for ind in all_indicators:
+            if ind.forecast == 0 and ind.actual == 0:
+                continue
+            if "Employment Change" in ind.indicator_name:
+                continue
+            curr = ind.currency.upper()
+            if ind.indicator_name == "Interest Rate Decision":
+                score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+            else:
+                if ind.is_lower_better:
+                    score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+                else:
+                    score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+            econ_cache.setdefault(curr, {})[ind.indicator_name] = score
+
+        # 2. COT data: {currency: {'net': net, 'change': change}}
+        cot_records = COTData.query.all()
+        cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+
+        # 3. Helper to get retail sentiment (light)
+        def get_retail_score(pair):
+            return get_retail_sentiment_score(pair)
+
+        # 4. COT alignment (sum‑difference method)
+        def get_cot_align(base, quote):
+            base_cot = cot_cache.get(base, {'net':0, 'change':0})
+            quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
+            base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+            base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
+            quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
+            quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
+            base_score = base_net_dir + base_mom_dir
+            quote_score = quote_net_dir + quote_mom_dir
+            raw_diff = base_score - quote_score
+            if raw_diff > 2:
+                return 2
+            elif raw_diff < -2:
+                return -2
+            else:
+                return raw_diff
+
+        # ---------- SAVE CURRENCIES ----------
+        for currency in MAJOR_CURRENCIES:
+            try:
+                score = get_asset_score(currency)
+                save_asset_score_history(currency, score)
+                print(f"Saved currency {currency}: {score}")
+            except Exception as e:
+                print(f"Error saving currency {currency}: {e}")
+
+        # ---------- SAVE PAIRS (optimized with cache) ----------
+        for base, quote in ALL_PAIRS:
+            pair = f"{base}/{quote}"
+            try:
+                base_scores = econ_cache.get(base, {})
+                quote_scores = econ_cache.get(quote, {})
+                def norm(name):
+                    b = base_scores.get(name, 0)
+                    q = quote_scores.get(name, 0)
+                    return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
+                gdp = norm("GDP Growth Rate QoQ (%)")
+                m_pmi = norm("Manufacturing PMI")
+                s_pmi = norm("Services PMI")
+                retail = norm("Retail Sales MoM (%)")
+                consumer_conf = norm("Consumer Confidence")
+                cpi = norm("CPI YoY (%)")
+                ppi = norm("PPI YoY (%)")
+                pce = norm("PCE YoY (%)")
+                interest = norm("Interest Rate Decision")
+                nfp = norm("NFP (K)")
+                avg_hourly = norm("Average Hourly Earnings")
+                unemp_rate = norm("Unemployment Rate (%)")
+                unemp_claims = norm("Unemployment Claims (K)")
+                adp = norm("ADP (K)")
+                jolts = norm("JOLTS Job Openings (M)")
+
+                cot_align = get_cot_align(base, quote)
+                crowd = get_retail_score(pair)
+
+                # Technical and seasonality – light external calls
+                yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
+                trend = get_technical_directional_score(yf_symbol)
+                season = get_seasonality_directional_score(pair)
+
+                total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
+                         cpi + ppi + pce + interest + nfp + avg_hourly +
+                         unemp_rate + unemp_claims + adp + jolts +
+                         cot_align + crowd + trend + season)
+                total = max(-20, min(20, total))
+
+                save_asset_score_history(pair, total)
+                print(f"Saved pair {pair}: {total}")
+            except Exception as e:
+                print(f"Error saving pair {pair}: {e}")
+
+
 
 def classify_bias(score: float) -> tuple:
     """Return (bias_string, symbol, color, display_score) based on ±20 scale."""
@@ -5607,112 +5710,9 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=update_retail_sentiment, trigger="interval", minutes=30, id='retail_sentiment_job')
     
-    # ---------- OPTIMIZED SAVE FUNCTION (uses prefetch) ----------
-    def save_all_asset_scores():
-        with app.app_context():
-            # ---------- PREFETCH ALL DATA (ONCE) ----------
-            # 1. Economic indicators: {currency: {indicator_name: directional_score}}
-            all_indicators = EconomicIndicator.query.all()
-            econ_cache = {}
-            for ind in all_indicators:
-                if ind.forecast == 0 and ind.actual == 0:
-                    continue
-                if "Employment Change" in ind.indicator_name:
-                    continue
-                curr = ind.currency.upper()
-                if ind.indicator_name == "Interest Rate Decision":
-                    score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
-                else:
-                    if ind.is_lower_better:
-                        score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
-                    else:
-                        score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
-                econ_cache.setdefault(curr, {})[ind.indicator_name] = score
-
-            # 2. COT data: {currency: {'net': net, 'change': change}}
-            cot_records = COTData.query.all()
-            cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
-
-            # 3. Helper to get retail sentiment (light)
-            def get_retail_score(pair):
-                return get_retail_sentiment_score(pair)
-
-            # 4. COT alignment (sum‑difference method)
-            def get_cot_align(base, quote):
-                base_cot = cot_cache.get(base, {'net':0, 'change':0})
-                quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
-                base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
-                base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
-                quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
-                quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
-                base_score = base_net_dir + base_mom_dir
-                quote_score = quote_net_dir + quote_mom_dir
-                raw_diff = base_score - quote_score
-                if raw_diff > 2:
-                    return 2
-                elif raw_diff < -2:
-                    return -2
-                else:
-                    return raw_diff
-
-            # ---------- SAVE CURRENCIES ----------
-            for currency in MAJOR_CURRENCIES:
-                try:
-                    # Use the existing get_asset_score – it's only 10 currencies, fine.
-                    score = get_asset_score(currency)
-                    save_asset_score_history(currency, score)
-                    print(f"Saved currency {currency}: {score}")
-                except Exception as e:
-                    print(f"Error saving currency {currency}: {e}")
-
-            # ---------- SAVE PAIRS (optimized with cache) ----------
-            for base, quote in ALL_PAIRS:
-                pair = f"{base}/{quote}"
-                try:
-                    base_scores = econ_cache.get(base, {})
-                    quote_scores = econ_cache.get(quote, {})
-                    def norm(name):
-                        b = base_scores.get(name, 0)
-                        q = quote_scores.get(name, 0)
-                        return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
-                    gdp = norm("GDP Growth Rate QoQ (%)")
-                    m_pmi = norm("Manufacturing PMI")
-                    s_pmi = norm("Services PMI")
-                    retail = norm("Retail Sales MoM (%)")
-                    consumer_conf = norm("Consumer Confidence")
-                    cpi = norm("CPI YoY (%)")
-                    ppi = norm("PPI YoY (%)")
-                    pce = norm("PCE YoY (%)")
-                    interest = norm("Interest Rate Decision")
-                    nfp = norm("NFP (K)")
-                    avg_hourly = norm("Average Hourly Earnings")
-                    unemp_rate = norm("Unemployment Rate (%)")
-                    unemp_claims = norm("Unemployment Claims (K)")
-                    adp = norm("ADP (K)")
-                    jolts = norm("JOLTS Job Openings (M)")
-
-                    cot_align = get_cot_align(base, quote)
-                    crowd = get_retail_score(pair)
-
-                    # Technical and seasonality – light external calls
-                    yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
-                    trend = get_technical_directional_score(yf_symbol)
-                    season = get_seasonality_directional_score(pair)
-
-                    total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
-                             cpi + ppi + pce + interest + nfp + avg_hourly +
-                             unemp_rate + unemp_claims + adp + jolts +
-                             cot_align + crowd + trend + season)
-                    total = max(-20, min(20, total))
-
-                    save_asset_score_history(pair, total)
-                    print(f"Saved pair {pair}: {total}")
-                except Exception as e:
-                    print(f"Error saving pair {pair}: {e}")
-    
     # Add the job (runs every 3 days at 00:00 UTC)
     scheduler.add_job(
-        func=save_all_asset_scores,
+        func=save_all_asset_scores,   # now global
         trigger=CronTrigger(day='*/3', hour=0, minute=0),
         id='score_history_job'
     )
