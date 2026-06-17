@@ -2436,10 +2436,24 @@ def admin_users():
 @admin_required
 def admin_delete_user(user_id):
     user = User.query.get_or_404(user_id)
-    # Prevent deleting the last admin? Optional – we allow it.
-    db.session.delete(user)
-    db.session.commit()
-    return jsonify({'success': True})
+    
+    # Optional: prevent deleting the only admin
+    if user.is_admin and User.query.filter_by(is_admin=True).count() == 1:
+        return jsonify({'success': False, 'error': 'Cannot delete the only admin user.'}), 400
+    
+    try:
+        # Delete related records (cascade manually)
+        AnalysisHistory.query.filter_by(user_id=user.id).delete()
+        SignalPerformance.query.filter_by(user_id=user.id).delete()
+        UserNote.query.filter_by(user_id=user.id).delete()
+        # Add any other related models here if they exist
+        
+        db.session.delete(user)
+        db.session.commit()
+        return jsonify({'success': True})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 @app.route('/admin/users/<int:user_id>/activate', methods=['POST'])
 @login_required
