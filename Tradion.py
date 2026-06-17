@@ -2059,7 +2059,7 @@ def debug_save_scores():
                 print(f"Error saving score for {currency}: {e}")
     return jsonify({'success': True, 'message': 'Scores saved for all assets'})
 
-@app.route('/debug/check_history/<asset>')
+@app.route('/debug/check_history/<path:asset>')
 @login_required
 @admin_required
 def debug_check_history(asset):
@@ -2071,6 +2071,13 @@ def debug_check_history(asset):
         'score': r.score,
         'recorded_at': r.recorded_at.isoformat()
     } for r in records])
+
+@app.route('/debug/list_history')
+@login_required
+@admin_required
+def debug_list_history():
+    assets = db.session.query(AssetScoreHistory.asset).distinct().all()
+    return jsonify([a[0] for a in assets])
 
 @app.route('/debug/manual_save')
 @login_required
