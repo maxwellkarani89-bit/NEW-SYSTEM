@@ -345,43 +345,11 @@ def admin_required(f):
 @login_required
 @admin_required
 def debug_save_all_now():
-    results = {
-        'currencies': [],
-        'pairs': [],
-        'errors': []
-    }
-    with app.app_context():
-        # Save currencies
-        for currency in MAJOR_CURRENCIES:
-            try:
-                score = get_asset_score(currency)
-                save_asset_score_history(currency, score)
-                results['currencies'].append({'asset': currency, 'score': score})
-                print(f"Saved currency {currency}: {score}")
-            except Exception as e:
-                error_msg = f"Currency {currency}: {str(e)}"
-                results['errors'].append(error_msg)
-                print(f"Error {currency}: {e}")
-
-        # Save forex pairs
-        for base, quote in ALL_PAIRS:
-            pair = f"{base}/{quote}"
-            try:
-                weighted = calculate_weighted_pair_score(pair, base, quote)
-                total_score = weighted["total_raw"]
-                save_asset_score_history(pair, total_score)
-                results['pairs'].append({'pair': pair, 'score': total_score})
-                print(f"Saved pair {pair}: {total_score}")
-            except Exception as e:
-                error_msg = f"Pair {pair}: {str(e)}"
-                results['errors'].append(error_msg)
-                print(f"Error {pair}: {e}")
-
-    return jsonify({
-        'success': True,
-        'message': 'All scores saved (currencies + pairs)',
-        'details': results
-    })
+    try:
+        save_all_asset_scores()
+        return jsonify({'success': True, 'message': 'All scores saved (currencies + pairs)'})
+    except Exception as e:
+        return jsonify({'success': False, 'error': str(e)}), 500
 
 # -----------------------------
 # DEBUG endpoint to check economic surprise calculation
@@ -5639,28 +5607,108 @@ if __name__ == '__main__':
     scheduler = BackgroundScheduler()
     scheduler.add_job(func=update_retail_sentiment, trigger="interval", minutes=30, id='retail_sentiment_job')
     
-    # Schedule score history saving every 3 days at midnight UTC
+    # ---------- OPTIMIZED SAVE FUNCTION (uses prefetch) ----------
     def save_all_asset_scores():
         with app.app_context():
-            # Save scores for individual currencies
+            # ---------- PREFETCH ALL DATA (ONCE) ----------
+            # 1. Economic indicators: {currency: {indicator_name: directional_score}}
+            all_indicators = EconomicIndicator.query.all()
+            econ_cache = {}
+            for ind in all_indicators:
+                if ind.forecast == 0 and ind.actual == 0:
+                    continue
+                if "Employment Change" in ind.indicator_name:
+                    continue
+                curr = ind.currency.upper()
+                if ind.indicator_name == "Interest Rate Decision":
+                    score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+                else:
+                    if ind.is_lower_better:
+                        score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+                    else:
+                        score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+                econ_cache.setdefault(curr, {})[ind.indicator_name] = score
+
+            # 2. COT data: {currency: {'net': net, 'change': change}}
+            cot_records = COTData.query.all()
+            cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+
+            # 3. Helper to get retail sentiment (light)
+            def get_retail_score(pair):
+                return get_retail_sentiment_score(pair)
+
+            # 4. COT alignment (sum‑difference method)
+            def get_cot_align(base, quote):
+                base_cot = cot_cache.get(base, {'net':0, 'change':0})
+                quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
+                base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
+                base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
+                quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
+                quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
+                base_score = base_net_dir + base_mom_dir
+                quote_score = quote_net_dir + quote_mom_dir
+                raw_diff = base_score - quote_score
+                if raw_diff > 2:
+                    return 2
+                elif raw_diff < -2:
+                    return -2
+                else:
+                    return raw_diff
+
+            # ---------- SAVE CURRENCIES ----------
             for currency in MAJOR_CURRENCIES:
                 try:
+                    # Use the existing get_asset_score – it's only 10 currencies, fine.
                     score = get_asset_score(currency)
                     save_asset_score_history(currency, score)
-                    print(f"Saved score for {currency}: {score}")
+                    print(f"Saved currency {currency}: {score}")
                 except Exception as e:
-                    print(f"Error saving score for {currency}: {e}")
-            
-            # Save scores for all forex pairs
+                    print(f"Error saving currency {currency}: {e}")
+
+            # ---------- SAVE PAIRS (optimized with cache) ----------
             for base, quote in ALL_PAIRS:
                 pair = f"{base}/{quote}"
                 try:
-                    weighted = calculate_weighted_pair_score(pair, base, quote)
-                    total_score = weighted["total_raw"]
-                    save_asset_score_history(pair, total_score)
-                    print(f"Saved score for {pair}: {total_score}")
+                    base_scores = econ_cache.get(base, {})
+                    quote_scores = econ_cache.get(quote, {})
+                    def norm(name):
+                        b = base_scores.get(name, 0)
+                        q = quote_scores.get(name, 0)
+                        return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
+                    gdp = norm("GDP Growth Rate QoQ (%)")
+                    m_pmi = norm("Manufacturing PMI")
+                    s_pmi = norm("Services PMI")
+                    retail = norm("Retail Sales MoM (%)")
+                    consumer_conf = norm("Consumer Confidence")
+                    cpi = norm("CPI YoY (%)")
+                    ppi = norm("PPI YoY (%)")
+                    pce = norm("PCE YoY (%)")
+                    interest = norm("Interest Rate Decision")
+                    nfp = norm("NFP (K)")
+                    avg_hourly = norm("Average Hourly Earnings")
+                    unemp_rate = norm("Unemployment Rate (%)")
+                    unemp_claims = norm("Unemployment Claims (K)")
+                    adp = norm("ADP (K)")
+                    jolts = norm("JOLTS Job Openings (M)")
+
+                    cot_align = get_cot_align(base, quote)
+                    crowd = get_retail_score(pair)
+
+                    # Technical and seasonality – light external calls
+                    yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
+                    trend = get_technical_directional_score(yf_symbol)
+                    season = get_seasonality_directional_score(pair)
+
+                    total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
+                             cpi + ppi + pce + interest + nfp + avg_hourly +
+                             unemp_rate + unemp_claims + adp + jolts +
+                             cot_align + crowd + trend + season)
+                    total = max(-20, min(20, total))
+
+                    save_asset_score_history(pair, total)
+                    print(f"Saved pair {pair}: {total}")
                 except Exception as e:
-                    print(f"Error saving score for {pair}: {e}")
+                    print(f"Error saving pair {pair}: {e}")
     
     # Add the job (runs every 3 days at 00:00 UTC)
     scheduler.add_job(
