@@ -2431,6 +2431,16 @@ def admin_users():
     users = User.query.all()
     return jsonify({'users': [{'id': u.id, 'username': u.username, 'email': u.email, 'is_admin': u.is_admin, 'is_active': u.is_active} for u in users]})
 
+@app.route('/admin/users/<int:user_id>/delete', methods=['POST'])
+@login_required
+@admin_required
+def admin_delete_user(user_id):
+    user = User.query.get_or_404(user_id)
+    # Prevent deleting the last admin? Optional – we allow it.
+    db.session.delete(user)
+    db.session.commit()
+    return jsonify({'success': True})
+
 @app.route('/admin/users/<int:user_id>/activate', methods=['POST'])
 @login_required
 @admin_required
@@ -2782,21 +2792,22 @@ def login():
 @app.route('/register', methods=['GET', 'POST'])
 def register():
     if request.method == 'POST':
-        username = request.form['username']
-        email = request.form['email']
+        username = request.form['username'].strip()
+        email = request.form['email'].strip()
         password = request.form['password']
         confirm = request.form['confirm_password']
         if password != confirm:
             return render_template('register.html', error='Passwords do not match')
         if User.query.filter_by(username=username).first():
-            return render_template('register.html', error='Username exists')
+            return render_template('register.html', error='Username already taken')
         if User.query.filter_by(email=email).first():
-            return render_template('register.html', error='Email exists')
+            return render_template('register.html', error='Email already registered')
         user = User(username=username, email=email, is_active=False)
         user.set_password(password)
         db.session.add(user)
         db.session.commit()
-        return redirect(url_for('login'))
+        # Redirect to login with a success message
+        return redirect(url_for('login', registered=1))
     return render_template('register.html')
 
 @app.route('/logout')
@@ -2889,12 +2900,12 @@ def create_templates():
 <html lang="en">
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Tradion · Login</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;height:100vh;display:flex;overflow:hidden}.split-container{display:flex;width:100%}.brand-panel{flex:1.2;background:radial-gradient(circle at 20% 30%, #121826 0%, #0B0F1A 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:3rem;position:relative;overflow:hidden}.brand-content{max-width:500px;z-index:2;text-align:center}.logo{font-size:3.8rem;font-weight:800;letter-spacing:4px;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 80%);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:1rem}.tagline{font-size:1.4rem;color:#a0b0c0;margin-bottom:3rem;font-weight:300}.chart-animation{width:100%;height:200px;margin-top:2rem;opacity:0.6}.chart-line{stroke:#00e5ff;stroke-width:2;fill:none;stroke-dasharray:1000;stroke-dashoffset:1000;animation:drawLine 4s ease-out forwards}@keyframes drawLine{to{stroke-dashoffset:0}}.glow-pulse{position:absolute;width:300px;height:300px;background:radial-gradient(circle, rgba(0,229,255,0.15) 0%, transparent 70%);border-radius:50%;top:20%;left:30%;animation:pulse 8s infinite alternate;z-index:1}@keyframes pulse{0%{transform:scale(1);opacity:0.3}100%{transform:scale(1.5);opacity:0.1}}.login-panel{flex:0.8;background:#0B0F1A;display:flex;align-items:center;justify-content:center;padding:2rem}.login-card{background:#121826;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:0 20px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(0,229,255,0.1);border:1px solid #2a3040}.login-card h2{font-size:2rem;font-weight:600;color:#FFFFFF;margin-bottom:0.5rem}.subtitle{color:#8892b0;margin-bottom:2rem;font-size:0.95rem}.input-group{margin-bottom:1.5rem}.input-group label{display:block;margin-bottom:0.5rem;color:#ccd6f6;font-size:0.9rem;font-weight:500}.input-wrapper{position:relative}.input-wrapper input{width:100%;padding:0.9rem 1rem;background:#1a1f2e;border:1.5px solid #2a3040;border-radius:12px;color:#fff;font-size:1rem;transition:all 0.2s}.input-wrapper input:focus{outline:none;border-color:#00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,0.1)}.input-wrapper input::placeholder{color:#5a6380}.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);color:#8892b0;cursor:pointer;font-size:1.2rem}.btn-login{width:100%;padding:0.9rem;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%);border:none;border-radius:12px;color:#0B0F1A;font-weight:700;font-size:1.1rem;cursor:pointer;transition:all 0.2s;margin-top:0.5rem}.btn-login:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(0,229,255,0.2)}.btn-login:active{transform:translateY(0)}.error-message{background:rgba(255,77,109,0.15);color:#ff8099;padding:0.8rem;border-radius:10px;margin-bottom:1rem;font-size:0.9rem;border-left:4px solid #ff4d6d}.footer-text{text-align:center;margin-top:1.5rem;color:#8892b0;font-size:0.9rem}.footer-text a{color:#00e5ff;text-decoration:none;font-weight:600}.footer-text a:hover{text-decoration:underline}@media (max-width:768px){.split-container{flex-direction:column}.brand-panel{display:none}}</style>
+<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;height:100vh;display:flex;overflow:hidden}.split-container{display:flex;width:100%}.brand-panel{flex:1.2;background:radial-gradient(circle at 20% 30%, #121826 0%, #0B0F1A 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:3rem;position:relative;overflow:hidden}.brand-content{max-width:500px;z-index:2;text-align:center}.logo{font-size:3.8rem;font-weight:800;letter-spacing:4px;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 80%);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:1rem}.tagline{font-size:1.4rem;color:#a0b0c0;margin-bottom:3rem;font-weight:300}.chart-animation{width:100%;height:200px;margin-top:2rem;opacity:0.6}.chart-line{stroke:#00e5ff;stroke-width:2;fill:none;stroke-dasharray:1000;stroke-dashoffset:1000;animation:drawLine 4s ease-out forwards}@keyframes drawLine{to{stroke-dashoffset:0}}.glow-pulse{position:absolute;width:300px;height:300px;background:radial-gradient(circle, rgba(0,229,255,0.15) 0%, transparent 70%);border-radius:50%;top:20%;left:30%;animation:pulse 8s infinite alternate;z-index:1}@keyframes pulse{0%{transform:scale(1);opacity:0.3}100%{transform:scale(1.5);opacity:0.1}}.login-panel{flex:0.8;background:#0B0F1A;display:flex;align-items:center;justify-content:center;padding:2rem}.login-card{background:#121826;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:0 20px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(0,229,255,0.1);border:1px solid #2a3040}.login-card h2{font-size:2rem;font-weight:600;color:#FFFFFF;margin-bottom:0.5rem}.subtitle{color:#8892b0;margin-bottom:2rem;font-size:0.95rem}.input-group{margin-bottom:1.5rem}.input-group label{display:block;margin-bottom:0.5rem;color:#ccd6f6;font-size:0.9rem;font-weight:500}.input-wrapper{position:relative}.input-wrapper input{width:100%;padding:0.9rem 1rem;background:#1a1f2e;border:1.5px solid #2a3040;border-radius:12px;color:#fff;font-size:1rem;transition:all 0.2s}.input-wrapper input:focus{outline:none;border-color:#00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,0.1)}.input-wrapper input::placeholder{color:#5a6380}.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);color:#8892b0;cursor:pointer;font-size:1.2rem}.btn-login{width:100%;padding:0.9rem;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%);border:none;border-radius:12px;color:#0B0F1A;font-weight:700;font-size:1.1rem;cursor:pointer;transition:all 0.2s;margin-top:0.5rem}.btn-login:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(0,229,255,0.2)}.btn-login:active{transform:translateY(0)}.error-message{background:rgba(255,77,109,0.15);color:#ff8099;padding:0.8rem;border-radius:10px;margin-bottom:1rem;font-size:0.9rem;border-left:4px solid #ff4d6d}.success-message{background:rgba(0,229,160,0.15);color:#00e5a0;padding:0.8rem;border-radius:10px;margin-bottom:1rem;font-size:0.9rem;border-left:4px solid #00e5a0}.footer-text{text-align:center;margin-top:1.5rem;color:#8892b0;font-size:0.9rem}.footer-text a{color:#00e5ff;text-decoration:none;font-weight:600}.footer-text a:hover{text-decoration:underline}@media (max-width:768px){.split-container{flex-direction:column}.brand-panel{display:none}}</style>
 </head>
 <body>
 <div class="split-container">
 <div class="brand-panel"><div class="glow-pulse"></div><div class="brand-content"><div class="logo">Tradion</div><div class="tagline">Trade smarter. Analyze deeper.</div><svg class="chart-animation" viewBox="0 0 400 100" preserveAspectRatio="none"><polyline class="chart-line" points="0,80 50,60 100,70 150,20 200,40 250,10 300,50 350,30 400,45"/></svg></div></div>
-<div class="login-panel"><div class="login-card"><h2>Welcome Back</h2><p class="subtitle">Access your trading dashboard</p>{% if error %}<div class="error-message">{{ error }}</div>{% endif %}<form method="POST"><div class="input-group"><label>Username</label><div class="input-wrapper"><input type="text" name="username" placeholder="Enter username" required autofocus></div></div><div class="input-group"><label>Password</label><div class="input-wrapper"><input type="password" name="password" id="password" placeholder="••••••••" required><span class="password-toggle" onclick="togglePassword()">👁</span></div></div><button type="submit" class="btn-login">Sign In</button></form><p class="footer-text">Don't have an account? <a href="{{ url_for('register') }}">Sign up</a></p></div></div>
+<div class="login-panel"><div class="login-card"><h2>Welcome Back</h2><p class="subtitle">Access your trading dashboard</p>{% if request.args.get('registered') %}<div class="success-message">✅ Registration successful! Your account is pending admin approval. You will be notified when approved.</div>{% endif %}{% if error %}<div class="error-message">{{ error }}</div>{% endif %}<form method="POST"><div class="input-group"><label>Username</label><div class="input-wrapper"><input type="text" name="username" placeholder="Enter username" required autofocus></div></div><div class="input-group"><label>Password</label><div class="input-wrapper"><input type="password" name="password" id="password" placeholder="••••••••" required><span class="password-toggle" onclick="togglePassword()">👁</span></div></div><button type="submit" class="btn-login">Sign In</button></form><p class="footer-text">Don't have an account? <a href="{{ url_for('register') }}">Sign up</a></p></div></div>
 </div>
 <script>function togglePassword(){const pwd=document.getElementById('password');const toggle=document.querySelector('.password-toggle');if(pwd.type==='password'){pwd.type='text';toggle.textContent='🙈'}else{pwd.type='password';toggle.textContent='👁'}}</script>
 </body>
@@ -2904,10 +2915,63 @@ def create_templates():
     with open('templates/register.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Register - Tradion</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;min-height:100vh;display:flex;justify-content:center;align-items:center}.register-container{background:#121826;border-radius:20px;padding:40px;width:100%;max-width:400px;box-shadow:0 0 40px rgba(0,229,255,0.1);border:1px solid #2a3040}h2{color:#00e5ff;text-align:center;margin-bottom:30px}input{width:100%;padding:12px;margin:10px 0;border:none;border-radius:10px;background:#1a1f2e;color:#fff;border:1.5px solid #2a3040}input:focus{border-color:#00e5ff;outline:none}button{width:100%;padding:12px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:10px;cursor:pointer;font-weight:bold}.error{color:#ff8099;text-align:center;margin-top:10px}.link{text-align:center;margin-top:20px}.link a{color:#00e5ff}</style>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;min-height:100vh;display:flex;justify-content:center;align-items:center}
+.register-container{background:#121826;border-radius:20px;padding:40px;width:100%;max-width:400px;box-shadow:0 0 40px rgba(0,229,255,0.1);border:1px solid #2a3040}
+h2{color:#00e5ff;text-align:center;margin-bottom:30px}
+.input-group{margin-bottom:20px}
+.input-group label{display:block;color:#ccd6f6;margin-bottom:5px;font-size:0.9rem}
+.input-wrapper{position:relative}
+input{width:100%;padding:12px;background:#1a1f2e;color:#fff;border:1.5px solid #2a3040;border-radius:10px;font-size:1rem}
+input:focus{border-color:#00e5ff;outline:none}
+.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);color:#8892b0;cursor:pointer;font-size:1.2rem}
+button{width:100%;padding:12px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:10px;cursor:pointer;font-weight:bold;font-size:1.1rem}
+.error{color:#ff8099;text-align:center;margin-top:10px}
+.link{text-align:center;margin-top:20px}
+.link a{color:#00e5ff}
+</style>
 </head>
 <body>
-<div class="register-container"><h2>Create Account</h2><form method="POST"><input type="text" name="username" placeholder="Username" required><input type="email" name="email" placeholder="Email" required><input type="password" name="password" placeholder="Password" required><input type="password" name="confirm_password" placeholder="Confirm Password" required><button type="submit">Register</button></form>{% if error %}<div class="error">{{ error }}</div>{% endif %}<div class="link"><a href="{{ url_for('login') }}">Back to Login</a></div></div>
+<div class="register-container">
+<h2>Create Account</h2>
+<form method="POST">
+<div class="input-group">
+<label>Username</label>
+<input type="text" name="username" placeholder="Choose a username" required>
+</div>
+<div class="input-group">
+<label>Email</label>
+<input type="email" name="email" placeholder="Your email address" required>
+</div>
+<div class="input-group">
+<label>Password</label>
+<div class="input-wrapper">
+<input type="password" name="password" id="password" placeholder="Enter password" required>
+<span class="password-toggle" onclick="togglePassword('password')">👁</span>
+</div>
+</div>
+<div class="input-group">
+<label>Confirm Password</label>
+<div class="input-wrapper">
+<input type="password" name="confirm_password" id="confirm_password" placeholder="Confirm password" required>
+<span class="password-toggle" onclick="togglePassword('confirm_password')">👁</span>
+</div>
+</div>
+<button type="submit">Register</button>
+</form>
+{% if error %}
+<div class="error">{{ error }}</div>
+{% endif %}
+<div class="link"><a href="{{ url_for('login') }}">Back to Login</a></div>
+</div>
+<script>
+function togglePassword(fieldId){
+const field=document.getElementById(fieldId);
+const toggle=field.parentElement.querySelector('.password-toggle');
+if(field.type==='password'){field.type='text';toggle.textContent='🙈';}
+else{field.type='password';toggle.textContent='👁';}
+}
+</script>
 </body>
 </html>''')
 
@@ -4395,7 +4459,7 @@ setTimeout(() => {
 <html><head><title>Admin - Tradion</title>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}button.danger{background:#ff4d6d;color:#fff}button.danger:hover{background:#e6395a}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
 
 /* ===== Clean Tables (shared) ===== */
 .table-container {
@@ -4904,7 +4968,10 @@ async function loadUsers(){
     data.users.forEach(u=>{
         const status=u.is_active?'Active':'Inactive';
         const badgeColor=u.is_active?'#00e5a0':'#ff4d6d';
-        const actionBtn=u.is_active?`<button onclick="deactivateUser(${u.id})" class="secondary"><i data-lucide="user-x" style="width:14px;height:14px;margin-right:4px"></i>Deactivate</button>`:`<button onclick="activateUser(${u.id})"><i data-lucide="user-check" style="width:14px;height:14px;margin-right:4px"></i>Activate</button>`;
+        const actionBtn = `
+            ${u.is_active ? `<button onclick="deactivateUser(${u.id})" class="secondary"><i data-lucide="user-x" style="width:14px;height:14px;margin-right:4px"></i>Deactivate</button>` : `<button onclick="activateUser(${u.id})"><i data-lucide="user-check" style="width:14px;height:14px;margin-right:4px"></i>Activate</button>`}
+            <button onclick="deleteUser(${u.id})" class="danger" style="margin-left:5px;"><i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px"></i>Delete</button>
+        `;
         html+=`<tr>
             <td>${u.username}</td>
             <td>${u.email}</td>
@@ -4919,6 +4986,16 @@ async function loadUsers(){
 }
 async function activateUser(id){await fetch(`/admin/users/${id}/activate`,{method:'POST'});loadUsers();}
 async function deactivateUser(id){await fetch(`/admin/users/${id}/deactivate`,{method:'POST'});loadUsers();}
+async function deleteUser(id){
+    if (!confirm('⚠️ Are you sure you want to permanently delete this user? This action cannot be undone.')) return;
+    const res = await fetch(`/admin/users/${id}/delete`, { method: 'POST' });
+    if (res.ok) {
+        alert('User deleted.');
+        loadUsers();
+    } else {
+        alert('Error deleting user.');
+    }
+}
 
 // Seasonality (unchanged)
 function populateSeasonPairs(){

@@ -2,7 +2,7 @@
 <html><head><title>Admin - Tradion</title>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}button.danger{background:#ff4d6d;color:#fff}button.danger:hover{background:#e6395a}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
 
 /* ===== Clean Tables (shared) ===== */
 .table-container {
@@ -511,7 +511,10 @@ async function loadUsers(){
     data.users.forEach(u=>{
         const status=u.is_active?'Active':'Inactive';
         const badgeColor=u.is_active?'#00e5a0':'#ff4d6d';
-        const actionBtn=u.is_active?`<button onclick="deactivateUser(${u.id})" class="secondary"><i data-lucide="user-x" style="width:14px;height:14px;margin-right:4px"></i>Deactivate</button>`:`<button onclick="activateUser(${u.id})"><i data-lucide="user-check" style="width:14px;height:14px;margin-right:4px"></i>Activate</button>`;
+        const actionBtn = `
+            ${u.is_active ? `<button onclick="deactivateUser(${u.id})" class="secondary"><i data-lucide="user-x" style="width:14px;height:14px;margin-right:4px"></i>Deactivate</button>` : `<button onclick="activateUser(${u.id})"><i data-lucide="user-check" style="width:14px;height:14px;margin-right:4px"></i>Activate</button>`}
+            <button onclick="deleteUser(${u.id})" class="danger" style="margin-left:5px;"><i data-lucide="trash-2" style="width:14px;height:14px;margin-right:4px"></i>Delete</button>
+        `;
         html+=`<tr>
             <td>${u.username}</td>
             <td>${u.email}</td>
@@ -526,6 +529,16 @@ async function loadUsers(){
 }
 async function activateUser(id){await fetch(`/admin/users/${id}/activate`,{method:'POST'});loadUsers();}
 async function deactivateUser(id){await fetch(`/admin/users/${id}/deactivate`,{method:'POST'});loadUsers();}
+async function deleteUser(id){
+    if (!confirm('⚠️ Are you sure you want to permanently delete this user? This action cannot be undone.')) return;
+    const res = await fetch(`/admin/users/${id}/delete`, { method: 'POST' });
+    if (res.ok) {
+        alert('User deleted.');
+        loadUsers();
+    } else {
+        alert('Error deleting user.');
+    }
+}
 
 // Seasonality (unchanged)
 function populateSeasonPairs(){
