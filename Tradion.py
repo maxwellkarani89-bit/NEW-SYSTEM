@@ -724,6 +724,118 @@ def get_cot_alignment_score(base_curr: str, quote_curr: str) -> int:
 # -----------------------------
 MYFXBOOK_API_URL = "https://www.myfxbook.com/api/get-community-outlook.json?session=DSL07vu14QxHWErTIAFrH40"
 
+# --- FastBull Sentiment API ---
+def fetch_fastbull_sentiment():
+    url = "https://api.fastbull.com/fastbull-macro-data-service/api/v2/getSpeculativeEmotion"
+    headers = {"User-Agent": "Mozilla/5.0"}
+    
+    target_pairs = [
+        "USDCAD", "USDCHF", "EURCAD", "EURAUD", "EURCHF",
+        "EURNZD", "USDJPY", "GBPAUD", "EURGBP", "GBPCAD",
+        "GBPNZD", "AUDCAD", "NZDCAD", "GBPCHF", "AUDNZD",
+        "AUDCHF", "BTCUSD", "CHFJPY", "EURJPY", "CADCHF",
+        "NZDCHF", "GBPJPY", "XAUUSD", "EURUSD", "GBPUSD",
+        "CADJPY", "NZDUSD", "AUDUSD", "NZDJPY", "AUDJPY"
+    ]
+    
+    try:
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()
+        data = response.json()
+        if data.get("code") != 0:
+            print(f"FastBull API error: {data.get('message')}")
+            return None
+        
+        body = json.loads(data.get("bodyMessage", "{}"))
+        all_broker_data = body.get("response", {}).get("brokerPairValueModels", [])
+        if not all_broker_data:
+            print("FastBull: No broker data found")
+            return None
+        
+        # Build dict of long percentages per pair
+        pair_long_values = {pair: [] for pair in target_pairs}
+        for broker_entry in all_broker_data:
+            pairs = broker_entry.get("pairValueModels", [])
+            for pair in pairs:
+                pair_name = pair.get("pairName")
+                if pair_name in target_pairs:
+                    try:
+                        long_pct = float(pair.get("value", 0))
+                        pair_long_values[pair_name].append(long_pct)
+                    except (TypeError, ValueError):
+                        pass
+        
+        # Compute averages and convert to display format
+        filtered_result = {}
+        for pair, values in pair_long_values.items():
+            if values:
+                avg_long = sum(values) / len(values)
+                avg_short = 100 - avg_long
+                filtered_result[pair] = {
+                    "long": round(avg_long, 2),
+                    "short": round(avg_short, 2),
+                    "brokers_used": len(values)
+                }
+            else:
+                filtered_result[pair] = None
+        
+        # Convert keys to display format (with slashes)
+        display_result = {}
+        for api_pair, values in filtered_result.items():
+            if values:
+                if len(api_pair) == 6 and api_pair != "BTCUSD":
+                    display_pair = api_pair[:3] + "/" + api_pair[3:]
+                elif api_pair == "XAUUSD":
+                    display_pair = "XAU/USD"
+                elif api_pair == "BTCUSD":
+                    display_pair = "BTC/USD"
+                else:
+                    display_pair = api_pair
+                display_result[display_pair] = values
+            else:
+                if len(api_pair) == 6 and api_pair != "BTCUSD":
+                    display_pair = api_pair[:3] + "/" + api_pair[3:]
+                elif api_pair == "XAUUSD":
+                    display_pair = "XAU/USD"
+                elif api_pair == "BTCUSD":
+                    display_pair = "BTC/USD"
+                else:
+                    display_pair = api_pair
+                display_result[display_pair] = None
+        
+        return display_result
+    except Exception as e:
+        print(f"FastBull request failed: {e}")
+        return None
+
+def update_sentiment_from_fastbull():
+    """Update SentimentData table with FastBull averages."""
+    with app.app_context():
+        print("Updating sentiment from FastBull...")
+        data = fetch_fastbull_sentiment()
+        if not data:
+            print("FastBull: No data received.")
+            return
+        
+        updated = 0
+        for pair, values in data.items():
+            if values is None:
+                continue
+            long_pct = values['long']
+            short_pct = values['short']
+            existing = SentimentData.query.filter_by(pair=pair).first()
+            if existing:
+                existing.long_pct = long_pct
+                existing.short_pct = short_pct
+                existing.last_updated = datetime.utcnow()
+            else:
+                new_entry = SentimentData(pair=pair, long_pct=long_pct, short_pct=short_pct)
+                db.session.add(new_entry)
+            updated += 1
+        db.session.commit()
+        print(f"FastBull: Updated {updated} pairs.")
+
+
 def fetch_retail_sentiment_from_api():
     """Fetch raw data from Myfxbook API. Returns list of dicts or None."""
     try:
@@ -777,12 +889,13 @@ def store_retail_sentiment_snapshot(symbols: list):
 
 def update_retail_sentiment():
     """Fetch API and store snapshot. Called by scheduler."""
-    symbols = fetch_retail_sentiment_from_api()
-    if symbols:
-        store_retail_sentiment_snapshot(symbols)
-        print(f"Retail sentiment updated at {datetime.utcnow()}")
-    else:
-        print("Failed to fetch retail sentiment")
+    with app.app_context():
+        symbols = fetch_retail_sentiment_from_api()
+        if symbols:
+            store_retail_sentiment_snapshot(symbols)
+            print(f"Retail sentiment updated at {datetime.utcnow()}")
+        else:
+            print("Failed to fetch retail sentiment")
 
 def get_latest_retail_sentiment(pair: str) -> dict:
     """Return the most recent sentiment data for a pair."""
@@ -2447,6 +2560,14 @@ def admin_refresh():
     last_analysis_time = None
     manual_refresh_triggered = True
     return jsonify({'success': True})
+
+@app.route('/admin/update_fastbull_sentiment', methods=['POST'])
+@login_required
+@admin_required
+def admin_force_fastbull():
+    update_sentiment_from_fastbull()
+    return jsonify({'success': True})
+
 
 @app.route('/admin/cot/upload', methods=['POST'])
 @login_required
@@ -6212,24 +6333,46 @@ setTimeout(() => {
 if __name__ == '__main__':
     create_templates()
     
-    # Start background scheduler for retail sentiment (Myfxbook)
+    # Start background scheduler for retail sentiment (Myfxbook + FastBull)
     from apscheduler.schedulers.background import BackgroundScheduler
     from apscheduler.triggers.cron import CronTrigger
     from datetime import timedelta
     import atexit
     
     scheduler = BackgroundScheduler()
-    scheduler.add_job(func=update_retail_sentiment, trigger="interval", minutes=30, id='retail_sentiment_job')
     
-    # Add the job (runs every 3 days at 00:00 UTC)
+    # Myfxbook job (kept as fallback – may fail, but that's fine)
     scheduler.add_job(
-        func=save_all_asset_scores,   # now global
+        func=update_retail_sentiment,
+        trigger="interval",
+        minutes=30,
+        id='retail_sentiment_job'
+    )
+    
+    # FastBull job (new primary source)
+    scheduler.add_job(
+        func=update_sentiment_from_fastbull,
+        trigger="interval",
+        minutes=60,
+        id='fastbull_sentiment_job'
+    )
+    
+    # Score history job (every 3 days at midnight UTC)
+    scheduler.add_job(
+        func=save_all_asset_scores,
         trigger=CronTrigger(day='*/3', hour=0, minute=0),
         id='score_history_job'
     )
     
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
+    
+    # ---------- ADD THIS ----------
+    # Run FastBull update once immediately on startup (with app context)
+    print("Running initial FastBull sentiment fetch...")
+    with app.app_context():
+        update_sentiment_from_fastbull()
+    # -----------------------------
     
     def open_browser():
         time.sleep(2)
@@ -6246,7 +6389,8 @@ if __name__ == '__main__':
     print("- Currencies page renamed to 'COT Data' with vertical bar graph")
     print("- Asset Scorecard padding increased (medium size)")
     print("- Technical score now uses 21-day SMA from Yahoo Finance")
-    print("- Retail sentiment auto-fetched from Myfxbook (every 30 minutes)")
+    print("- Retail sentiment auto-fetched from FastBull (every 60 minutes)")
+    print("- Myfxbook fallback still runs every 30 minutes (may fail)")
     print("- Score history saved every 3 days at midnight UTC (max 30 entries)")
     print("=" * 50)
     
