@@ -192,14 +192,40 @@ class AssetScoreHistory(db.Model):
     
     __table_args__ = (db.Index('idx_asset_recorded', 'asset', 'recorded_at'),)   
 
+class CentralBankScore(db.Model):
+    __tablename__ = 'central_bank_scores'
+    id = db.Column(db.Integer, primary_key=True)
+    currency_code = db.Column(db.String(5), nullable=False, unique=True)
+    central_bank = db.Column(db.String(10), nullable=False)
+    inflation_score = db.Column(db.Integer, default=0)    # -1,0,1
+    growth_score = db.Column(db.Integer, default=0)
+    labour_score = db.Column(db.Integer, default=0)
+    guidance_score = db.Column(db.Integer, default=0)
+    tone_score = db.Column(db.Integer, default=0)
+    current_rate = db.Column(db.Float, default=0.0)
+    previous_rate = db.Column(db.Float, default=0.0)
+    reference_date = db.Column(db.Date, nullable=True)
+    next_release_date = db.Column(db.Date, nullable=True)
+    normalized_score = db.Column(db.Integer, default=0)
+    updated_at = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    def calculate_normalized_score(self):
+        raw = (self.inflation_score + self.growth_score + self.labour_score +
+               self.guidance_score + self.tone_score)
+        if raw > 0:
+            self.normalized_score = 1
+        elif raw < 0:
+            self.normalized_score = -1
+        else:
+            self.normalized_score = 0
+        return self.normalized_score
+
 # -----------------------------
 # DATABASE INITIALIZATION & MIGRATIONS
 # -----------------------------
 with app.app_context():
     db.create_all()
     
-    
-
     # Add category column to economic_indicator if missing (safe for both SQLite and PostgreSQL)
     try:
         db.session.execute(db.text(
@@ -230,8 +256,6 @@ with app.app_context():
         db.session.add(admin)
         db.session.commit()
         
-        
-  
     # List of all currencies (same as MAJOR_CURRENCIES defined later)
     all_currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "XAU", "BTC"]
 
@@ -259,6 +283,36 @@ with app.app_context():
         ))
 
     db.session.commit()
+
+    # ---------- SEED CENTRAL BANK SCORES (if empty) ----------
+    if CentralBankScore.query.count() == 0:
+        default_data = [
+            ('USD', 'Fed', 0, 1, -1, -1, -1, 3.75, 3.75, None, None),
+            ('EUR', 'ECB', 1, 0, 0, 1, 1, 2.4, 2.4, None, None),
+            ('GBP', 'BoE', 1, -1, 0, 0, 0, 3.75, 3.75, None, None),
+            ('JPY', 'BoJ', 1, -1, 1, 1, 1, 0.75, 0.75, None, None),
+            ('CHF', 'SNB', -1, 0, 0, -1, -1, 0.0, 0.0, None, None),
+            ('CAD', 'BoC', -1, 1, 1, 1, 1, 2.25, 2.25, None, None),
+            ('AUD', 'RBA', 1, 0, 0, 1, 1, 4.35, 4.35, None, None),
+            ('NZD', 'RBNZ', 1, 0, 0, 1, 1, 2.25, 2.25, None, None),
+        ]
+        for code, bank, inf, grw, lab, gui, ton, cur, prev, ref, next_rel in default_data:
+            entry = CentralBankScore(
+                currency_code=code,
+                central_bank=bank,
+                inflation_score=inf,
+                growth_score=grw,
+                labour_score=lab,
+                guidance_score=gui,
+                tone_score=ton,
+                current_rate=cur,
+                previous_rate=prev,
+                reference_date=ref,
+                next_release_date=next_rel
+            )
+            entry.calculate_normalized_score()
+            db.session.add(entry)
+        db.session.commit()
         
         
         
@@ -1569,7 +1623,11 @@ def detailed_analysis():
     cot_records = COTData.query.all()
     cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
 
-    # ---------- NEW COT ALIGNMENT (sum‑difference, clamped) ----------
+    # ---------- LOAD CENTRAL BANK SCORES ----------
+    cb_records = CentralBankScore.query.all()
+    cb_cache = {s.currency_code: s.normalized_score for s in cb_records}  # -1,0,1
+
+    # ---------- COT ALIGNMENT (sum‑difference, clamped) ----------
     def get_cot_align(base, quote):
         base_cot = cot_cache.get(base, {'net':0, 'change':0})
         quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
@@ -1604,7 +1662,8 @@ def detailed_analysis():
                 cpi = raw("CPI YoY (%)")
                 ppi = raw("PPI YoY (%)")
                 pce = raw("PCE YoY (%)")
-                interest = raw("Interest Rate Decision")
+                # For standalone, just use the base currency’s CB score
+                interest = cb_cache.get(base, 0)
                 nfp = raw("NFP (K)")
                 avg_hourly = raw("Average Hourly Earnings")
                 unemp_rate = raw("Unemployment Rate (%)")
@@ -1652,7 +1711,18 @@ def detailed_analysis():
                 cpi = norm("CPI YoY (%)")
                 ppi = norm("PPI YoY (%)")
                 pce = norm("PCE YoY (%)")
-                interest = norm("Interest Rate Decision")
+                # ---------- FIX: pair difference for CB scores ----------
+                base_cb = cb_cache.get(base, 0)
+                quote_cb = cb_cache.get(quote, 0)
+                raw_diff_cb = base_cb - quote_cb   # can be -2, -1, 0, 1, 2
+                # Clamp to -1,0,1 for display in the table
+                if raw_diff_cb > 0:
+                    interest = 1
+                elif raw_diff_cb < 0:
+                    interest = -1
+                else:
+                    interest = 0
+                # ---------------------------------------------------------
                 nfp = norm("NFP (K)")
                 avg_hourly = norm("Average Hourly Earnings")
                 unemp_rate = norm("Unemployment Rate (%)")
@@ -1660,7 +1730,7 @@ def detailed_analysis():
                 adp = norm("ADP (K)")
                 jolts = norm("JOLTS Job Openings (M)")
 
-                cot_align = get_cot_align(base, quote)   # NEW function used here
+                cot_align = get_cot_align(base, quote)
                 crowd = get_retail_sentiment_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
@@ -2901,6 +2971,62 @@ def debug_weighted(pair):
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+@app.route('/central-bank-scorecard')
+@login_required
+def central_bank_scorecard():
+    return render_template('central_bank_scorecard.html', username=session['username'], is_admin=session.get('is_admin', False))
+
+@app.route('/admin/central-bank')
+@login_required
+@admin_required
+def admin_central_bank():
+    return render_template('admin_central_bank.html')
+
+@app.route('/api/central-bank-scores')
+@login_required
+def api_central_bank_scores():
+    scores = CentralBankScore.query.order_by(CentralBankScore.currency_code).all()
+    return jsonify([{
+        'id': s.id,
+        'currency_code': s.currency_code,
+        'central_bank': s.central_bank,
+        'inflation_score': s.inflation_score,
+        'growth_score': s.growth_score,
+        'labour_score': s.labour_score,
+        'guidance_score': s.guidance_score,
+        'tone_score': s.tone_score,
+        'current_rate': s.current_rate,
+        'previous_rate': s.previous_rate,
+        'reference_date': s.reference_date.isoformat() if s.reference_date else None,
+        'next_release_date': s.next_release_date.isoformat() if s.next_release_date else None,
+        'normalized_score': s.normalized_score
+    } for s in scores])
+
+@app.route('/api/central-bank-scores/<int:score_id>', methods=['PUT'])
+@login_required
+@admin_required
+def api_update_central_bank_score(score_id):
+    data = request.json
+    score = CentralBankScore.query.get_or_404(score_id)
+    
+    # Update fields
+    for field in ['inflation_score', 'growth_score', 'labour_score', 'guidance_score', 'tone_score']:
+        if field in data:
+            setattr(score, field, int(data[field]))
+    for field in ['current_rate', 'previous_rate']:
+        if field in data:
+            setattr(score, field, float(data[field]))
+    if 'reference_date' in data and data['reference_date']:
+        score.reference_date = datetime.strptime(data['reference_date'], '%Y-%m-%d').date()
+    if 'next_release_date' in data and data['next_release_date']:
+        score.next_release_date = datetime.strptime(data['next_release_date'], '%Y-%m-%d').date()
+    
+    # Recalculate normalized score
+    score.calculate_normalized_score()
+    db.session.commit()
+    
+    return jsonify({'success': True})
+
 
 # -----------------------------
 # CREATE TEMPLATES (all complete)
@@ -2992,425 +3118,426 @@ else{field.type='password';toggle.textContent='👁';}
                      # Dashboard (with Lucide icons and row background gradient matching score) - FIXED SEARCH
 with open('templates/dashboard.html', 'w') as f:
     f.write('''<!DOCTYPE html>
-<html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://unpkg.com/lucide@latest"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.search-input{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;width:200px;margin-left:10px}.search-input:focus{outline:none;border-color:#00e5ff}.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-.sidebar.collapsed{width:80px !important;min-width:80px !important}
-.sidebar.collapsed ~ .main-content{margin-left:80px !important}
-/* Conditional highlighting – same colors as Score column */
-.indicator-positive {
-    background-color: rgba(0, 229, 160, 0.15);
-    color: #00e5a0;
-    font-weight: 500;
-}
-.indicator-negative {
-    background-color: rgba(255, 77, 109, 0.15);
-    color: #ff4d6d;
-    font-weight: 500;
-}
-/* Ensure cells without highlight keep normal styling */
-td {
-    background-color: inherit;
-}
-/* Sticky clone table */
-.sticky-header-clone {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    z-index: 1000;
-    display: none;
-    background: #121826;
-    border-collapse: collapse;
-    width: auto;
-    box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-}
-.sticky-header-clone th {
-    background: rgba(0,229,255,0.1);
-    color: #00e5ff;
-    font-weight: 600;
-    padding: 10px 8px;
-    text-align: center;
-    border-bottom: 1px solid #2a3040;
-    white-space: nowrap;
-}
-@media (max-width:768px){
-    .sidebar{transform:translateX(-100%);width:260px !important}
-    .sidebar.open{transform:translateX(0)}
-    .sidebar.collapsed{width:260px !important; min-width:260px !important}
-    .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
-    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
-    .sidebar.collapsed .menu-icon{margin-right:12px}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-    .sidebar.collapsed ~ .main-content{margin-left:0 !important}
-    .hamburger{display:block}
-    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
-    th,td{padding:8px 4px;font-size:10px}
-    .search-input{width:100%;margin:10px 0 0 0}
-    .toolbar{flex-wrap:wrap}
-}
-</style>
-</head>
-<body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar" id="sidebar">
-    <div class="logo">
-        <span class="logo-text">⚡ Tradion</span>
-        <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
-    </div>
-    <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-<div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-</div>
-<div class="main-content" id="mainContent">
-    <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
-    <div id="analysisPane" class="content-pane active">
-        <div class="toolbar" style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-            <button onclick="loadDetailedAnalysis()">🔥 RUN ANALYSIS</button>
-            <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search pair..." onkeyup="filterTable()">
+    <html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.search-input{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;width:200px;margin-left:10px}.search-input:focus{outline:none;border-color:#00e5ff}.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+    .sidebar.collapsed{width:80px !important;min-width:80px !important}
+    .sidebar.collapsed ~ .main-content{margin-left:80px !important}
+    /* Conditional highlighting – same colors as Score column */
+    .indicator-positive {
+        background-color: rgba(0, 229, 160, 0.15);
+        color: #00e5a0;
+        font-weight: 500;
+    }
+    .indicator-negative {
+        background-color: rgba(255, 77, 109, 0.15);
+        color: #ff4d6d;
+        font-weight: 500;
+    }
+    /* Ensure cells without highlight keep normal styling */
+    td {
+        background-color: inherit;
+    }
+    /* Sticky clone table */
+    .sticky-header-clone {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        display: none;
+        background: #121826;
+        border-collapse: collapse;
+        width: auto;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
+    }
+    .sticky-header-clone th {
+        background: rgba(0,229,255,0.1);
+        color: #00e5ff;
+        font-weight: 600;
+        padding: 10px 8px;
+        text-align: center;
+        border-bottom: 1px solid #2a3040;
+        white-space: nowrap;
+    }
+    @media (max-width:768px){
+        .sidebar{transform:translateX(-100%);width:260px !important}
+        .sidebar.open{transform:translateX(0)}
+        .sidebar.collapsed{width:260px !important; min-width:260px !important}
+        .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
+        .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+        .sidebar.collapsed .menu-icon{margin-right:12px}
+        .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+        .sidebar.collapsed ~ .main-content{margin-left:0 !important}
+        .hamburger{display:block}
+        .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
+        th,td{padding:8px 4px;font-size:10px}
+        .search-input{width:100%;margin:10px 0 0 0}
+        .toolbar{flex-wrap:wrap}
+    }
+    </style>
+    </head>
+    <body>
+    <div class="hamburger" onclick="toggleSidebar()">☰</div>
+    <div class="sidebar" id="sidebar">
+        <div class="logo">
+            <span class="logo-text">⚡ Tradion</span>
+            <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
         </div>
-        <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
-        <div class="table-container">
-            <table id="detailedTable">
-                <thead>
-                    <tr>
-                        <th>Symbol</th><th>Bias</th><th>Score</th>
-                        <th colspan="2">Technical</th><th colspan="2">Sentiment</th>
-                        <th colspan="5">Economic Growth & Consumer Strength</th>
-                        <th colspan="3">Inflation</th><th>Interest Rates</th>
-                        <th colspan="6">Job Market</th>
-                    </tr>
-                    <tr>
-                        <th></th><th></th><th></th>
-                        <th>Trend</th><th>Seasonality</th>
-                        <th>COT</th><th>Crowd</th>
-                        <th>GDP</th><th>M-PMI</th><th>S-PMI</th><th>Retail</th><th>Cons Conf</th>
-                        <th>CPI</th><th>PPI</th><th>PCE</th><th>Interest</th>
-                        <th>NFP</th><th>Avg Hrly</th><th>Unemp Rate</th><th>Unemp Claims</th><th>ADP</th><th>JOLTS</th>
-                    </tr>
-                </thead>
-                <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</tbody>
-            </table>
-        </div>
+        <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
+        <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+        <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+        <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+        <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+        {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+        <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+        <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+        <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
     </div>
-    <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
-</div>
-<script>
-let currentDetailed = [];
+    <div class="main-content" id="mainContent">
+        <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
+        <div id="analysisPane" class="content-pane active">
+            <div class="toolbar" style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+                <button onclick="loadDetailedAnalysis()">🔥 RUN ANALYSIS</button>
+                <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
+                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search pair..." onkeyup="filterTable()">
+            </div>
+            <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
+            <div class="table-container">
+                <table id="detailedTable">
+                    <thead>
+                        <tr>
+                            <th>Symbol</th><th>Bias</th><th>Score</th>
+                            <th colspan="2">Technical</th><th colspan="2">Sentiment</th>
+                            <th colspan="5">Economic Growth & Consumer Strength</th>
+                            <th colspan="3">Inflation</th><th>Interest Rates</th>
+                            <th colspan="6">Job Market</th>
+                        </tr>
+                        <tr>
+                            <th></th><th></th><th></th>
+                            <th>Trend</th><th>Seasonality</th>
+                            <th>COT</th><th>Crowd</th>
+                            <th>GDP</th><th>M-PMI</th><th>S-PMI</th><th>Retail</th><th>Cons Conf</th>
+                            <th>CPI</th><th>PPI</th><th>PCE</th><th>CB Score</th>
+                            <th>NFP</th><th>Avg Hrly</th><th>Unemp Rate</th><th>Unemp Claims</th><th>ADP</th><th>JOLTS</th>
+                        </tr>
+                    </thead>
+                    <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</tbody>
+                </table>
+            </div>
+        </div>
+        <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
+    </div>
+    <script>
+    let currentDetailed = [];
 
-// Cache keys
-const CACHE_KEY = 'tradion_detailed_analysis';
-const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+    // Cache keys
+    const CACHE_KEY = 'tradion_detailed_analysis';
+    const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-// Helper to get cell class based on numeric value
-function getIndicatorClass(value) {
-    if (value > 0) return 'indicator-positive';
-    if (value < 0) return 'indicator-negative';
-    return '';
-}
-
-function updateSidebarToggleIcon() {
-    const sidebar = document.getElementById('sidebar');
-    const btn = document.getElementById('sidebarToggleBtn');
-    if (!btn) return;
-    if (sidebar.classList.contains('collapsed')) {
-        btn.innerHTML = '▶'; // collapsed → show right arrow (expand)
-    } else {
-        btn.innerHTML = '◀'; // expanded → show left arrow (collapse)
+    // Helper to get cell class based on numeric value
+    function getIndicatorClass(value) {
+        if (value > 0) return 'indicator-positive';
+        if (value < 0) return 'indicator-negative';
+        return '';
     }
-}
 
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-function toggleSidebarCollapse() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        updateSidebarToggleIcon();
-    }
-}
-function restoreSidebarState() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-}
-window.addEventListener('resize', function() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    } else {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-});
-function showPane(pane) {
-    document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
-    document.getElementById(pane+'Pane').classList.add('active');
-    if (pane === 'history') loadHistory();
-}
-
-async function loadDetailedAnalysis(forceRefresh = false) {
-    if (!forceRefresh) {
-        const cachedData = sessionStorage.getItem(CACHE_KEY);
-        const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
-        if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
-            try {
-                let data = JSON.parse(cachedData);
-                data.sort((a, b) => b.score - a.score);
-                currentDetailed = data;
-                renderDetailedTable(data);
-                document.getElementById('lastUpdateTime').innerHTML = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
-                return;
-            } catch(e) { console.warn('Cache parse error', e); }
+    function updateSidebarToggleIcon() {
+        const sidebar = document.getElementById('sidebar');
+        const btn = document.getElementById('sidebarToggleBtn');
+        if (!btn) return;
+        if (sidebar.classList.contains('collapsed')) {
+            btn.innerHTML = '▶'; // collapsed → show right arrow (expand)
+        } else {
+            btn.innerHTML = '◀'; // expanded → show left arrow (collapse)
         }
     }
 
-    document.getElementById('loading').style.display = 'block';
-    try {
-        const res = await fetch('/api/detailed_analysis');
-        if (!res.ok) throw new Error('HTTP ' + res.status);
-        let data = await res.json();
-        data.sort((a, b) => b.score - a.score);
-        currentDetailed = data;
-        renderDetailedTable(data);
-        const now = Date.now();
-        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-        sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
-        document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
-    } catch(e) {
-        console.error('Analysis error:', e);
-        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
-    } finally {
-        document.getElementById('loading').style.display = 'none';
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
     }
-}
-
-function renderDetailedTable(data) {
-    const tbody = document.getElementById('detailedTableBody');
-    tbody.innerHTML = '';
-    data.forEach(item => {
-        const row = tbody.insertRow();
-        // Symbol cell (no highlight)
-        row.insertCell(0).innerText = item.symbol;
-        // Bias cell (text only)
-        row.insertCell(1).innerHTML = `<strong>${item.bias}</strong>`;
-        // Score cell (already has its own styling)
-        const scoreCell = row.insertCell(2);
-        const score = item.score;
-        let bgColor = '';
-        if (score >= 8) bgColor = 'rgba(0, 229, 160, 0.5)';
-        else if (score >= 6) bgColor = 'rgba(0, 229, 160, 0.4)';
-        else if (score >= 4) bgColor = 'rgba(0, 229, 160, 0.3)';
-        else if (score >= 2) bgColor = 'rgba(0, 229, 160, 0.2)';
-        else if (score > 0)  bgColor = 'rgba(0, 229, 160, 0.1)';
-        else if (score <= -8) bgColor = 'rgba(255, 77, 109, 0.5)';
-        else if (score <= -6) bgColor = 'rgba(255, 77, 109, 0.4)';
-        else if (score <= -4) bgColor = 'rgba(255, 77, 109, 0.3)';
-        else if (score <= -2) bgColor = 'rgba(255, 77, 109, 0.2)';
-        else if (score < 0)  bgColor = 'rgba(255, 77, 109, 0.1)';
-        scoreCell.innerHTML = `<span class="${score > 0 ? 'score-positive' : (score < 0 ? 'score-negative' : 'score-neutral')}">${score}</span>`;
-        if (bgColor) scoreCell.style.backgroundColor = bgColor;
-
-        // Indicator columns (all numeric)
-        const trend = item.trend;
-        const seasonality = item.seasonality;
-        const cot = item.cot;
-        const crowd = item.crowd;
-        const gdp = item.gdp;
-        const mPmi = item.m_pmi;
-        const sPmi = item.s_pmi;
-        const retail = item.retail;
-        const consConf = item.consumer_conf;
-        const cpi = item.cpi;
-        const ppi = item.ppi;
-        const pce = item.pce;
-        const interest = item.interest;
-        const nfp = item.nfp;
-        const avgHrly = item.avg_hourly_earnings;
-        const unempRate = item.unemp_rate;
-        const unempClaims = item.unemp_claims;
-        const adp = item.adp;
-        const jolts = item.jolts;
-
-        // Helper to create a cell with conditional class
-        const addCell = (value) => {
-            const cell = row.insertCell();
-            cell.innerText = value;
-            const cls = getIndicatorClass(value);
-            if (cls) cell.classList.add(cls);
-        };
-
-        addCell(trend);
-        addCell(seasonality);
-        addCell(cot);
-        addCell(crowd);
-        addCell(gdp);
-        addCell(mPmi);
-        addCell(sPmi);
-        addCell(retail);
-        addCell(consConf);
-        addCell(cpi);
-        addCell(ppi);
-        addCell(pce);
-        addCell(interest);
-        addCell(nfp);
-        addCell(avgHrly);
-        addCell(unempRate);
-        addCell(unempClaims);
-        addCell(adp);
-        addCell(jolts);
-    });
-    // Remove any existing "no results" message
-    const existingMsg = document.getElementById('noResultsMsg');
-    if (existingMsg) existingMsg.remove();
-    // Re-apply search filter after loading new data
-    filterTable();
-    initStickyHeader();
-}
-
-// ========== FIXED SEARCH FUNCTION ==========
-function filterTable() {
-    const input = document.getElementById('searchInput');
-    if (!input) return;
-    const filter = input.value.trim().toLowerCase();
-    const table = document.getElementById('detailedTable');
-    const tbody = table.querySelector('tbody');
-    if (!tbody) return;
-    const rows = tbody.querySelectorAll('tr');
-    let hasVisible = false;
-    
-    rows.forEach(row => {
-        const symbolCell = row.cells[0];
-        if (symbolCell) {
-            const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
-            const matches = filter === '' || symbol.indexOf(filter) > -1;
-            row.style.display = matches ? '' : 'none';
-            if (matches) hasVisible = true;
-        }
-    });
-    
-    // Show "no results" message if needed
-    let noResultMsg = document.getElementById('noResultsMsg');
-    if (!hasVisible && filter !== '') {
-        if (!noResultMsg) {
-            noResultMsg = document.createElement('div');
-            noResultMsg.id = 'noResultsMsg';
-            noResultMsg.style.textAlign = 'center';
-            noResultMsg.style.padding = '20px';
-            noResultMsg.style.color = '#ffb800';
-            tbody.parentNode.insertBefore(noResultMsg, tbody.nextSibling);
-        }
-        noResultMsg.innerText = `🔍 No pairs matching "${filter}"`;
-        noResultMsg.style.display = 'block';
-    } else if (noResultMsg) {
-        noResultMsg.style.display = 'none';
-    }
-}
-// ==========================================
-
-async function refreshAnalysis() {
-    sessionStorage.removeItem(CACHE_KEY);
-    sessionStorage.removeItem(CACHE_TIME_KEY);
-    await loadDetailedAnalysis(true);
-}
-
-async function loadHistory() {
-    const r = await fetch('/api/history');
-    const d = await r.json();
-    let html = '<td><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
-    d.forEach(i=>{html+=`<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td>`});
-    html+='</tbody><table>';
-    document.getElementById('historyContent').innerHTML = html;
-}
-
-function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
-
-// Sticky header (same as before, unchanged)
-let stickyHeader = null;
-
-function initStickyHeader() {
-    if (stickyHeader && stickyHeader.parentNode) stickyHeader.parentNode.removeChild(stickyHeader);
-    const originalTable = document.getElementById('detailedTable');
-    if (!originalTable) return;
-    const cloneTable = originalTable.cloneNode(true);
-    const tbody = cloneTable.querySelector('tbody');
-    if (tbody) tbody.remove();
-    cloneTable.style.position = 'fixed';
-    cloneTable.style.top = '0';
-    cloneTable.style.left = '0';
-    cloneTable.style.zIndex = '1000';
-    cloneTable.style.display = 'none';
-    cloneTable.style.background = '#121826';
-    cloneTable.style.borderCollapse = 'collapse';
-    cloneTable.style.width = originalTable.offsetWidth + 'px';
-    cloneTable.classList.add('sticky-header-clone');
-    originalTable.parentNode.insertBefore(cloneTable, originalTable);
-    stickyHeader = cloneTable;
-    syncColumnWidths(originalTable, cloneTable);
-    function handleScroll() {
-        if (!originalTable) return;
-        const rect = originalTable.getBoundingClientRect();
-        const shouldSticky = rect.top <= 0;
-        if (shouldSticky && stickyHeader.style.display !== 'table') {
-            stickyHeader.style.display = 'table';
-            syncColumnWidths(originalTable, stickyHeader);
-            stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
-            stickyHeader.style.width = originalTable.offsetWidth + 'px';
-        } else if (!shouldSticky && stickyHeader.style.display === 'table') {
-            stickyHeader.style.display = 'none';
+    function toggleSidebarCollapse() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+            updateSidebarToggleIcon();
         }
     }
-    window.addEventListener('scroll', handleScroll);
+    function restoreSidebarState() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+            else sidebar.classList.remove('collapsed');
+            updateSidebarToggleIcon();
+        }
+    }
     window.addEventListener('resize', function() {
-        if (stickyHeader.style.display === 'table') {
-            syncColumnWidths(originalTable, stickyHeader);
-            stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
-            stickyHeader.style.width = originalTable.offsetWidth + 'px';
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('collapsed');
+            updateSidebarToggleIcon();
+        } else {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+            else sidebar.classList.remove('collapsed');
+            updateSidebarToggleIcon();
         }
     });
-    handleScroll();
-}
+    function showPane(pane) {
+        document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
+        document.getElementById(pane+'Pane').classList.add('active');
+        if (pane === 'history') loadHistory();
+    }
 
-function syncColumnWidths(sourceTable, targetTable) {
-    const sourceRows = sourceTable.querySelectorAll('thead tr');
-    const targetRows = targetTable.querySelectorAll('thead tr');
-    for (let r = 0; r < sourceRows.length && r < targetRows.length; r++) {
-        const sourceCells = sourceRows[r].cells;
-        const targetCells = targetRows[r].cells;
-        for (let c = 0; c < sourceCells.length && c < targetCells.length; c++) {
-            targetCells[c].style.width = sourceCells[c].offsetWidth + 'px';
+    async function loadDetailedAnalysis(forceRefresh = false) {
+        if (!forceRefresh) {
+            const cachedData = sessionStorage.getItem(CACHE_KEY);
+            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+            if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
+                try {
+                    let data = JSON.parse(cachedData);
+                    data.sort((a, b) => b.score - a.score);
+                    currentDetailed = data;
+                    renderDetailedTable(data);
+                    document.getElementById('lastUpdateTime').innerHTML = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
+                    return;
+                } catch(e) { console.warn('Cache parse error', e); }
+            }
+        }
+
+        document.getElementById('loading').style.display = 'block';
+        try {
+            const res = await fetch('/api/detailed_analysis');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            let data = await res.json();
+            data.sort((a, b) => b.score - a.score);
+            currentDetailed = data;
+            renderDetailedTable(data);
+            const now = Date.now();
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
+            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+        } catch(e) {
+            console.error('Analysis error:', e);
+            document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
+        } finally {
+            document.getElementById('loading').style.display = 'none';
         }
     }
-}
 
-restoreSidebarState();
-loadDetailedAnalysis();
+    function renderDetailedTable(data) {
+        const tbody = document.getElementById('detailedTableBody');
+        tbody.innerHTML = '';
+        data.forEach(item => {
+            const row = tbody.insertRow();
+            // Symbol cell (no highlight)
+            row.insertCell(0).innerText = item.symbol;
+            // Bias cell (text only)
+            row.insertCell(1).innerHTML = `<strong>${item.bias}</strong>`;
+            // Score cell (already has its own styling)
+            const scoreCell = row.insertCell(2);
+            const score = item.score;
+            let bgColor = '';
+            if (score >= 8) bgColor = 'rgba(0, 229, 160, 0.5)';
+            else if (score >= 6) bgColor = 'rgba(0, 229, 160, 0.4)';
+            else if (score >= 4) bgColor = 'rgba(0, 229, 160, 0.3)';
+            else if (score >= 2) bgColor = 'rgba(0, 229, 160, 0.2)';
+            else if (score > 0)  bgColor = 'rgba(0, 229, 160, 0.1)';
+            else if (score <= -8) bgColor = 'rgba(255, 77, 109, 0.5)';
+            else if (score <= -6) bgColor = 'rgba(255, 77, 109, 0.4)';
+            else if (score <= -4) bgColor = 'rgba(255, 77, 109, 0.3)';
+            else if (score <= -2) bgColor = 'rgba(255, 77, 109, 0.2)';
+            else if (score < 0)  bgColor = 'rgba(255, 77, 109, 0.1)';
+            scoreCell.innerHTML = `<span class="${score > 0 ? 'score-positive' : (score < 0 ? 'score-negative' : 'score-neutral')}">${score}</span>`;
+            if (bgColor) scoreCell.style.backgroundColor = bgColor;
 
-setTimeout(() => {
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}, 100);
-</script>
-</body>
-</html>''')
+            // Indicator columns (all numeric)
+            const trend = item.trend;
+            const seasonality = item.seasonality;
+            const cot = item.cot;
+            const crowd = item.crowd;
+            const gdp = item.gdp;
+            const mPmi = item.m_pmi;
+            const sPmi = item.s_pmi;
+            const retail = item.retail;
+            const consConf = item.consumer_conf;
+            const cpi = item.cpi;
+            const ppi = item.ppi;
+            const pce = item.pce;
+            const interest = item.interest;
+            const nfp = item.nfp;
+            const avgHrly = item.avg_hourly_earnings;
+            const unempRate = item.unemp_rate;
+            const unempClaims = item.unemp_claims;
+            const adp = item.adp;
+            const jolts = item.jolts;
+
+            // Helper to create a cell with conditional class
+            const addCell = (value) => {
+                const cell = row.insertCell();
+                cell.innerText = value;
+                const cls = getIndicatorClass(value);
+                if (cls) cell.classList.add(cls);
+            };
+
+            addCell(trend);
+            addCell(seasonality);
+            addCell(cot);
+            addCell(crowd);
+            addCell(gdp);
+            addCell(mPmi);
+            addCell(sPmi);
+            addCell(retail);
+            addCell(consConf);
+            addCell(cpi);
+            addCell(ppi);
+            addCell(pce);
+            addCell(interest);
+            addCell(nfp);
+            addCell(avgHrly);
+            addCell(unempRate);
+            addCell(unempClaims);
+            addCell(adp);
+            addCell(jolts);
+        });
+        // Remove any existing "no results" message
+        const existingMsg = document.getElementById('noResultsMsg');
+        if (existingMsg) existingMsg.remove();
+        // Re-apply search filter after loading new data
+        filterTable();
+        initStickyHeader();
+    }
+
+    // ========== FIXED SEARCH FUNCTION ==========
+    function filterTable() {
+        const input = document.getElementById('searchInput');
+        if (!input) return;
+        const filter = input.value.trim().toLowerCase();
+        const table = document.getElementById('detailedTable');
+        const tbody = table.querySelector('tbody');
+        if (!tbody) return;
+        const rows = tbody.querySelectorAll('tr');
+        let hasVisible = false;
+        
+        rows.forEach(row => {
+            const symbolCell = row.cells[0];
+            if (symbolCell) {
+                const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
+                const matches = filter === '' || symbol.indexOf(filter) > -1;
+                row.style.display = matches ? '' : 'none';
+                if (matches) hasVisible = true;
+            }
+        });
+        
+        // Show "no results" message if needed
+        let noResultMsg = document.getElementById('noResultsMsg');
+        if (!hasVisible && filter !== '') {
+            if (!noResultMsg) {
+                noResultMsg = document.createElement('div');
+                noResultMsg.id = 'noResultsMsg';
+                noResultMsg.style.textAlign = 'center';
+                noResultMsg.style.padding = '20px';
+                noResultMsg.style.color = '#ffb800';
+                tbody.parentNode.insertBefore(noResultMsg, tbody.nextSibling);
+            }
+            noResultMsg.innerText = `🔍 No pairs matching "${filter}"`;
+            noResultMsg.style.display = 'block';
+        } else if (noResultMsg) {
+            noResultMsg.style.display = 'none';
+        }
+    }
+    // ==========================================
+
+    async function refreshAnalysis() {
+        sessionStorage.removeItem(CACHE_KEY);
+        sessionStorage.removeItem(CACHE_TIME_KEY);
+        await loadDetailedAnalysis(true);
+    }
+
+    async function loadHistory() {
+        const r = await fetch('/api/history');
+        const d = await r.json();
+        let html = '<td><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
+        d.forEach(i=>{html+=`<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td>`});
+        html+='</tbody><table>';
+        document.getElementById('historyContent').innerHTML = html;
+    }
+
+    function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+
+    // Sticky header (same as before, unchanged)
+    let stickyHeader = null;
+
+    function initStickyHeader() {
+        if (stickyHeader && stickyHeader.parentNode) stickyHeader.parentNode.removeChild(stickyHeader);
+        const originalTable = document.getElementById('detailedTable');
+        if (!originalTable) return;
+        const cloneTable = originalTable.cloneNode(true);
+        const tbody = cloneTable.querySelector('tbody');
+        if (tbody) tbody.remove();
+        cloneTable.style.position = 'fixed';
+        cloneTable.style.top = '0';
+        cloneTable.style.left = '0';
+        cloneTable.style.zIndex = '1000';
+        cloneTable.style.display = 'none';
+        cloneTable.style.background = '#121826';
+        cloneTable.style.borderCollapse = 'collapse';
+        cloneTable.style.width = originalTable.offsetWidth + 'px';
+        cloneTable.classList.add('sticky-header-clone');
+        originalTable.parentNode.insertBefore(cloneTable, originalTable);
+        stickyHeader = cloneTable;
+        syncColumnWidths(originalTable, cloneTable);
+        function handleScroll() {
+            if (!originalTable) return;
+            const rect = originalTable.getBoundingClientRect();
+            const shouldSticky = rect.top <= 0;
+            if (shouldSticky && stickyHeader.style.display !== 'table') {
+                stickyHeader.style.display = 'table';
+                syncColumnWidths(originalTable, stickyHeader);
+                stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
+                stickyHeader.style.width = originalTable.offsetWidth + 'px';
+            } else if (!shouldSticky && stickyHeader.style.display === 'table') {
+                stickyHeader.style.display = 'none';
+            }
+        }
+        window.addEventListener('scroll', handleScroll);
+        window.addEventListener('resize', function() {
+            if (stickyHeader.style.display === 'table') {
+                syncColumnWidths(originalTable, stickyHeader);
+                stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
+                stickyHeader.style.width = originalTable.offsetWidth + 'px';
+            }
+        });
+        handleScroll();
+    }
+
+    function syncColumnWidths(sourceTable, targetTable) {
+        const sourceRows = sourceTable.querySelectorAll('thead tr');
+        const targetRows = targetTable.querySelectorAll('thead tr');
+        for (let r = 0; r < sourceRows.length && r < targetRows.length; r++) {
+            const sourceCells = sourceRows[r].cells;
+            const targetCells = targetRows[r].cells;
+            for (let c = 0; c < sourceCells.length && c < targetCells.length; c++) {
+                targetCells[c].style.width = sourceCells[c].offsetWidth + 'px';
+            }
+        }
+    }
+
+    restoreSidebarState();
+    loadDetailedAnalysis();
+
+    setTimeout(() => {
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }, 100);
+    </script>
+    </body>
+    </html>''')
 
 #Asset scorecard template
     # Scorecard template (with Lucide icons) - Bond indicator fixed
@@ -3569,6 +3696,7 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -4101,6 +4229,7 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -4466,6 +4595,285 @@ setTimeout(() => {
 </body>
 </html>''')
 
+           #central_bank_scorecard.html
+           
+with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
+    f.write('''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Bank Scorecard – Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .header h2{color:#00e5ff;font-size:1.8rem}
+        .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040}
+        table{width:100%;border-collapse:collapse;background:#121826;font-size:0.8rem}
+        th,td{padding:8px 10px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
+        th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;position:sticky;top:0}
+        tr:hover{background:rgba(0,229,255,0.05)}
+        .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-weight:bold}
+        .badge-positive{background:rgba(0,229,160,0.2);color:#00e5a0}
+        .badge-negative{background:rgba(255,77,109,0.2);color:#ff4d6d}
+        .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
+        /* === NEW: colour classes for scores === */
+        .positive { color: #00e5a0; font-weight: 500; }
+        .negative { color: #ff4d6d; font-weight: 500; }
+        .neutral { color: #ffb800; }
+        /* ==================================== */
+        .tooltip{position:relative;cursor:help;border-bottom:1px dotted #8892b0}
+        .tooltip:hover::after{content:attr(data-tip);position:absolute;background:#1a1f2e;color:#e0e0e0;padding:6px 12px;border-radius:6px;font-size:0.7rem;white-space:nowrap;z-index:10;left:50%;transform:translateX(-50%);bottom:100%;margin-bottom:4px;border:1px solid #2a3040}
+        @media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.main-content{margin-left:0;padding:60px 15px 20px;width:100%}}
+    </style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content">
+    <div class="header"><h2>Central Bank Scorecard</h2></div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Currency</th>
+                    <th>Central Bank</th>
+                    <th><span class="tooltip" data-tip="Inflation outlook">Inflation</span></th>
+                    <th><span class="tooltip" data-tip="Economic growth outlook">Growth</span></th>
+                    <th><span class="tooltip" data-tip="Labour market outlook">Labour</span></th>
+                    <th><span class="tooltip" data-tip="Forward guidance score">Guidance</span></th>
+                    <th><span class="tooltip" data-tip="Overall communication tone">Tone</span></th>
+                    <th>Final Score</th>
+                    <th>Current Rate</th>
+                    <th>Previous Rate</th>
+                    <th>Reference Date</th>
+                    <th>Next Release</th>
+                </tr>
+            </thead>
+            <tbody id="centralBankTableBody">
+                <tr><td colspan="12" style="text-align:center; padding:20px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
+    function logout(){fetch('/logout').then(()=>window.location.href='/login');}
+
+    async function loadScores(){
+        try{
+            const res = await fetch('/api/central-bank-scores');
+            const data = await res.json();
+            const tbody = document.getElementById('centralBankTableBody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const normalized = row.normalized_score;
+                let badge = '';
+                if(normalized === 1) badge = '<span class="badge badge-positive">Bullish</span>';
+                else if(normalized === -1) badge = '<span class="badge badge-negative">Bearish</span>';
+                else badge = '<span class="badge badge-neutral">Neutral</span>';
+                const refDate = row.reference_date ? row.reference_date : '-';
+                const nextDate = row.next_release_date ? row.next_release_date : '-';
+                tr.innerHTML = `
+                    <td><strong>${row.currency_code}</strong></td>
+                    <td>${row.central_bank}</td>
+                    <td class="${row.inflation_score === 1 ? 'positive' : (row.inflation_score === -1 ? 'negative' : 'neutral')}">${row.inflation_score}</td>
+                    <td class="${row.growth_score === 1 ? 'positive' : (row.growth_score === -1 ? 'negative' : 'neutral')}">${row.growth_score}</td>
+                    <td class="${row.labour_score === 1 ? 'positive' : (row.labour_score === -1 ? 'negative' : 'neutral')}">${row.labour_score}</td>
+                    <td class="${row.guidance_score === 1 ? 'positive' : (row.guidance_score === -1 ? 'negative' : 'neutral')}">${row.guidance_score}</td>
+                    <td class="${row.tone_score === 1 ? 'positive' : (row.tone_score === -1 ? 'negative' : 'neutral')}">${row.tone_score}</td>
+                    <td>${badge}</td>
+                    <td>${row.current_rate}</td>
+                    <td>${row.previous_rate}</td>
+                    <td>${refDate}</td>
+                    <td>${nextDate}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch(e) {
+            document.getElementById('centralBankTableBody').innerHTML = `<tr><td colspan="12" style="color:#ff4d6d;text-align:center;">Error loading data</td></tr>`;
+        }
+    }
+    loadScores();
+    setTimeout(() => { if(typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')     
+
+#admin central bank html
+with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
+    f.write('''<!DOCTYPE html>
+<html><head><title>Manage Central Bank Scores</title>
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#e0e0e0}
+    .container{max-width:1400px;margin:20px auto;padding:0 20px}
+    h1{color:#00e5ff;margin-bottom:20px}
+    .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040}
+    table{width:100%;border-collapse:collapse;font-size:0.75rem;background:#121826}
+    th,td{padding:8px 6px;text-align:center;border-bottom:1px solid #2a3040;vertical-align:middle}
+    th{background:rgba(0,229,255,0.15);color:#00e5ff;position:sticky;top:0}
+    .score-select{width:50px;background:#1a1f2e;color:#fff;border:1px solid #2a3040;border-radius:4px;padding:4px;text-align:center}
+    .rate-input{width:80px;background:#1a1f2e;color:#fff;border:1px solid #2a3040;border-radius:4px;padding:4px}
+    .date-input{background:#1a1f2e;color:#fff;border:1px solid #2a3040;border-radius:4px;padding:4px;width:100px}
+    .save-btn{background:#00e5ff;color:#0B0F1A;border:none;border-radius:4px;padding:6px 12px;font-weight:bold;cursor:pointer}
+    .save-btn:hover{background:#00b8d4}
+    .badge{display:inline-block;padding:2px 8px;border-radius:12px;font-weight:bold}
+    .badge-positive{background:rgba(0,229,160,0.2);color:#00e5a0}
+    .badge-negative{background:rgba(255,77,109,0.2);color:#ff4d6d}
+    .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
+    .positive{color:#00e5a0;font-weight:500}
+    .negative{color:#ff4d6d;font-weight:500}
+    .neutral{color:#ffb800}
+    .back-link{color:#00e5ff;text-decoration:none;display:inline-block;margin-bottom:15px}
+    .back-link:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+<div class="container">
+    <a href="/admin" class="back-link">← Back to Admin Panel</a>
+    <h1>Manage Central Bank Scores</h1>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Currency</th>
+                    <th>Central Bank</th>
+                    <th>Inflation</th>
+                    <th>Growth</th>
+                    <th>Labour</th>
+                    <th>Guidance</th>
+                    <th>Tone</th>
+                    <th>Final Score</th>
+                    <th>Current Rate</th>
+                    <th>Previous Rate</th>
+                    <th>Reference Date</th>
+                    <th>Next Release</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody id="adminTableBody">
+                <tr><td colspan="13">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    async function loadAdminScores(){
+        const res = await fetch('/api/central-bank-scores');
+        const data = await res.json();
+        const tbody = document.getElementById('adminTableBody');
+        tbody.innerHTML = '';
+        data.forEach(row => {
+            const tr = document.createElement('tr');
+            tr.dataset.id = row.id;
+            const badge = row.normalized_score === 1 ? '<span class="badge badge-positive">Bullish</span>' :
+                          (row.normalized_score === -1 ? '<span class="badge badge-negative">Bearish</span>' :
+                          '<span class="badge badge-neutral">Neutral</span>');
+            tr.innerHTML = `
+                <td><strong>${row.currency_code}</strong></td>
+                <td>${row.central_bank}</td>
+                <td><select class="score-select" data-field="inflation_score">
+                    <option value="1" ${row.inflation_score===1?'selected':''}>+1</option>
+                    <option value="0" ${row.inflation_score===0?'selected':''}>0</option>
+                    <option value="-1" ${row.inflation_score===-1?'selected':''}>-1</option>
+                </select></td>
+                <td><select class="score-select" data-field="growth_score">
+                    <option value="1" ${row.growth_score===1?'selected':''}>+1</option>
+                    <option value="0" ${row.growth_score===0?'selected':''}>0</option>
+                    <option value="-1" ${row.growth_score===-1?'selected':''}>-1</option>
+                </select></td>
+                <td><select class="score-select" data-field="labour_score">
+                    <option value="1" ${row.labour_score===1?'selected':''}>+1</option>
+                    <option value="0" ${row.labour_score===0?'selected':''}>0</option>
+                    <option value="-1" ${row.labour_score===-1?'selected':''}>-1</option>
+                </select></td>
+                <td><select class="score-select" data-field="guidance_score">
+                    <option value="1" ${row.guidance_score===1?'selected':''}>+1</option>
+                    <option value="0" ${row.guidance_score===0?'selected':''}>0</option>
+                    <option value="-1" ${row.guidance_score===-1?'selected':''}>-1</option>
+                </select></td>
+                <td><select class="score-select" data-field="tone_score">
+                    <option value="1" ${row.tone_score===1?'selected':''}>+1</option>
+                    <option value="0" ${row.tone_score===0?'selected':''}>0</option>
+                    <option value="-1" ${row.tone_score===-1?'selected':''}>-1</option>
+                </select></td>
+                <td id="badge-${row.id}">${badge}</td>
+                <td><input class="rate-input" data-field="current_rate" value="${row.current_rate}" step="0.01"></td>
+                <td><input class="rate-input" data-field="previous_rate" value="${row.previous_rate}" step="0.01"></td>
+                <td><input class="date-input" data-field="reference_date" value="${row.reference_date || ''}" type="date"></td>
+                <td><input class="date-input" data-field="next_release_date" value="${row.next_release_date || ''}" type="date"></td>
+                <td><button class="save-btn" onclick="saveRow(this)">Save</button></td>
+            `;
+            tbody.appendChild(tr);
+        });
+    }
+
+    async function saveRow(btn){
+        const tr = btn.closest('tr');
+        const id = tr.dataset.id;
+        const data = {
+            inflation_score: parseInt(tr.querySelector('[data-field="inflation_score"]').value),
+            growth_score: parseInt(tr.querySelector('[data-field="growth_score"]').value),
+            labour_score: parseInt(tr.querySelector('[data-field="labour_score"]').value),
+            guidance_score: parseInt(tr.querySelector('[data-field="guidance_score"]').value),
+            tone_score: parseInt(tr.querySelector('[data-field="tone_score"]').value),
+            current_rate: parseFloat(tr.querySelector('[data-field="current_rate"]').value),
+            previous_rate: parseFloat(tr.querySelector('[data-field="previous_rate"]').value),
+            reference_date: tr.querySelector('[data-field="reference_date"]').value || null,
+            next_release_date: tr.querySelector('[data-field="next_release_date"]').value || null,
+        };
+        btn.disabled = true;
+        btn.textContent = 'Saving...';
+        try {
+            const res = await fetch(`/api/central-bank-scores/${id}`, {
+                method: 'PUT',
+                headers: {'Content-Type': 'application/json'},
+                body: JSON.stringify(data)
+            });
+            const result = await res.json();
+            if(result.success){
+                loadAdminScores(); // refresh table
+            } else {
+                alert('Update failed');
+            }
+        } catch(e) {
+            alert('Error: '+e.message);
+        } finally {
+            btn.disabled = false;
+            btn.textContent = 'Save';
+        }
+    }
+
+    loadAdminScores();
+    setTimeout(() => { if(typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
+
 
             # Admin (with Lucide icons, preserving all functionality)
     with open('templates/admin.html', 'w', encoding='utf-8') as f:
@@ -4590,6 +4998,8 @@ setTimeout(() => {
     <div class="menu-item" onclick="showPane('cotData')"><i data-lucide="database" class="menu-icon"></i> COT Data</div>
     <div class="menu-item" onclick="showPane('seasonality')"><i data-lucide="calendar" class="menu-icon"></i> Seasonality</div>
     <div class="menu-item" onclick="showPane('sentiment')"><i data-lucide="message-circle" class="menu-icon"></i> Sentiment</div>
+    <!-- NEW: Central Bank admin pane -->
+    <div class="menu-item" onclick="showPane('centralBank')"><i data-lucide="landmark" class="menu-icon"></i> Central Bank</div>
     <div class="menu-item" onclick="showPane('users')"><i data-lucide="users" class="menu-icon"></i> Users</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="arrow-left" class="menu-icon"></i> Dashboard</div>
 </div>
@@ -4709,6 +5119,15 @@ setTimeout(() => {
         </div>
     </div>
     
+    <!-- NEW: Central Bank admin pane -->
+    <div id="centralBankPane" class="content-pane">
+        <div class="card">
+            <h2>Manage Central Bank Scores</h2>
+            <p>Edit central bank inflation, growth, labour, guidance, tone scores and interest rates. Final score is calculated automatically.</p>
+            <button onclick="window.location.href='/admin/central-bank'" style="margin-top:10px;">Open Central Bank Manager</button>
+        </div>
+    </div>
+    
     <div id="usersPane" class="content-pane"><div class="card"><h2>User Management</h2><button onclick="loadUsers()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button><div id="usersList" style="margin-top:15px"></div></div></div>
 </div>
 
@@ -4751,6 +5170,7 @@ function showPane(pane){
     if(pane==='econIndicators') populateCurrencySelects();
     if(pane==='cotData') loadHistoryForCurrency();
     if(pane==='sentiment') loadSentiment();
+    // No special action for centralBank – it just shows the card with button
 }
 
 function populateCurrencySelects(){

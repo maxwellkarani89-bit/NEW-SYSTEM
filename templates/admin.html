@@ -119,6 +119,8 @@
     <div class="menu-item" onclick="showPane('cotData')"><i data-lucide="database" class="menu-icon"></i> COT Data</div>
     <div class="menu-item" onclick="showPane('seasonality')"><i data-lucide="calendar" class="menu-icon"></i> Seasonality</div>
     <div class="menu-item" onclick="showPane('sentiment')"><i data-lucide="message-circle" class="menu-icon"></i> Sentiment</div>
+    <!-- NEW: Central Bank admin pane -->
+    <div class="menu-item" onclick="showPane('centralBank')"><i data-lucide="landmark" class="menu-icon"></i> Central Bank</div>
     <div class="menu-item" onclick="showPane('users')"><i data-lucide="users" class="menu-icon"></i> Users</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="arrow-left" class="menu-icon"></i> Dashboard</div>
 </div>
@@ -238,6 +240,15 @@
         </div>
     </div>
     
+    <!-- NEW: Central Bank admin pane -->
+    <div id="centralBankPane" class="content-pane">
+        <div class="card">
+            <h2>Manage Central Bank Scores</h2>
+            <p>Edit central bank inflation, growth, labour, guidance, tone scores and interest rates. Final score is calculated automatically.</p>
+            <button onclick="window.location.href='/admin/central-bank'" style="margin-top:10px;">Open Central Bank Manager</button>
+        </div>
+    </div>
+    
     <div id="usersPane" class="content-pane"><div class="card"><h2>User Management</h2><button onclick="loadUsers()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button><div id="usersList" style="margin-top:15px"></div></div></div>
 </div>
 
@@ -280,6 +291,7 @@ function showPane(pane){
     if(pane==='econIndicators') populateCurrencySelects();
     if(pane==='cotData') loadHistoryForCurrency();
     if(pane==='sentiment') loadSentiment();
+    // No special action for centralBank – it just shows the card with button
 }
 
 function populateCurrencySelects(){

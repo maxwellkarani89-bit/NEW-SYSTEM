@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Central Bank Scorecard – Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .header h2{color:#00e5ff;font-size:1.8rem}
+        .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040}
+        table{width:100%;border-collapse:collapse;background:#121826;font-size:0.8rem}
+        th,td{padding:8px 10px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
+        th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;position:sticky;top:0}
+        tr:hover{background:rgba(0,229,255,0.05)}
+        .badge{display:inline-block;padding:2px 10px;border-radius:20px;font-weight:bold}
+        .badge-positive{background:rgba(0,229,160,0.2);color:#00e5a0}
+        .badge-negative{background:rgba(255,77,109,0.2);color:#ff4d6d}
+        .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
+        /* === NEW: colour classes for scores === */
+        .positive { color: #00e5a0; font-weight: 500; }
+        .negative { color: #ff4d6d; font-weight: 500; }
+        .neutral { color: #ffb800; }
+        /* ==================================== */
+        .tooltip{position:relative;cursor:help;border-bottom:1px dotted #8892b0}
+        .tooltip:hover::after{content:attr(data-tip);position:absolute;background:#1a1f2e;color:#e0e0e0;padding:6px 12px;border-radius:6px;font-size:0.7rem;white-space:nowrap;z-index:10;left:50%;transform:translateX(-50%);bottom:100%;margin-bottom:4px;border:1px solid #2a3040}
+        @media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.main-content{margin-left:0;padding:60px 15px 20px;width:100%}}
+    </style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content">
+    <div class="header"><h2>Central Bank Scorecard</h2></div>
+    <div class="table-container">
+        <table>
+            <thead>
+                <tr>
+                    <th>Currency</th>
+                    <th>Central Bank</th>
+                    <th><span class="tooltip" data-tip="Inflation outlook">Inflation</span></th>
+                    <th><span class="tooltip" data-tip="Economic growth outlook">Growth</span></th>
+                    <th><span class="tooltip" data-tip="Labour market outlook">Labour</span></th>
+                    <th><span class="tooltip" data-tip="Forward guidance score">Guidance</span></th>
+                    <th><span class="tooltip" data-tip="Overall communication tone">Tone</span></th>
+                    <th>Final Score</th>
+                    <th>Current Rate</th>
+                    <th>Previous Rate</th>
+                    <th>Reference Date</th>
+                    <th>Next Release</th>
+                </tr>
+            </thead>
+            <tbody id="centralBankTableBody">
+                <tr><td colspan="12" style="text-align:center; padding:20px;">Loading...</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+<script>
+    function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
+    function logout(){fetch('/logout').then(()=>window.location.href='/login');}
+
+    async function loadScores(){
+        try{
+            const res = await fetch('/api/central-bank-scores');
+            const data = await res.json();
+            const tbody = document.getElementById('centralBankTableBody');
+            tbody.innerHTML = '';
+            data.forEach(row => {
+                const tr = document.createElement('tr');
+                const normalized = row.normalized_score;
+                let badge = '';
+                if(normalized === 1) badge = '<span class="badge badge-positive">Bullish</span>';
+                else if(normalized === -1) badge = '<span class="badge badge-negative">Bearish</span>';
+                else badge = '<span class="badge badge-neutral">Neutral</span>';
+                const refDate = row.reference_date ? row.reference_date : '-';
+                const nextDate = row.next_release_date ? row.next_release_date : '-';
+                tr.innerHTML = `
+                    <td><strong>${row.currency_code}</strong></td>
+                    <td>${row.central_bank}</td>
+                    <td class="${row.inflation_score === 1 ? 'positive' : (row.inflation_score === -1 ? 'negative' : 'neutral')}">${row.inflation_score}</td>
+                    <td class="${row.growth_score === 1 ? 'positive' : (row.growth_score === -1 ? 'negative' : 'neutral')}">${row.growth_score}</td>
+                    <td class="${row.labour_score === 1 ? 'positive' : (row.labour_score === -1 ? 'negative' : 'neutral')}">${row.labour_score}</td>
+                    <td class="${row.guidance_score === 1 ? 'positive' : (row.guidance_score === -1 ? 'negative' : 'neutral')}">${row.guidance_score}</td>
+                    <td class="${row.tone_score === 1 ? 'positive' : (row.tone_score === -1 ? 'negative' : 'neutral')}">${row.tone_score}</td>
+                    <td>${badge}</td>
+                    <td>${row.current_rate}</td>
+                    <td>${row.previous_rate}</td>
+                    <td>${refDate}</td>
+                    <td>${nextDate}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        } catch(e) {
+            document.getElementById('centralBankTableBody').innerHTML = `<tr><td colspan="12" style="color:#ff4d6d;text-align:center;">Error loading data</td></tr>`;
+        }
+    }
+    loadScores();
+    setTimeout(() => { if(typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>
