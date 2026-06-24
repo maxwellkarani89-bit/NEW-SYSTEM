@@ -943,10 +943,10 @@ def get_retail_sentiment_score(pair: str) -> int:
     sent = SentimentData.query.filter_by(pair=pair).first()
     if not sent:
         return 0
-    if sent.short_pct > sent.long_pct:
-        return 1
-    elif sent.long_pct > sent.short_pct:
+    if sent.long_pct > 60:
         return -1
+    elif sent.long_pct < 40:
+        return 1
     return 0
 
 def get_seasonality_directional_score(pair: str) -> int:
