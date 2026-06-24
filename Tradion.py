@@ -2565,8 +2565,21 @@ def admin_refresh():
 @login_required
 @admin_required
 def admin_force_fastbull():
-    update_sentiment_from_fastbull()
-    return jsonify({'success': True})
+    try:
+        update_sentiment_from_fastbull()
+        # After update, fetch the latest timestamps to confirm
+        sample = SentimentData.query.first()
+        return jsonify({
+            'success': True,
+            'message': 'Update function ran',
+            'sample_last_updated': sample.last_updated.isoformat() if sample else None
+        })
+    except Exception as e:
+        return jsonify({
+            'success': False,
+            'error': str(e),
+            'trace': traceback.format_exc()
+        }), 500
 
 
 @app.route('/admin/cot/upload', methods=['POST'])
@@ -6330,6 +6343,21 @@ setTimeout(() => {
 # -----------------------------
 # MAIN
 # -----------------------------
+
+@app.route('/debug/jobs')
+@login_required
+@admin_required
+def debug_jobs():
+    jobs = []
+    for job in scheduler.get_jobs():
+        jobs.append({
+            'id': job.id,
+            'next_run': job.next_run_time.isoformat() if job.next_run_time else None,
+            'func': str(job.func)
+        })
+    return jsonify(jobs)
+
+
 if __name__ == '__main__':
     create_templates()
     
