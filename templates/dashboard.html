@@ -335,11 +335,46 @@
     }
     // ==========================================
 
+    // ========== UPDATED: Force Refresh now updates sentiment, saves scores (3-day interval), and reloads ==========
     async function refreshAnalysis() {
+        // 1. Update sentiment from FastBull
+        try {
+            const response = await fetch('/admin/update_fastbull_sentiment', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (result.success) {
+                console.log('✅ Sentiment data updated via FastBull');
+            } else {
+                console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error');
+            }
+        } catch (e) {
+            console.error('❌ Error updating sentiment:', e);
+        }
+
+        // 2. Save asset scores (only if at least 3 days have passed)
+        try {
+            const response = await fetch('/debug/save_all_now', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            });
+            const result = await response.json();
+            if (result.success) {
+                console.log('✅ Asset scores saved (3-day interval respected)');
+            } else {
+                console.warn('⚠️ Score save failed:', result.message || 'Unknown error');
+            }
+        } catch (e) {
+            console.error('❌ Error saving scores:', e);
+        }
+
+        // 3. Clear cache and reload analysis
         sessionStorage.removeItem(CACHE_KEY);
         sessionStorage.removeItem(CACHE_TIME_KEY);
         await loadDetailedAnalysis(true);
     }
+    // =======================================================================
 
     async function loadHistory() {
         const r = await fetch('/api/history');

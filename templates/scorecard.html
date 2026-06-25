@@ -16,15 +16,15 @@
         .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}  /* reduced top/bottom padding */
-        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}  /* reduced margin */
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
-        .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}  /* reduced gap */
+        .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
             background:#121826;
             border-radius:16px;
-            padding:12px 12px 16px 12px;  /* reduced padding */
+            padding:12px 12px 16px 12px;
             display:flex;
             flex-direction:column;
             align-items:center;
@@ -33,7 +33,7 @@
         }
         .gauge-container{
             position:relative;
-            width:160px;   /* slightly smaller */
+            width:160px;
             height:90px;
             margin-bottom:8px;
         }
@@ -57,20 +57,19 @@
         .loading-overlay.hidden{display:none}
         .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-        .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}  /* reduced gap */
+        .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
         .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
         .score-label{font-weight:500;font-size:0.85rem}
         .score-value{font-weight:bold;padding:2px 8px;border-radius:20px;font-size:0.75rem}
         .score-value.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
         .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
-        /* Right column cards */
-        .right-col{display:flex;flex-direction:column;gap:10px}  /* reduced gap */
+        .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .panel{
             background:#121826;
             border-radius:12px;
-            padding:10px;  /* reduced padding */
+            padding:10px;
             border:1px solid #2a3040;
         }
         .panel h3{
@@ -96,7 +95,6 @@
         .surprise{font-size:0.7rem;padding:1px 4px;border-radius:4px}
         .surprise.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
         .surprise.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
-        /* Table styles */
         .panel table {
             width: 100%;
             border-collapse: collapse;
@@ -113,7 +111,6 @@
         .panel th:nth-child(5), .panel td:nth-child(5) { width: 15%; }
         .panel.crowd-table th:nth-child(1), .panel.crowd-table td:nth-child(1) { width: 50%; }
         .panel.crowd-table th:nth-child(2), .panel.crowd-table td:nth-child(2) { width: 50%; }
-        /* Score History Chart */
         .history-chart-container {
             background: #121826;
             border-radius: 12px;
@@ -130,7 +127,7 @@
         }
         .chart-wrapper {
             position: relative;
-            height: 240px;  /* reduced height to fit without scroll */
+            height: 240px;
             width: 100%;
         }
         @media (max-width:768px){
@@ -140,7 +137,7 @@
             .panel{padding:8px}
             .indicator-values{gap:6px}
             .value{width:40px}
-            .chart-wrapper{height: 200px;}
+            .chart-wrapper{height:200px;}
             .two-cols{grid-template-columns:1fr;}
         }
     </style>
@@ -227,7 +224,6 @@
         select.appendChild(opt);
     });
 
-    // Order of categories on the right side (as per screenshot)
     const CATEGORY_ORDER = [
         "Crowd Sentiment (COT)",
         "Technical Bias",
@@ -354,14 +350,12 @@
         }
     }
 
-    // Helper: map numeric bias score to label and CSS class
     function getBiasLabelAndClass(score) {
         if (score >= 5) return { label: 'Bullish', className: 'positive' };
         if (score <= -5) return { label: 'Bearish', className: 'negative' };
         return { label: 'Neutral', className: 'neutral' };
     }
 
-    // Build an HTML string for a standard table with 5 columns (Indicator, Signal, Actual, Forecast, Surprise)
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
@@ -417,7 +411,6 @@
         return html;
     }
 
-    // For Crowd Sentiment (COT) card we only need two columns (Indicator, Signal) and only the COT Alignment row
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -440,24 +433,20 @@
         const container = document.getElementById('categoryCards');
         container.innerHTML = '';
 
-        // Separate the first two cards (Crowd Sentiment and Technical Bias) to be side by side
-        const firstTwo = CATEGORY_ORDER.slice(0,2);   // ["Crowd Sentiment (COT)", "Technical Bias"]
+        const firstTwo = CATEGORY_ORDER.slice(0,2);
         const rest = CATEGORY_ORDER.slice(2);
 
-        // Create a wrapper for the two columns
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
-        // Crowd Sentiment (COT) card – simplified table
+        // Crowd Sentiment (COT) card – no badge
         const crowdCategory = firstTwo[0];
         const crowdIndicators = data.base_indicators.filter(ind => ind.category === crowdCategory);
         const crowdBiasScore = data.category_bias[crowdCategory] || 0;
-        const crowdBiasObj = getBiasLabelAndClass(crowdBiasScore);
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${crowdCategory}</h3>
-                            <span class="value ${crowdBiasObj.class}" style="background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:20px; font-size:0.7rem;">${crowdBiasObj.label}</span>
                         </div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
                             <span>Bias Score</span>
@@ -467,16 +456,14 @@
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card – full table
+        // Technical Bias card – no badge
         const techCategory = firstTwo[1];
         const techIndicators = data.base_indicators.filter(ind => ind.category === techCategory);
         const techBiasScore = data.category_bias[techCategory] || 0;
-        const techBiasObj = getBiasLabelAndClass(techBiasScore);
         const techCard = document.createElement('div');
         techCard.className = 'panel';
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${techCategory}</h3>
-                            <span class="value ${techBiasObj.class}" style="background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:20px; font-size:0.7rem;">${techBiasObj.label}</span>
                         </div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
                             <span>Bias Score</span>
@@ -491,16 +478,14 @@
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Now render the remaining cards (Economic Growth, Inflation, Jobs Market)
+        // Remaining cards – no badge
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
-            const biasObj = getBiasLabelAndClass(biasScore);
             const card = document.createElement('div');
             card.className = 'panel';
             let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${category}</h3>
-                            <span class="value ${biasObj.class}" style="background:rgba(255,255,255,0.05); padding:2px 8px; border-radius:20px; font-size:0.7rem;">${biasObj.label}</span>
                         </div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
                             <span>Bias Score</span>
