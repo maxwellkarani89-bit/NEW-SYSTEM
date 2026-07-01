@@ -1130,106 +1130,281 @@ def get_asset_score(asset: str) -> float:
     return overall_score
 
 def save_all_asset_scores():
-    """Save scores for all currencies and forex pairs using optimized prefetch."""
-    with app.app_context():
-        # ---------- PREFETCH ALL DATA (ONCE) ----------
-        # 1. Economic indicators: {currency: {indicator_name: directional_score}}
-        all_indicators = EconomicIndicator.query.all()
-        econ_cache = {}
-        for ind in all_indicators:
-            if ind.forecast == 0 and ind.actual == 0:
-                continue
-            if "Employment Change" in ind.indicator_name:
-                continue
-            curr = ind.currency.upper()
-            if ind.indicator_name == "Interest Rate Decision":
+    """
+    Optimized version: pre-fetch all data once, compute all scores,
+    then bulk write history in a single transaction.
+    """
+    import time
+    import yfinance as yf
+    from collections import defaultdict
+    from sqlalchemy import func
+
+    start = time.perf_counter()
+    app.logger.info("Starting optimized asset score update...")
+
+    # ---------- 1. BUILD CACHES (no DB/API calls inside loops) ----------
+
+    # 1a. Economic indicators: score + category
+    all_indicators = EconomicIndicator.query.all()
+    econ_cache = {}
+    for ind in all_indicators:
+        if ind.forecast == 0 and ind.actual == 0:
+            continue
+        if "Employment Change" in ind.indicator_name:
+            continue
+        curr = ind.currency.upper()
+        if ind.indicator_name == "Interest Rate Decision":
+            score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        else:
+            if ind.is_lower_better:
+                score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+            else:
                 score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
+        cat = ind.category or 'General'
+        econ_cache.setdefault(curr, {})[ind.indicator_name] = {'score': score, 'category': cat}
+
+    # 1b. COT
+    cot_records = COTData.query.all()
+    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+
+    # 1c. Retail sentiment (contrarian) – latest per pair
+    subq = db.session.query(
+        RetailSentimentHistory.pair,
+        func.max(RetailSentimentHistory.timestamp).label('max_ts')
+    ).group_by(RetailSentimentHistory.pair).subquery()
+    latest_retail = db.session.query(RetailSentimentHistory).join(
+        subq,
+        (RetailSentimentHistory.pair == subq.c.pair) &
+        (RetailSentimentHistory.timestamp == subq.c.max_ts)
+    ).all()
+    retail_cache = {r.pair: r.retail_bias for r in latest_retail}  # already -1,0,1
+
+    # Fallback: SentimentData table
+    sent_data = SentimentData.query.all()
+    for s in sent_data:
+        if s.pair not in retail_cache:
+            if s.long_pct > 60:
+                retail_cache[s.pair] = -1
+            elif s.long_pct < 40:
+                retail_cache[s.pair] = 1
             else:
-                if ind.is_lower_better:
-                    score = 1 if ind.actual < ind.forecast else (-1 if ind.actual > ind.forecast else 0)
+                retail_cache[s.pair] = 0
+
+    # 1d. Seasonality
+    monthly_biases = MonthlyBias.query.all()
+    monthly_dict = defaultdict(dict)
+    for mb in monthly_biases:
+        monthly_dict[mb.pair][mb.month] = mb.bias
+
+    date_ranges = SeasonalityDateRange.query.all()
+    range_dict = defaultdict(list)
+    for dr in date_ranges:
+        range_dict[dr.pair].append((dr.start_month, dr.start_day, dr.end_month, dr.end_day, dr.bias))
+
+    def seasonality_score(pair):
+        today = datetime.now()
+        current_month = today.month
+        current_day = today.day
+        month_bias = monthly_dict.get(pair, {}).get(current_month, 'Neutral')
+        if month_bias == 'Neutral':
+            return 0
+        ranges = range_dict.get(pair, [])
+        in_range = False
+        for sm, sd, em, ed, _ in ranges:
+            start = (sm, sd)
+            end = (em, ed)
+            current = (current_month, current_day)
+            if start <= end:
+                if start <= current <= end:
+                    in_range = True
+                    break
+            else:
+                if current >= start or current <= end:
+                    in_range = True
+                    break
+        if not in_range:
+            return 0
+        return 1 if month_bias == 'Bullish' else (-1 if month_bias == 'Bearish' else 0)
+
+    seasonality_cache = {f"{b}/{q}": seasonality_score(f"{b}/{q}") for b, q in ALL_PAIRS}
+
+    # 1e. Technical trend (21-day SMA) – batch download for all pairs
+    pair_symbol_map = {}
+    symbols = []
+    for base, quote in ALL_PAIRS:
+        pair = f"{base}/{quote}"
+        yf_sym = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
+        pair_symbol_map[pair] = yf_sym
+        symbols.append(yf_sym)
+
+    try:
+        data = yf.download(symbols, period="2mo", interval="1d", group_by='ticker', auto_adjust=False)
+    except Exception as e:
+        app.logger.error(f"yfinance batch download failed: {e}")
+        data = {}
+
+    trend_cache = {}
+    for pair, yf_sym in pair_symbol_map.items():
+        if yf_sym not in data:
+            # fallback: individual download (should rarely happen)
+            try:
+                ticker = yf.Ticker(yf_sym)
+                hist = ticker.history(period="2mo")
+                if len(hist) >= 21:
+                    sma = hist['Close'].rolling(21).mean().iloc[-1]
+                    current = hist['Close'].iloc[-1]
+                    if current > sma:
+                        trend_cache[pair] = 2
+                    elif current < sma:
+                        trend_cache[pair] = -2
+                    else:
+                        trend_cache[pair] = 0
                 else:
-                    score = 1 if ind.actual > ind.forecast else (-1 if ind.actual < ind.forecast else 0)
-            econ_cache.setdefault(curr, {})[ind.indicator_name] = score
-
-        # 2. COT data: {currency: {'net': net, 'change': change}}
-        cot_records = COTData.query.all()
-        cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
-
-        # 3. Helper to get retail sentiment (light)
-        def get_retail_score(pair):
-            return get_retail_sentiment_score(pair)
-
-        # 4. COT alignment (sum‑difference method)
-        def get_cot_align(base, quote):
-            base_cot = cot_cache.get(base, {'net':0, 'change':0})
-            quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
-            base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
-            base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
-            quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
-            quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
-            base_score = base_net_dir + base_mom_dir
-            quote_score = quote_net_dir + quote_mom_dir
-            raw_diff = base_score - quote_score
-            if raw_diff > 2:
-                return 2
-            elif raw_diff < -2:
-                return -2
+                    trend_cache[pair] = 0
+            except:
+                trend_cache[pair] = 0
+            continue
+        df = data[yf_sym]
+        if len(df) >= 21:
+            sma = df['Close'].rolling(21).mean().iloc[-1]
+            current = df['Close'].iloc[-1]
+            if current > sma:
+                trend_cache[pair] = 2
+            elif current < sma:
+                trend_cache[pair] = -2
             else:
-                return raw_diff
+                trend_cache[pair] = 0
+        else:
+            trend_cache[pair] = 0
 
-        # ---------- SAVE CURRENCIES ----------
-        for currency in MAJOR_CURRENCIES:
-            try:
-                score = get_asset_score(currency)
-                save_asset_score_history(currency, score)
-                print(f"Saved currency {currency}: {score}")
-            except Exception as e:
-                print(f"Error saving currency {currency}: {e}")
+    # 1f. US 2-year bond trend (cached internally)
+    bond_score = get_us_2yr_bond_trend_score()
 
-        # ---------- SAVE PAIRS (optimized with cache) ----------
-        for base, quote in ALL_PAIRS:
-            pair = f"{base}/{quote}"
-            try:
-                base_scores = econ_cache.get(base, {})
-                quote_scores = econ_cache.get(quote, {})
-                def norm(name):
-                    b = base_scores.get(name, 0)
-                    q = quote_scores.get(name, 0)
-                    return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
-                gdp = norm("GDP Growth Rate QoQ (%)")
-                m_pmi = norm("Manufacturing PMI")
-                s_pmi = norm("Services PMI")
-                retail = norm("Retail Sales MoM (%)")
-                consumer_conf = norm("Consumer Confidence")
-                cpi = norm("CPI YoY (%)")
-                ppi = norm("PPI YoY (%)")
-                pce = norm("PCE YoY (%)")
-                interest = norm("Interest Rate Decision")
-                nfp = norm("NFP (K)")
-                avg_hourly = norm("Average Hourly Earnings")
-                unemp_rate = norm("Unemployment Rate (%)")
-                unemp_claims = norm("Unemployment Claims (K)")
-                adp = norm("ADP (K)")
-                jolts = norm("JOLTS Job Openings (M)")
+    # ---------- 2. HELPERS TO COMPUTE SCORES (using caches) ----------
 
-                cot_align = get_cot_align(base, quote)
-                crowd = get_retail_score(pair)
+    def compute_fundamentals_score(indicator_dict):
+        """indicator_dict: {name: {'score': s, 'category': cat}}"""
+        category_data = defaultdict(list)
+        for name, info in indicator_dict.items():
+            cat = info['category']
+            score = info['score']
+            category_data[cat].append(score)
+        # Add bond score to Inflation Bias
+        category_data['Inflation Bias'].append(bond_score)
+        total = 0
+        for cat, scores in category_data.items():
+            if scores:
+                avg = sum(scores) / len(scores)
+                total += avg * len(scores)   # weighted by count
+        return round(total, 1)
 
-                # Technical and seasonality – light external calls
-                yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
-                trend = get_technical_directional_score(yf_symbol)
-                season = get_seasonality_directional_score(pair)
+    def compute_currency_score(currency):
+        base = currency.upper()
+        # Technical: 0 for single currency (no pair)
+        technical_score = 0
+        # COT
+        cot = cot_cache.get(base, {'net': 0, 'change': 0})
+        net_dir = 1 if cot['net'] > 0 else (-1 if cot['net'] < 0 else 0)
+        mom_dir = 1 if cot['change'] > 0 else (-1 if cot['change'] < 0 else 0)
+        sentiment_cot_score = net_dir + mom_dir
+        # Fundamentals
+        indicators = econ_cache.get(base, {})
+        fundamentals_score = compute_fundamentals_score(indicators)
+        # Sentiment (contrarian) – use currency as pair key
+        sent_score = retail_cache.get(currency, 0)
+        # Seasonality – use currency as pair key
+        season_score = seasonality_cache.get(currency, 0)
+        # Overall
+        tradion = technical_score + sentiment_cot_score + fundamentals_score
+        overall = tradion + season_score + sent_score
+        return overall
 
-                total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
-                         cpi + ppi + pce + interest + nfp + avg_hourly +
-                         unemp_rate + unemp_claims + adp + jolts +
-                         cot_align + crowd + trend + season)
-                total = max(-20, min(20, total))
+    def compute_pair_score(pair):
+        base, quote = pair.split('/')
+        base_indicators = econ_cache.get(base, {})
+        quote_indicators = econ_cache.get(quote, {})
+        # Build combined indicator dict with pair-normalised scores
+        combined = {}
+        all_names = set(base_indicators.keys()) | set(quote_indicators.keys())
+        for name in all_names:
+            b_info = base_indicators.get(name, {'score': 0})
+            q_info = quote_indicators.get(name, {'score': 0})
+            b_score = b_info['score'] if isinstance(b_info, dict) else b_info
+            q_score = q_info['score'] if isinstance(q_info, dict) else q_info
+            diff = b_score - q_score
+            pair_score = 1 if diff > 0 else (-1 if diff < 0 else 0)
+            cat = b_info.get('category', 'General') if isinstance(b_info, dict) else 'General'
+            combined[name] = {'score': pair_score, 'category': cat}
+        fundamentals_score = compute_fundamentals_score(combined)
 
-                save_asset_score_history(pair, total)
-                print(f"Saved pair {pair}: {total}")
-            except Exception as e:
-                print(f"Error saving pair {pair}: {e}")
+        # COT alignment
+        def cot_alignment(base, quote):
+            b_cot = cot_cache.get(base, {'net': 0, 'change': 0})
+            q_cot = cot_cache.get(quote, {'net': 0, 'change': 0})
+            b_net_dir = 1 if b_cot['net'] > 0 else (-1 if b_cot['net'] < 0 else 0)
+            b_mom_dir = 1 if b_cot['change'] > 0 else (-1 if b_cot['change'] < 0 else 0)
+            q_net_dir = 1 if q_cot['net'] > 0 else (-1 if q_cot['net'] < 0 else 0)
+            q_mom_dir = 1 if q_cot['change'] > 0 else (-1 if q_cot['change'] < 0 else 0)
+            b_score = b_net_dir + b_mom_dir
+            q_score = q_net_dir + q_mom_dir
+            raw = b_score - q_score
+            if raw > 2: return 2
+            elif raw < -2: return -2
+            else: return raw
+
+        cot_score = cot_alignment(base, quote)
+        retail_score = retail_cache.get(pair, 0)
+        tech_score = trend_cache.get(pair, 0)
+        season_score = seasonality_cache.get(pair, 0)
+
+        total = fundamentals_score + cot_score + retail_score + tech_score + season_score
+        return max(-20, min(20, total))
+
+    # ---------- 3. COMPUTE ALL SCORES (in memory) ----------
+
+    history_objects = []
+    today = datetime.utcnow().date()
+    start_of_day = datetime.combine(today, datetime.min.time())
+    end_of_day = datetime.combine(today, datetime.max.time())
+
+    # Delete today's existing records (we'll reinsert fresh)
+    AssetScoreHistory.query.filter(
+        AssetScoreHistory.recorded_at >= start_of_day,
+        AssetScoreHistory.recorded_at <= end_of_day
+    ).delete(synchronize_session=False)
+    db.session.commit()
+
+    # Currencies
+    for currency in MAJOR_CURRENCIES:
+        score = compute_currency_score(currency)
+        history_objects.append(AssetScoreHistory(asset=currency, score=score, recorded_at=datetime.utcnow()))
+
+    # Forex pairs
+    for base, quote in ALL_PAIRS:
+        pair = f"{base}/{quote}"
+        score = compute_pair_score(pair)
+        history_objects.append(AssetScoreHistory(asset=pair, score=score, recorded_at=datetime.utcnow()))
+
+    # ---------- 4. BULK INSERT ----------
+    db.session.bulk_save_objects(history_objects)
+    db.session.commit()
+
+    # ---------- 5. CLEANUP OLD RECORDS (keep last 30 per asset) ----------
+    # Use bulk delete to avoid per‑row overhead
+    for asset in set(h.asset for h in history_objects):
+        # Get IDs of records to delete (oldest ones)
+        count = AssetScoreHistory.query.filter_by(asset=asset).count()
+        if count > 30:
+            to_delete = AssetScoreHistory.query.filter_by(asset=asset).order_by(
+                AssetScoreHistory.recorded_at.asc()
+            ).limit(count - 30).all()
+            ids = [r.id for r in to_delete]
+            if ids:
+                AssetScoreHistory.query.filter(AssetScoreHistory.id.in_(ids)).delete(synchronize_session=False)
+    db.session.commit()
+
+    end = time.perf_counter()
+    app.logger.info(f"Asset scores updated. Saved {len(history_objects)} records in {end-start:.2f} seconds.")
 
 
 
@@ -3290,16 +3465,749 @@ def create_templates():
     with open('templates/login.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Tradion · Login</title>
-<style>*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;height:100vh;display:flex;overflow:hidden}.split-container{display:flex;width:100%}.brand-panel{flex:1.2;background:radial-gradient(circle at 20% 30%, #121826 0%, #0B0F1A 100%);display:flex;flex-direction:column;justify-content:center;align-items:center;padding:3rem;position:relative;overflow:hidden}.brand-content{max-width:500px;z-index:2;text-align:center}.logo{font-size:3.8rem;font-weight:800;letter-spacing:4px;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 80%);-webkit-background-clip:text;background-clip:text;color:transparent;margin-bottom:1rem}.tagline{font-size:1.4rem;color:#a0b0c0;margin-bottom:3rem;font-weight:300}.chart-animation{width:100%;height:200px;margin-top:2rem;opacity:0.6}.chart-line{stroke:#00e5ff;stroke-width:2;fill:none;stroke-dasharray:1000;stroke-dashoffset:1000;animation:drawLine 4s ease-out forwards}@keyframes drawLine{to{stroke-dashoffset:0}}.glow-pulse{position:absolute;width:300px;height:300px;background:radial-gradient(circle, rgba(0,229,255,0.15) 0%, transparent 70%);border-radius:50%;top:20%;left:30%;animation:pulse 8s infinite alternate;z-index:1}@keyframes pulse{0%{transform:scale(1);opacity:0.3}100%{transform:scale(1.5);opacity:0.1}}.login-panel{flex:0.8;background:#0B0F1A;display:flex;align-items:center;justify-content:center;padding:2rem}.login-card{background:#121826;border-radius:20px;padding:2.5rem 2rem;width:100%;max-width:420px;box-shadow:0 20px 40px rgba(0,0,0,0.6),0 0 0 1px rgba(0,229,255,0.1);border:1px solid #2a3040}.login-card h2{font-size:2rem;font-weight:600;color:#FFFFFF;margin-bottom:0.5rem}.subtitle{color:#8892b0;margin-bottom:2rem;font-size:0.95rem}.input-group{margin-bottom:1.5rem}.input-group label{display:block;margin-bottom:0.5rem;color:#ccd6f6;font-size:0.9rem;font-weight:500}.input-wrapper{position:relative}.input-wrapper input{width:100%;padding:0.9rem 1rem;background:#1a1f2e;border:1.5px solid #2a3040;border-radius:12px;color:#fff;font-size:1rem;transition:all 0.2s}.input-wrapper input:focus{outline:none;border-color:#00e5ff;box-shadow:0 0 0 3px rgba(0,229,255,0.1)}.input-wrapper input::placeholder{color:#5a6380}.password-toggle{position:absolute;right:15px;top:50%;transform:translateY(-50%);color:#8892b0;cursor:pointer;font-size:1.2rem}.btn-login{width:100%;padding:0.9rem;background:linear-gradient(135deg, #00e5ff 0%, #00b8d4 100%);border:none;border-radius:12px;color:#0B0F1A;font-weight:700;font-size:1.1rem;cursor:pointer;transition:all 0.2s;margin-top:0.5rem}.btn-login:hover{transform:translateY(-2px);box-shadow:0 10px 20px rgba(0,229,255,0.2)}.btn-login:active{transform:translateY(0)}.error-message{background:rgba(255,77,109,0.15);color:#ff8099;padding:0.8rem;border-radius:10px;margin-bottom:1rem;font-size:0.9rem;border-left:4px solid #ff4d6d}.success-message{background:rgba(0,229,160,0.15);color:#00e5a0;padding:0.8rem;border-radius:10px;margin-bottom:1rem;font-size:0.9rem;border-left:4px solid #00e5a0}.footer-text{text-align:center;margin-top:1.5rem;color:#8892b0;font-size:0.9rem}.footer-text a{color:#00e5ff;text-decoration:none;font-weight:600}.footer-text a:hover{text-decoration:underline}@media (max-width:768px){.split-container{flex-direction:column}.brand-panel{display:none}}</style>
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Tradion · Institutional Login</title>
+
+    <!-- Google Fonts: Inter -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
+
+    <style>
+        /* ---------- RESET & BASE ---------- */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+            background: #071A35;
+            color: #e0e8f0;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow-x: hidden;
+            line-height: 1.5;
+        }
+
+        /* ---------- NAVBAR ---------- */
+        .navbar {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 1rem 2.5rem;
+            background: rgba(7, 26, 53, 0.7);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+            position: sticky;
+            top: 0;
+            z-index: 100;
+        }
+
+        .navbar .logo {
+            font-size: 1.6rem;
+            font-weight: 800;
+            letter-spacing: -0.5px;
+            background: linear-gradient(135deg, #3B82F6, #60A5FA);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .navbar .logo i {
+            font-style: normal;
+            display: inline-block;
+            margin-right: 4px;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            align-items: center;
+        }
+        .nav-links a {
+            color: #94a3b8;
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+        }
+        .nav-links a:hover {
+            color: #60A5FA;
+        }
+        .nav-links .login-btn {
+            background: #3B82F6;
+            color: #fff;
+            padding: 0.5rem 1.2rem;
+            border-radius: 30px;
+            font-weight: 600;
+            border: none;
+            cursor: pointer;
+            transition: background 0.2s, transform 0.1s;
+        }
+        .nav-links .login-btn:hover {
+            background: #2563EB;
+            transform: scale(1.02);
+        }
+
+        /* ---------- MARKET TICKER ---------- */
+        .market-ticker {
+            background: rgba(7, 26, 53, 0.5);
+            backdrop-filter: blur(4px);
+            -webkit-backdrop-filter: blur(4px);
+            padding: 0.4rem 0;
+            border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+            overflow: hidden;
+            white-space: nowrap;
+        }
+        .ticker-wrap {
+            display: flex;
+            gap: 2.5rem;
+            justify-content: center;
+            flex-wrap: wrap;
+            padding: 0 1rem;
+        }
+        .ticker-item {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            font-weight: 500;
+            color: #94a3b8;
+        }
+        .ticker-item .symbol {
+            color: #e0e8f0;
+            font-weight: 600;
+        }
+        .ticker-item .change {
+            font-weight: 600;
+        }
+        .ticker-item .change.positive {
+            color: #4ade80;
+        }
+        .ticker-item .change.negative {
+            color: #f87171;
+        }
+
+        /* ---------- MAIN LAYOUT ---------- */
+        .main-container {
+            display: flex;
+            flex: 1;
+            min-height: calc(100vh - 120px); /* adjust for navbar + ticker */
+        }
+
+        /* ---------- LEFT HERO (60%) ---------- */
+        .hero-section {
+            flex: 0 0 60%;
+            padding: 3rem 4rem 2rem 4rem;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* Background animations */
+        .hero-bg {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+            z-index: 0;
+        }
+        .hero-bg .grid-line {
+            position: absolute;
+            background: rgba(59, 130, 246, 0.04);
+        }
+        .hero-bg .grid-line.horizontal {
+            width: 100%;
+            height: 1px;
+            animation: moveGridH 30s linear infinite;
+        }
+        .hero-bg .grid-line.vertical {
+            height: 100%;
+            width: 1px;
+            animation: moveGridV 30s linear infinite;
+        }
+        @keyframes moveGridH {
+            0% { transform: translateY(0); }
+            100% { transform: translateY(80px); }
+        }
+        @keyframes moveGridV {
+            0% { transform: translateX(0); }
+            100% { transform: translateX(80px); }
+        }
+
+        .hero-bg .glow-line {
+            position: absolute;
+            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+            border-radius: 50%;
+            animation: floatGlow 40s ease-in-out infinite alternate;
+        }
+        @keyframes floatGlow {
+            0% { transform: translate(0, 0) scale(1); opacity: 0.3; }
+            100% { transform: translate(60px, -40px) scale(1.5); opacity: 0.6; }
+        }
+
+        .hero-bg .float-icon {
+            position: absolute;
+            font-size: 2rem;
+            opacity: 0.08;
+            animation: floatIcon 50s linear infinite;
+        }
+        @keyframes floatIcon {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(30px, -20px) rotate(5deg); }
+            50% { transform: translate(-20px, 30px) rotate(-3deg); }
+            75% { transform: translate(40px, 10px) rotate(4deg); }
+            100% { transform: translate(0, 0) rotate(0deg); }
+        }
+
+        .hero-content {
+            position: relative;
+            z-index: 1;
+            max-width: 600px;
+        }
+
+        .hero-content h1 {
+            font-size: 3.2rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin-bottom: 1.2rem;
+            letter-spacing: -1px;
+            background: linear-gradient(to right, #ffffff, #94a3b8);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .hero-content p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin-bottom: 2.5rem;
+            max-width: 480px;
+        }
+
+        /* Cards */
+        .cards-grid {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 1.5rem;
+        }
+        .hero-card {
+            background: rgba(14, 76, 146, 0.12);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(59, 130, 246, 0.15);
+            border-radius: 20px;
+            padding: 1.5rem 1.2rem;
+            transition: all 0.3s ease;
+            cursor: default;
+            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+        }
+        .hero-card:hover {
+            background: rgba(14, 76, 146, 0.25);
+            border-color: rgba(59, 130, 246, 0.4);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 30px rgba(59, 130, 246, 0.15);
+        }
+        .hero-card .icon {
+            font-size: 1.8rem;
+            margin-bottom: 0.5rem;
+            display: block;
+        }
+        .hero-card h3 {
+            font-size: 1rem;
+            font-weight: 600;
+            color: #e0e8f0;
+            margin-bottom: 0.3rem;
+        }
+        .hero-card p {
+            font-size: 0.8rem;
+            color: #94a3b8;
+            margin: 0;
+        }
+
+        /* ---------- RIGHT LOGIN (40%) ---------- */
+        .login-section {
+            flex: 0 0 40%;
+            padding: 2rem 2.5rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: radial-gradient(ellipse at 30% 40%, rgba(14, 76, 146, 0.15), transparent 70%);
+        }
+
+        .login-card {
+            width: 100%;
+            max-width: 400px;
+            background: rgba(7, 26, 53, 0.65);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 24px;
+            padding: 2.5rem 2rem;
+            box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(59, 130, 246, 0.05);
+            transition: transform 0.3s ease, box-shadow 0.3s ease;
+        }
+        .login-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(59, 130, 246, 0.15);
+        }
+
+        .login-card .card-logo {
+            font-size: 1.8rem;
+            font-weight: 800;
+            color: #3B82F6;
+            margin-bottom: 0.2rem;
+            letter-spacing: -0.5px;
+        }
+        .login-card .card-logo small {
+            font-weight: 300;
+            font-size: 0.7rem;
+            color: #94a3b8;
+            display: block;
+            letter-spacing: 1px;
+            margin-top: -0.2rem;
+        }
+        .login-card h2 {
+            font-size: 1.5rem;
+            font-weight: 700;
+            margin: 0.8rem 0 0.2rem;
+            color: #fff;
+        }
+        .login-card .sub {
+            color: #94a3b8;
+            font-size: 0.9rem;
+            margin-bottom: 1.8rem;
+        }
+
+        /* Form */
+        .input-group {
+            margin-bottom: 1.2rem;
+        }
+        .input-group label {
+            display: block;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            color: #94a3b8;
+            margin-bottom: 0.3rem;
+        }
+        .input-group input {
+            width: 100%;
+            padding: 0.75rem 1rem;
+            background: rgba(7, 26, 53, 0.6);
+            border: 1px solid rgba(59, 130, 246, 0.2);
+            border-radius: 12px;
+            color: #fff;
+            font-size: 0.95rem;
+            font-family: 'Inter', sans-serif;
+            transition: border-color 0.2s, box-shadow 0.2s;
+        }
+        .input-group input:focus {
+            outline: none;
+            border-color: #3B82F6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+        }
+        .input-group input::placeholder {
+            color: #4b5a72;
+        }
+
+        .options {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.85rem;
+            margin: 0.2rem 0 1.5rem;
+        }
+        .options label {
+            display: flex;
+            align-items: center;
+            gap: 0.4rem;
+            color: #94a3b8;
+            cursor: pointer;
+        }
+        .options label input[type="checkbox"] {
+            accent-color: #3B82F6;
+            width: 16px;
+            height: 16px;
+        }
+        .options a {
+            color: #3B82F6;
+            text-decoration: none;
+            font-weight: 500;
+        }
+        .options a:hover {
+            text-decoration: underline;
+        }
+
+        .btn-login {
+            width: 100%;
+            padding: 0.85rem;
+            background: #0E4C92;
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-weight: 700;
+            font-size: 1rem;
+            cursor: pointer;
+            transition: background 0.3s, box-shadow 0.3s, transform 0.1s;
+            font-family: 'Inter', sans-serif;
+            letter-spacing: 0.3px;
+        }
+        .btn-login:hover {
+            background: #1D5EAA;
+            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+            transform: scale(1.01);
+        }
+
+        /* Security section */
+        .security-divider {
+            display: flex;
+            align-items: center;
+            gap: 0.8rem;
+            margin: 1.8rem 0 1.2rem;
+            color: #4b5a72;
+            font-size: 0.7rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+        .security-divider::before,
+        .security-divider::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: rgba(59, 130, 246, 0.15);
+        }
+
+        .security-badges {
+            display: flex;
+            justify-content: space-between;
+            gap: 0.5rem;
+            font-size: 0.7rem;
+            color: #94a3b8;
+        }
+        .security-badges .badge {
+            display: flex;
+            align-items: center;
+            gap: 0.3rem;
+        }
+        .security-badges .badge i {
+            font-style: normal;
+        }
+
+        .login-footer-link {
+            text-align: center;
+            margin-top: 1.5rem;
+            font-size: 0.85rem;
+            color: #94a3b8;
+        }
+        .login-footer-link a {
+            color: #3B82F6;
+            text-decoration: none;
+            font-weight: 600;
+        }
+        .login-footer-link a:hover {
+            text-decoration: underline;
+        }
+
+        /* ---------- FOOTER ---------- */
+        .footer {
+            background: rgba(7, 26, 53, 0.8);
+            backdrop-filter: blur(8px);
+            -webkit-backdrop-filter: blur(8px);
+            padding: 1rem 2.5rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            border-top: 1px solid rgba(59, 130, 246, 0.08);
+            font-size: 0.75rem;
+            color: #4b5a72;
+            flex-wrap: wrap;
+            gap: 0.5rem;
+        }
+        .footer .links {
+            display: flex;
+            gap: 1.5rem;
+        }
+        .footer .links a {
+            color: #4b5a72;
+            text-decoration: none;
+            transition: color 0.2s;
+        }
+        .footer .links a:hover {
+            color: #94a3b8;
+        }
+        .footer .social {
+            display: flex;
+            gap: 1rem;
+        }
+        .footer .social a {
+            color: #4b5a72;
+            text-decoration: none;
+            font-size: 1.1rem;
+            transition: color 0.2s;
+        }
+        .footer .social a:hover {
+            color: #60A5FA;
+        }
+
+        /* ---------- RESPONSIVE ---------- */
+        @media (max-width: 1024px) {
+            .hero-section {
+                padding: 2rem;
+            }
+            .hero-content h1 {
+                font-size: 2.6rem;
+            }
+            .cards-grid {
+                gap: 1rem;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .main-container {
+                flex-direction: column;
+            }
+            .hero-section {
+                flex: 1 1 auto;
+                padding: 2rem 1.5rem;
+            }
+            .login-section {
+                flex: 1 1 auto;
+                padding: 1.5rem;
+                background: transparent;
+            }
+            .login-card {
+                max-width: 100%;
+                padding: 2rem 1.5rem;
+            }
+            .hero-content h1 {
+                font-size: 2rem;
+            }
+            .navbar {
+                padding: 0.8rem 1.5rem;
+                flex-wrap: wrap;
+                gap: 0.5rem;
+            }
+            .nav-links {
+                gap: 1rem;
+                flex-wrap: wrap;
+            }
+            .nav-links a {
+                font-size: 0.8rem;
+            }
+            .market-ticker .ticker-wrap {
+                gap: 1rem;
+                justify-content: flex-start;
+                overflow-x: auto;
+                flex-wrap: nowrap;
+                padding: 0 1rem;
+            }
+            .footer {
+                flex-direction: column;
+                text-align: center;
+                padding: 1rem;
+            }
+            .cards-grid {
+                grid-template-columns: 1fr;
+            }
+            .security-badges {
+                flex-wrap: wrap;
+                justify-content: center;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .hero-content h1 {
+                font-size: 1.8rem;
+            }
+            .hero-content p {
+                font-size: 0.9rem;
+            }
+            .login-card {
+                padding: 1.5rem 1rem;
+            }
+        }
+
+        /* ---------- ANIMATIONS ---------- */
+        .fade-in {
+            animation: fadeIn 1s ease-out forwards;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(20px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .delay-1 { animation-delay: 0.1s; }
+        .delay-2 { animation-delay: 0.2s; }
+        .delay-3 { animation-delay: 0.3s; }
+    </style>
 </head>
 <body>
-<div class="split-container">
-<div class="brand-panel"><div class="glow-pulse"></div><div class="brand-content"><div class="logo">Tradion</div><div class="tagline">Trade smarter. Analyze deeper.</div><svg class="chart-animation" viewBox="0 0 400 100" preserveAspectRatio="none"><polyline class="chart-line" points="0,80 50,60 100,70 150,20 200,40 250,10 300,50 350,30 400,45"/></svg></div></div>
-<div class="login-panel"><div class="login-card"><h2>Welcome Back</h2><p class="subtitle">Access your trading dashboard</p>{% if request.args.get('registered') %}<div class="success-message">✅ Registration successful! Your account is pending admin approval. You will be notified when approved.</div>{% endif %}{% if error %}<div class="error-message">{{ error }}</div>{% endif %}<form method="POST"><div class="input-group"><label>Username</label><div class="input-wrapper"><input type="text" name="username" placeholder="Enter username" required autofocus></div></div><div class="input-group"><label>Password</label><div class="input-wrapper"><input type="password" name="password" id="password" placeholder="••••••••" required><span class="password-toggle" onclick="togglePassword()">👁</span></div></div><button type="submit" class="btn-login">Sign In</button></form><p class="footer-text">Don't have an account? <a href="{{ url_for('register') }}">Sign up</a></p></div></div>
-</div>
-<script>function togglePassword(){const pwd=document.getElementById('password');const toggle=document.querySelector('.password-toggle');if(pwd.type==='password'){pwd.type='text';toggle.textContent='🙈'}else{pwd.type='password';toggle.textContent='👁'}}</script>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <div class="logo"><i>⚡</i>Tradion</div>
+        <div class="nav-links">
+            <a href="#">About</a>
+            <a href="#">Features</a>
+            <a href="#">Pricing</a>
+            <a href="#">Contact</a>
+            <a href="#" class="login-btn">Login</a>
+        </div>
+    </nav>
+
+    <!-- MARKET TICKER -->
+    <div class="market-ticker">
+        <div class="ticker-wrap">
+            <span class="ticker-item"><span class="symbol">EUR/USD</span> <span class="change positive">+0.12%</span></span>
+            <span class="ticker-item"><span class="symbol">GBP/USD</span> <span class="change negative">-0.08%</span></span>
+            <span class="ticker-item"><span class="symbol">USD/JPY</span> <span class="change positive">+0.23%</span></span>
+            <span class="ticker-item"><span class="symbol">Gold</span> <span class="change positive">+0.45%</span></span>
+            <span class="ticker-item"><span class="symbol">Bitcoin</span> <span class="change negative">-0.67%</span></span>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-container">
+
+        <!-- LEFT HERO -->
+        <section class="hero-section fade-in">
+            <div class="hero-bg">
+                <!-- Animated grid lines -->
+                <div class="grid-line horizontal" style="top: 20%; left: 0;"></div>
+                <div class="grid-line horizontal" style="top: 60%; left: 0; animation-delay: -10s;"></div>
+                <div class="grid-line vertical" style="left: 30%; top: 0;"></div>
+                <div class="grid-line vertical" style="left: 70%; top: 0; animation-delay: -15s;"></div>
+                <!-- Glowing blobs -->
+                <div class="glow-line" style="width: 300px; height: 300px; top: 10%; left: 5%;"></div>
+                <div class="glow-line" style="width: 200px; height: 200px; bottom: 10%; right: 5%; animation-delay: -20s;"></div>
+                <!-- Floating icons -->
+                <div class="float-icon" style="top: 15%; left: 10%;">📈</div>
+                <div class="float-icon" style="top: 45%; left: 80%;">🏦</div>
+                <div class="float-icon" style="bottom: 25%; left: 20%;">🌍</div>
+                <div class="float-icon" style="bottom: 40%; right: 10%;">💰</div>
+                <div class="float-icon" style="top: 70%; left: 60%;">📊</div>
+            </div>
+
+            <div class="hero-content">
+                <h1>Trade the Fundamentals.<br />Execute with Confidence.</h1>
+                <p>
+                    Tradion combines macroeconomic analysis, central bank decisions, bond yields,
+                    COT positioning, retail sentiment, and AI-powered scoring into one institutional
+                    trading platform.
+                </p>
+
+                <div class="cards-grid">
+                    <div class="hero-card">
+                        <span class="icon">📈</span>
+                        <h3>Real-Time Macro Analysis</h3>
+                        <p>Live economic data and scoring.</p>
+                    </div>
+                    <div class="hero-card">
+                        <span class="icon">🏦</span>
+                        <h3>Central Bank Intelligence</h3>
+                        <p>Policy scores, rate decisions, guidance.</p>
+                    </div>
+                    <div class="hero-card">
+                        <span class="icon">🌍</span>
+                        <h3>Global Market Sentiment</h3>
+                        <p>COT, retail, and institutional flow.</p>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- RIGHT LOGIN -->
+        <section class="login-section fade-in delay-1">
+            <div class="login-card">
+                <div class="card-logo">
+                    ⚡Tradion
+                    <small>Institutional Macro Intelligence</small>
+                </div>
+                <h2>Welcome Back</h2>
+                <p class="sub">Access your institutional trading workspace.</p>
+
+                <form method="POST" action="{{ url_for('login') }}">
+                    <div class="input-group">
+                        <label for="username">Email / Username</label>
+                        <input type="text" id="username" name="username" placeholder="you@institution.com" required autofocus />
+                    </div>
+                    <div class="input-group">
+                        <label for="password">Password</label>
+                        <input type="password" id="password" name="password" placeholder="••••••••" required />
+                    </div>
+
+                    <div class="options">
+                        <label>
+                            <input type="checkbox" name="remember" /> Remember me
+                        </label>
+                        <a href="#">Forgot password?</a>
+                    </div>
+
+                    <button type="submit" class="btn-login">Sign In</button>
+                </form>
+
+                <div class="security-divider">
+                    <span>Secure Authentication</span>
+                </div>
+
+                <div class="security-badges">
+                    <span class="badge"><i>🔒</i> Encrypted login</span>
+                    <span class="badge"><i>📊</i> Real-time data</span>
+                    <span class="badge"><i>🧠</i> AI-powered analysis</span>
+                </div>
+
+                <div class="login-footer-link">
+                    Don’t have an account? <a href="{{ url_for('register') }}">Request access</a>
+                </div>
+            </div>
+        </section>
+    </div>
+
+    <!-- FOOTER -->
+    <footer class="footer">
+        <span>&copy; 2026 Tradion. All rights reserved.</span>
+        <div class="links">
+            <a href="#">Privacy</a>
+            <a href="#">Terms</a>
+            <a href="#">Cookies</a>
+        </div>
+        <div class="social">
+            <a href="#" aria-label="Twitter">🐦</a>
+            <a href="#" aria-label="LinkedIn">🔗</a>
+            <a href="#" aria-label="YouTube">▶️</a>
+        </div>
+    </footer>
+
+    <!-- Optional: small script to handle any JS enhancements (parallax, etc.) -->
+    <script>
+        // Simple mouse parallax on the login card (very subtle)
+        document.addEventListener('DOMContentLoaded', function() {
+            const card = document.querySelector('.login-card');
+            if (card) {
+                document.addEventListener('mousemove', function(e) {
+                    const x = (e.clientX / window.innerWidth - 0.5) * 4;
+                    const y = (e.clientY / window.innerHeight - 0.5) * 4;
+                    card.style.transform = `perspective(1000px) rotateY(${x}deg) rotateX(${-y}deg)`;
+                });
+                // Reset on mouse leave
+                document.addEventListener('mouseleave', function() {
+                    card.style.transform = 'perspective(1000px) rotateY(0deg) rotateX(0deg)';
+                });
+            }
+        });
+    </script>
+
 </body>
 </html>''')
 
