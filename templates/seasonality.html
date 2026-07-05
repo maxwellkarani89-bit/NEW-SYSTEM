@@ -1,0 +1,320 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seasonality – Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s ease, transform 0.3s ease;overflow-x:hidden;white-space:nowrap}
+        .sidebar .logo{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:800;color:#00e5ff;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040}
+        .sidebar .logo-text{transition:opacity 0.2s}
+        .sidebar.collapsed .logo-text{opacity:0;width:0;visibility:hidden}
+        .sidebar-toggle{background:none;border:none;color:#00e5ff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:0.2s}
+        .sidebar-toggle:hover{background:rgba(0,229,255,0.2)}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px;transition:margin 0.2s}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .sidebar.collapsed .menu-icon{margin-right:0}
+        .sidebar .menu-item span:not(.menu-icon){transition:opacity 0.2s}
+        .sidebar.collapsed .menu-item span:not(.menu-icon){opacity:0;width:0;display:none}
+        .main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}
+        .navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+        .navbar-title{font-size:18px;color:#00e5ff}
+        button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}
+        button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
+        button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
+        .selector-group{display:flex;gap:15px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
+        .selector-group select{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;min-width:180px;cursor:pointer}
+        .selector-group select:focus{outline:none;border-color:#00e5ff}
+        .chart-container{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040;margin-bottom:20px;height:500px;position:relative}
+        .chart-loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(18,24,38,0.7);z-index:10;border-radius:16px;color:#8892b0;font-size:1.2rem}
+        .chart-loading.hidden{display:none}
+        #plotlyDiv{width:100%;height:100%}
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:10px}
+        .stat-card{background:#121826;border-radius:12px;padding:16px;border:1px solid #2a3040;text-align:center}
+        .stat-card .label{font-size:0.8rem;color:#8892b0;text-transform:uppercase;letter-spacing:0.5px}
+        .stat-card .value{font-size:1.6rem;font-weight:bold;margin-top:4px;color:#00e5ff}
+        .stat-card .value.positive{color:#00e5a0}
+        .stat-card .value.negative{color:#ff4d6d}
+        .hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+        .sidebar.collapsed{width:80px !important;min-width:80px !important}
+        .sidebar.collapsed ~ .main-content{margin-left:80px !important}
+        @media (max-width:768px){
+            .sidebar{transform:translateX(-100%);width:260px !important}
+            .sidebar.open{transform:translateX(0)}
+            .sidebar.collapsed{width:260px !important; min-width:260px !important}
+            .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
+            .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+            .sidebar.collapsed .menu-icon{margin-right:12px}
+            .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+            .sidebar.collapsed ~ .main-content{margin-left:0 !important}
+            .hamburger{display:block}
+            .selector-group{flex-direction:column;align-items:stretch}
+            .selector-group select{width:100%}
+            .stats-grid{grid-template-columns:1fr 1fr}
+            .chart-container{height:350px}
+        }
+    </style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">
+        <span class="logo-text">⚡ Tradion</span>
+        <button class="sidebar-toggle" onclick="toggleSidebarCollapse()">◀</button>
+    </div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item active" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content">
+    <div class="navbar">
+        <div class="navbar-title">📅 Seasonality</div>
+        <div><span id="lastUpdateTime" style="font-size:12px;color:#8892b0"></span></div>
+    </div>
+
+    <div class="selector-group">
+        <select id="pairSelect">
+            <option value="">Select pair...</option>
+            {% for base, quote in all_pairs %}
+                <option value="{{ base }}/{{ quote }}">{{ base }}/{{ quote }}</option>
+            {% endfor %}
+        </select>
+        <select id="typeSelect">
+            <option value="monthly">Monthly Seasonality</option>
+            <option value="annual">Annual Seasonality</option>
+        </select>
+        <button onclick="loadSeasonality()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Load</button>
+    </div>
+
+    <div class="chart-container" id="chartContainer">
+        <div class="chart-loading hidden" id="chartLoading">Loading chart...</div>
+        <div id="plotlyDiv"></div>
+    </div>
+
+    <div class="stats-grid" id="statsContainer">
+        <div class="stat-card"><div class="label">Avg Monthly Return</div><div class="value" id="statAvgMonthly">—</div></div>
+        <div class="stat-card"><div class="label">Best Month</div><div class="value positive" id="statBestMonth">—</div></div>
+        <div class="stat-card"><div class="label">Worst Month</div><div class="value negative" id="statWorstMonth">—</div></div>
+        <div class="stat-card"><div class="label">10-Yr Avg Annual</div><div class="value" id="statAvgAnnual">—</div></div>
+    </div>
+</div>
+
+<script>
+    // Sidebar functions
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+    function toggleSidebarCollapse() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        }
+    }
+    function restoreSidebarState() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+        }
+    }
+    window.addEventListener('resize', function() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('collapsed');
+        } else {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+        }
+    });
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
+    // Load seasonality with loading overlay
+    async function loadSeasonality() {
+        const pair = document.getElementById('pairSelect').value;
+        const type = document.getElementById('typeSelect').value;
+        if (!pair) {
+            alert('Please select a forex pair.');
+            return;
+        }
+
+        const loading = document.getElementById('chartLoading');
+        loading.classList.remove('hidden');
+
+        try {
+            const resp = await fetch(`/api/seasonality?pair=${encodeURIComponent(pair)}&type=${type}`);
+            if (!resp.ok) throw new Error('Failed to fetch data');
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            renderChart(data, type);
+            updateStats(data.stats, type);
+            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+        } catch (err) {
+            const plotDiv = document.getElementById('plotlyDiv');
+            Plotly.react(plotDiv, [], {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                annotations: [{
+                    text: `❌ ${err.message}`,
+                    showarrow: false,
+                    font: { color: '#ff4d6d', size: 16 },
+                    x: 0.5, y: 0.5, xref: 'paper', yref: 'paper'
+                }]
+            });
+        } finally {
+            loading.classList.add('hidden');
+        }
+    }
+
+    function renderChart(data, type) {
+        const plotDiv = document.getElementById('plotlyDiv');
+
+        // Shared dark theme layout properties
+        const darkLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(18,24,38,0.8)',
+            font: { color: '#e0e0e0' },
+            xaxis: {
+                titlefont: { color: '#e0e0e0' },
+                tickfont: { color: '#a0b0c0' },
+                gridcolor: '#2a3040',
+                zerolinecolor: '#555'
+            },
+            yaxis: {
+                titlefont: { color: '#e0e0e0' },
+                tickfont: { color: '#a0b0c0' },
+                gridcolor: '#2a3040',
+                zerolinecolor: '#555'
+            },
+            legend: {
+                font: { color: '#e0e0e0' },
+                orientation: 'h',
+                y: 1.05,
+                x: 0.5,
+                xanchor: 'center'
+            }
+        };
+
+        if (type === 'monthly') {
+            const trace1 = {
+                x: data.labels,
+                y: data.avg_returns,
+                type: 'bar',
+                name: '10-Year Avg',
+                marker: { color: '#00b8d4', borderRadius: 4 },
+                hovertemplate: '%{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
+            };
+            const trace2 = {
+                x: data.labels,
+                y: data.current_returns,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'This Year',
+                line: { color: '#00e5a0', dash: 'dot', width: 2 },
+                marker: { color: '#00e5a0', size: 6 },
+                hovertemplate: '%{x}<br>This Year: %{y:.2f}%<extra></extra>'
+            };
+            const layout = {
+                ...darkLayout,
+                title: { text: 'Monthly Average Returns', font: { color: '#e0e0e0' } },
+                xaxis: { ...darkLayout.xaxis, title: 'Month', tickangle: -45 },
+                yaxis: { ...darkLayout.yaxis, title: 'Return (%)', zeroline: true },
+                barmode: 'group',
+                hovermode: 'x unified',
+                margin: { l: 50, r: 30, t: 50, b: 80 }
+            };
+            Plotly.react(plotDiv, [trace1, trace2], layout);
+        } else { // annual
+            const trace1 = {
+                x: data.weeks,
+                y: data.ten_year_avg,
+                type: 'scatter',
+                mode: 'lines',
+                name: '10-Year Avg (%)',
+                line: { color: '#aaaaaa', dash: 'dash', width: 2 },
+                yaxis: 'y2',
+                hovertemplate: 'Week %{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
+            };
+            const trace2 = {
+                x: data.weeks,
+                y: data.current_year_prices,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Current Year (Price)',
+                line: { color: '#ff4a5a', width: 2.5 },
+                marker: { color: '#ff4a5a', size: 4 },
+                hovertemplate: 'Week %{x}<br>Price: %{y:.2f}<extra></extra>'
+            };
+            const annotations = data.month_midpoints.map((m, i) => ({
+                x: m,
+                y: 0,
+                text: data.month_names[i],
+                showarrow: false,
+                font: { color: '#a0b0c0', size: 10 },
+                yshift: -25
+            }));
+            const layout = {
+                ...darkLayout,
+                title: { text: 'Annual Seasonality', font: { color: '#e0e0e0' } },
+                xaxis: { ...darkLayout.xaxis, title: 'Week', tickvals: data.month_midpoints, ticktext: data.month_names },
+                yaxis: { ...darkLayout.yaxis, title: 'Price', side: 'left' },
+                yaxis2: {
+                    title: 'Avg Return (%)',
+                    titlefont: { color: '#e0e0e0' },
+                    tickfont: { color: '#a0b0c0' },
+                    gridcolor: '#2a3040',
+                    zerolinecolor: '#555',
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'x unified',
+                margin: { l: 60, r: 60, t: 50, b: 80 },
+                annotations: annotations
+            };
+            Plotly.react(plotDiv, [trace1, trace2], layout);
+        }
+    }
+
+    function updateStats(stats, type) {
+        if (type === 'monthly') {
+            document.getElementById('statAvgMonthly').textContent = stats.avg_monthly_return + '%';
+            document.getElementById('statBestMonth').textContent = stats.best_month + '%';
+            document.getElementById('statWorstMonth').textContent = stats.worst_month + '%';
+            document.getElementById('statAvgAnnual').textContent = stats.avg_annual_return + '%';
+        } else {
+            document.getElementById('statAvgMonthly').textContent = stats.avg_annual_return + '%';
+            document.getElementById('statBestMonth').textContent = stats.best_week + '%';
+            document.getElementById('statWorstMonth').textContent = stats.worst_week + '%';
+            document.getElementById('statAvgAnnual').textContent = stats.latest_price || '—';
+        }
+    }
+
+    // Auto-load when selectors change
+    document.getElementById('pairSelect').addEventListener('change', loadSeasonality);
+    document.getElementById('typeSelect').addEventListener('change', loadSeasonality);
+
+    // Initialise
+    restoreSidebarState();
+    const pairSelect = document.getElementById('pairSelect');
+    if (pairSelect.options.length > 1) {
+        pairSelect.selectedIndex = 1;
+        loadSeasonality();
+    }
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>

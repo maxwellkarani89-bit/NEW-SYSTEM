@@ -11,7 +11,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
 
     <style>
-        /* ---------- RESET & BASE ---------- */
+        /* ---------- RESET & BASE (colours updated) ---------- */
         * {
             margin: 0;
             padding: 0;
@@ -20,8 +20,8 @@
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #071A35;
-            color: #e0e8f0;
+            background: #0B0F1A;  /* Matches dashboard */
+            color: #E0E0E0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -34,11 +34,11 @@
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 2.5rem;
-            background: rgba(7, 26, 53, 0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+            padding: 0.8rem 2.5rem;
+            background: rgba(11, 15, 26, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 229, 255, 0.12);
             position: sticky;
             top: 0;
             z-index: 100;
@@ -48,7 +48,7 @@
             font-size: 1.6rem;
             font-weight: 800;
             letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #3B82F6, #60A5FA);
+            background: linear-gradient(135deg, #00e5ff, #00b8d4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -67,17 +67,17 @@
         .nav-links a {
             color: #94a3b8;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 500;
             transition: color 0.2s;
         }
         .nav-links a:hover {
-            color: #60A5FA;
+            color: #00e5ff;
         }
         .nav-links .login-btn {
-            background: #3B82F6;
-            color: #fff;
-            padding: 0.5rem 1.2rem;
+            background: #00e5ff;
+            color: #0B0F1A;
+            padding: 0.4rem 1.2rem;
             border-radius: 30px;
             font-weight: 600;
             border: none;
@@ -85,17 +85,17 @@
             transition: background 0.2s, transform 0.1s;
         }
         .nav-links .login-btn:hover {
-            background: #2563EB;
+            background: #00b8d4;
             transform: scale(1.02);
         }
 
         /* ---------- MARKET TICKER ---------- */
         .market-ticker {
-            background: rgba(7, 26, 53, 0.5);
+            background: rgba(11, 15, 26, 0.5);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            padding: 0.4rem 0;
-            border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+            padding: 0.3rem 0;
+            border-bottom: 1px solid rgba(0, 229, 255, 0.06);
             overflow: hidden;
             white-space: nowrap;
         }
@@ -110,12 +110,12 @@
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 500;
             color: #94a3b8;
         }
         .ticker-item .symbol {
-            color: #e0e8f0;
+            color: #E0E0E0;
             font-weight: 600;
         }
         .ticker-item .change {
@@ -128,11 +128,11 @@
             color: #f87171;
         }
 
-        /* ---------- MAIN LAYOUT ---------- */
+        /* ---------- MAIN LAYOUT (unchanged) ---------- */
         .main-container {
             display: flex;
             flex: 1;
-            min-height: calc(100vh - 120px); /* adjust for navbar + ticker */
+            min-height: calc(100vh - 110px);
         }
 
         /* ---------- LEFT HERO (60%) ---------- */
@@ -146,7 +146,7 @@
             overflow: hidden;
         }
 
-        /* Background animations */
+        /* Background animations – colours updated */
         .hero-bg {
             position: absolute;
             top: 0;
@@ -158,7 +158,7 @@
         }
         .hero-bg .grid-line {
             position: absolute;
-            background: rgba(59, 130, 246, 0.04);
+            background: rgba(0, 229, 255, 0.04);
         }
         .hero-bg .grid-line.horizontal {
             width: 100%;
@@ -181,7 +181,7 @@
 
         .hero-bg .glow-line {
             position: absolute;
-            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(0, 229, 255, 0.10) 0%, transparent 70%);
             border-radius: 50%;
             animation: floatGlow 40s ease-in-out infinite alternate;
         }
@@ -193,7 +193,7 @@
         .hero-bg .float-icon {
             position: absolute;
             font-size: 2rem;
-            opacity: 0.08;
+            opacity: 0.06;
             animation: floatIcon 50s linear infinite;
         }
         @keyframes floatIcon {
@@ -228,28 +228,28 @@
             max-width: 480px;
         }
 
-        /* Cards */
+        /* Cards – background and border updated */
         .cards-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
         }
         .hero-card {
-            background: rgba(14, 76, 146, 0.12);
+            background: rgba(18, 24, 38, 0.7);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(0, 229, 255, 0.12);
             border-radius: 20px;
             padding: 1.5rem 1.2rem;
             transition: all 0.3s ease;
             cursor: default;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
         }
         .hero-card:hover {
-            background: rgba(14, 76, 146, 0.25);
-            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(18, 24, 38, 0.9);
+            border-color: rgba(0, 229, 255, 0.3);
             transform: translateY(-4px);
-            box-shadow: 0 12px 30px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 12px 30px rgba(0, 229, 255, 0.1);
         }
         .hero-card .icon {
             font-size: 1.8rem;
@@ -259,7 +259,7 @@
         .hero-card h3 {
             font-size: 1rem;
             font-weight: 600;
-            color: #e0e8f0;
+            color: #E0E0E0;
             margin-bottom: 0.3rem;
         }
         .hero-card p {
@@ -275,30 +275,30 @@
             display: flex;
             align-items: center;
             justify-content: center;
-            background: radial-gradient(ellipse at 30% 40%, rgba(14, 76, 146, 0.15), transparent 70%);
+            background: radial-gradient(ellipse at 30% 40%, rgba(0, 229, 255, 0.05), transparent 70%);
         }
 
         .login-card {
             width: 100%;
             max-width: 400px;
-            background: rgba(7, 26, 53, 0.65);
+            background: #121826;  /* Matches dashboard panels */
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(0, 229, 255, 0.15);
             border-radius: 24px;
             padding: 2.5rem 2rem;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(59, 130, 246, 0.05);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 229, 255, 0.05);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         .login-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0, 229, 255, 0.15);
         }
 
         .login-card .card-logo {
             font-size: 1.8rem;
             font-weight: 800;
-            color: #3B82F6;
+            color: #00e5ff;
             margin-bottom: 0.2rem;
             letter-spacing: -0.5px;
         }
@@ -322,7 +322,7 @@
             margin-bottom: 1.8rem;
         }
 
-        /* Form */
+        /* Form – colours updated */
         .input-group {
             margin-bottom: 1.2rem;
         }
@@ -338,8 +338,8 @@
         .input-group input {
             width: 100%;
             padding: 0.75rem 1rem;
-            background: rgba(7, 26, 53, 0.6);
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            background: rgba(11, 15, 26, 0.6);
+            border: 1px solid rgba(0, 229, 255, 0.2);
             border-radius: 12px;
             color: #fff;
             font-size: 0.95rem;
@@ -348,8 +348,8 @@
         }
         .input-group input:focus {
             outline: none;
-            border-color: #3B82F6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            border-color: #00e5ff;
+            box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.15);
         }
         .input-group input::placeholder {
             color: #4b5a72;
@@ -370,12 +370,12 @@
             cursor: pointer;
         }
         .options label input[type="checkbox"] {
-            accent-color: #3B82F6;
+            accent-color: #00e5ff;
             width: 16px;
             height: 16px;
         }
         .options a {
-            color: #3B82F6;
+            color: #00e5ff;
             text-decoration: none;
             font-weight: 500;
         }
@@ -383,13 +383,14 @@
             text-decoration: underline;
         }
 
+        /* ---------- LOGIN BUTTON – matches dashboard "RUN ANALYSIS" ---------- */
         .btn-login {
             width: 100%;
             padding: 0.85rem;
-            background: #0E4C92;
+            background: linear-gradient(135deg, #00e5ff, #00b8d4);
             border: none;
             border-radius: 12px;
-            color: #fff;
+            color: #0B0F1A;
             font-weight: 700;
             font-size: 1rem;
             cursor: pointer;
@@ -398,12 +399,12 @@
             letter-spacing: 0.3px;
         }
         .btn-login:hover {
-            background: #1D5EAA;
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+            background: linear-gradient(135deg, #00b8d4, #0099aa);
+            box-shadow: 0 8px 25px rgba(0, 229, 255, 0.3);
             transform: scale(1.01);
         }
 
-        /* Security section */
+        /* Security section – colours updated */
         .security-divider {
             display: flex;
             align-items: center;
@@ -420,7 +421,7 @@
             content: '';
             flex: 1;
             height: 1px;
-            background: rgba(59, 130, 246, 0.15);
+            background: rgba(0, 229, 255, 0.15);
         }
 
         .security-badges {
@@ -446,7 +447,7 @@
             color: #94a3b8;
         }
         .login-footer-link a {
-            color: #3B82F6;
+            color: #00e5ff;
             text-decoration: none;
             font-weight: 600;
         }
@@ -456,15 +457,15 @@
 
         /* ---------- FOOTER ---------- */
         .footer {
-            background: rgba(7, 26, 53, 0.8);
+            background: rgba(11, 15, 26, 0.8);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            padding: 1rem 2.5rem;
+            padding: 0.8rem 2.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-top: 1px solid rgba(59, 130, 246, 0.08);
-            font-size: 0.75rem;
+            border-top: 1px solid rgba(0, 229, 255, 0.08);
+            font-size: 0.7rem;
             color: #4b5a72;
             flex-wrap: wrap;
             gap: 0.5rem;
@@ -488,14 +489,14 @@
         .footer .social a {
             color: #4b5a72;
             text-decoration: none;
-            font-size: 1.1rem;
+            font-size: 1rem;
             transition: color 0.2s;
         }
         .footer .social a:hover {
-            color: #60A5FA;
+            color: #00e5ff;
         }
 
-        /* ---------- RESPONSIVE ---------- */
+        /* ---------- RESPONSIVE (unchanged) ---------- */
         @media (max-width: 1024px) {
             .hero-section {
                 padding: 2rem;
@@ -529,7 +530,7 @@
                 font-size: 2rem;
             }
             .navbar {
-                padding: 0.8rem 1.5rem;
+                padding: 0.6rem 1.5rem;
                 flex-wrap: wrap;
                 gap: 0.5rem;
             }
@@ -550,7 +551,7 @@
             .footer {
                 flex-direction: column;
                 text-align: center;
-                padding: 1rem;
+                padding: 0.8rem 1rem;
             }
             .cards-grid {
                 grid-template-columns: 1fr;
@@ -575,13 +576,12 @@
 
         /* ---------- ANIMATIONS ---------- */
         .fade-in {
-            animation: fadeIn 1s ease-out forwards;
+            animation: fadeIn 0.8s ease-out forwards;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         .delay-1 { animation-delay: 0.1s; }
         .delay-2 { animation-delay: 0.2s; }
         .delay-3 { animation-delay: 0.3s; }
@@ -612,21 +612,18 @@
         </div>
     </div>
 
-    <!-- MAIN CONTENT -->
+    <!-- MAIN CONTENT – ORIGINAL LAYOUT WITH UPDATED COLOURS -->
     <div class="main-container">
 
-        <!-- LEFT HERO -->
+        <!-- LEFT HERO (with cards) -->
         <section class="hero-section fade-in">
             <div class="hero-bg">
-                <!-- Animated grid lines -->
                 <div class="grid-line horizontal" style="top: 20%; left: 0;"></div>
                 <div class="grid-line horizontal" style="top: 60%; left: 0; animation-delay: -10s;"></div>
                 <div class="grid-line vertical" style="left: 30%; top: 0;"></div>
                 <div class="grid-line vertical" style="left: 70%; top: 0; animation-delay: -15s;"></div>
-                <!-- Glowing blobs -->
                 <div class="glow-line" style="width: 300px; height: 300px; top: 10%; left: 5%;"></div>
                 <div class="glow-line" style="width: 200px; height: 200px; bottom: 10%; right: 5%; animation-delay: -20s;"></div>
-                <!-- Floating icons -->
                 <div class="float-icon" style="top: 15%; left: 10%;">📈</div>
                 <div class="float-icon" style="top: 45%; left: 80%;">🏦</div>
                 <div class="float-icon" style="bottom: 25%; left: 20%;">🌍</div>
@@ -672,6 +669,7 @@
                 <h2>Welcome Back</h2>
                 <p class="sub">Access your institutional trading workspace.</p>
 
+                <!-- ⚠️ DO NOT CHANGE: form action, method, input names, or IDs -->
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="input-group">
                         <label for="username">Email / Username</label>
@@ -724,9 +722,8 @@
         </div>
     </footer>
 
-    <!-- Optional: small script to handle any JS enhancements (parallax, etc.) -->
+    <!-- Parallax tilt (unchanged) -->
     <script>
-        // Simple mouse parallax on the login card (very subtle)
         document.addEventListener('DOMContentLoaded', function() {
             const card = document.querySelector('.login-card');
             if (card) {
@@ -735,7 +732,6 @@
                     const y = (e.clientY / window.innerHeight - 0.5) * 4;
                     card.style.transform = `perspective(1000px) rotateY(${x}deg) rotateX(${-y}deg)`;
                 });
-                // Reset on mouse leave
                 document.addEventListener('mouseleave', function() {
                     card.style.transform = 'perspective(1000px) rotateY(0deg) rotateX(0deg)';
                 });

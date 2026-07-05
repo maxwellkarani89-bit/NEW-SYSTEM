@@ -38,6 +38,7 @@
             margin-bottom:8px;
         }
         .gauge-svg{width:100%;height:100%}
+        /* premium gauge styles */
         .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
         .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
         .gauge-needle-group{transition:transform 0.5s ease-out}
@@ -150,6 +151,14 @@
     <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <!-- ===== MISSING MENU ITEMS ADDED ===== -->
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <!-- Admin link (optional – add if is_admin is available) -->
+    <!-- <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div> -->
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <!-- ================================= -->
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -171,23 +180,83 @@
                     <div class="spinner"></div>
                 </div>
                 <div class="gauge-container">
+                    <!-- PREMIUM GAUGE SVG -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
-                            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#ff4d6d"/>
-                                <stop offset="50%" stop-color="#ffb800"/>
+                            <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%"   stop-color="#5a7a8a"/>
+                                <stop offset="25%"  stop-color="#8ab0c0"/>
+                                <stop offset="50%"  stop-color="#c0d8e0"/>
+                                <stop offset="75%"  stop-color="#6a8a9a"/>
+                                <stop offset="100%" stop-color="#3a5a6a"/>
+                            </linearGradient>
+                            <linearGradient id="gaugeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%"   stop-color="#ff4d6d"/>
+                                <stop offset="40%"  stop-color="#ffb800"/>
+                                <stop offset="60%"  stop-color="#ffb800"/>
                                 <stop offset="100%" stop-color="#00e5a0"/>
                             </linearGradient>
-                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
+                            <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
                             </filter>
+                            <filter id="needleShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            <radialGradient id="glassGlow" cx="50%" cy="30%" r="60%">
+                                <stop offset="0%"   stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+                            </radialGradient>
                         </defs>
-                        <path class="gauge-bg" d="M20,110 A90,90 0 0,1 200,110"/>
-                        <path id="gaugeFill" class="gauge-fill" d="M20,110 A90,90 0 0,1 200,110" stroke="url(#gaugeGradient)"/>
-                        <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)" filter="url(#shadow)">
-                            <line class="needle-body" x1="110" y1="110" x2="110" y2="30"/>
-                            <circle class="needle-tip" cx="110" cy="30" r="4"/>
+
+                        <!-- metallic outer ring -->
+                        <path d="M14,105 A91,91 0 0,1 206,105"
+                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+                        <!-- glass overlay -->
+                        <path d="M16,105 A89,89 0 0,1 204,105"
+                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
+
+                        <!-- background arc -->
+                        <path d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+
+                        <!-- active arc (progress) -->
+                        <path id="gaugeFill"
+                              d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
+                              stroke-dasharray="0 267"
+                              style="transition: stroke-dasharray 0.7s ease;"
+                              filter="url(#glowFilter)"/>
+
+                        <!-- tick marks -->
+                        <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
+                            <line x1="14" y1="105" x2="22" y2="105" />
+                            <line x1="206" y1="105" x2="198" y2="105" />
+                            <line x1="110" y1="20" x2="110" y2="28" />
+                            <line x1="54" y1="46" x2="60" y2="52" />
+                            <line x1="166" y1="46" x2="160" y2="52" />
                         </g>
+
+                        <!-- labels -->
+                        <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
+                        <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
+                        <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
+
+                        <!-- needle group -->
+                        <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                            <line x1="110" y1="105" x2="110" y2="30"
+                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
+                            <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
+                            <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
+                        </g>
+
+                        <!-- center cap glow -->
+                        <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
                 <div class="gauge-center">
@@ -325,10 +394,16 @@
     function updateGauge(score, bias, color) {
         const clampedScore = Math.min(Math.max(score, -10), 10);
         const angle = ((clampedScore + 10) / 20) * 180;
-        document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 110)`);
+        document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 105)`);
         document.getElementById('gaugeBias').textContent = bias;
         document.getElementById('gaugeValue').textContent = score.toFixed(1);
         document.querySelector('.gauge-bias').style.color = color;
+
+        // Update the arc dasharray
+        const circumference = 267; // 2 * pi * 85 ≈ 534, but we have half circle so ~267
+        const fraction = (clampedScore + 10) / 20;
+        const dash = fraction * circumference;
+        document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
     function updateScores(data) {

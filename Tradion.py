@@ -608,6 +608,63 @@ def get_seasonality_bias(pair):
         return month_bias.bias, 2
     else:
         return month_bias.bias, 1
+
+# -------------------------------------------------------------------
+# REAL SEASONALITY FROM YFINANCE (replaces manual MonthlyBias table)
+# -------------------------------------------------------------------
+seasonality_cache = {}
+SEASONALITY_CACHE_TTL = 86400  # 24 hours
+
+def get_seasonality_score_from_yf(pair: str) -> int:
+    """
+    Return directional score (+1, -1, 0) based on historical average return
+    for the current month using 10 years of daily data.
+    Cached per pair + month for 24 hours.
+    """
+    now = datetime.now()
+    current_month = now.month
+    cache_key = f"{pair}_{current_month}"
+    
+    if cache_key in seasonality_cache:
+        cached_val, cached_time = seasonality_cache[cache_key]
+        if (now - cached_time).total_seconds() < SEASONALITY_CACHE_TTL:
+            return cached_val
+
+    try:
+        # Get yfinance symbol from mapping
+        yf_symbol = SYMBOL_MAPPING.get(pair)
+        if not yf_symbol:
+            yf_symbol = pair.replace('/', '') + '=X'
+        
+        ticker = yf.Ticker(yf_symbol)
+        df = ticker.history(period="10y", interval="1d")
+        if df.empty:
+            return 0
+
+        # Resample to monthly
+        monthly_df = df.resample('ME').agg({'Open': 'first', 'Close': 'last'})
+        monthly_df['Monthly_Return_Pct'] = ((monthly_df['Close'] - monthly_df['Open']) / monthly_df['Open']) * 100
+        monthly_df['Month'] = monthly_df.index.month
+
+        # Average return for the current month across all years
+        avg_return = monthly_df[monthly_df['Month'] == current_month]['Monthly_Return_Pct'].mean()
+        
+        if pd.isna(avg_return):
+            score = 0
+        elif avg_return > 0:
+            score = 1
+        elif avg_return < 0:
+            score = -1
+        else:
+            score = 0
+
+        seasonality_cache[cache_key] = (score, now)
+        return score
+
+    except Exception as e:
+        print(f"Seasonality yfinance error for {pair}: {e}")
+        return 0
+
     
 # -----------------------------
 # WEIGHTED MACRO SCORING ENGINE (CORRECTED)
@@ -1014,7 +1071,7 @@ def calculate_weighted_pair_score(pair: str, base: str, quote: str) -> dict:
     total += tech_score
 
     # Seasonality (±1)
-    seas_score = get_seasonality_directional_score(pair)
+    seas_score = get_seasonality_score_from_yf(pair)
     breakdown["SEASONALITY"] = seas_score
     total += seas_score
 
@@ -1080,7 +1137,8 @@ def get_asset_score(asset: str) -> float:
         else:
             sent_score_val = 0
 
-        season_bias, season_score = get_seasonality_bias(asset)
+        season_score = get_seasonality_score_from_yf(asset)
+        season_bias = "Bullish" if season_score > 0 else "Bearish" if season_score < 0 else "Neutral"
 
         tradion_score = technical_score + sentiment_cot_score + fundamentals_score
         overall_score = tradion_score + season_score + sent_score_val
@@ -1122,7 +1180,8 @@ def get_asset_score(asset: str) -> float:
         sent = SentimentData.query.filter_by(pair=asset).first()
         sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
 
-        season_bias, season_score = get_seasonality_bias(asset)
+        season_score = get_seasonality_score_from_yf(asset)
+        season_bias = "Bullish" if season_score > 0 else "Bearish" if season_score < 0 else "Neutral"
 
         tradion_score = technical_score + sentiment_cot_score + fundamentals_score
         overall_score = tradion_score + season_score + sent_score_val
@@ -1968,7 +2027,7 @@ def detailed_analysis():
                 crowd = get_retail_sentiment_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
-                season = get_seasonality_directional_score(pair)
+                season = get_seasonality_score_from_yf(pair)
 
                 total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
                          cpi + ppi + pce + interest + nfp + avg_hourly +
@@ -2023,7 +2082,7 @@ def detailed_analysis():
                 crowd = get_retail_sentiment_score(pair)
                 yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
                 trend = get_technical_directional_score(yf_symbol)
-                season = get_seasonality_directional_score(pair)
+                season = get_seasonality_score_from_yf(pair)
 
                 total = (gdp + m_pmi + s_pmi + retail + consumer_conf +
                          cpi + ppi + pce + interest + nfp + avg_hourly +
@@ -2260,7 +2319,8 @@ def api_asset_scorecard(symbol):
         fundamentals_score = round(sum(category_bias.values()), 1)
         
         # Seasonality (standalone)
-        season_bias, season_score = get_seasonality_bias(symbol)
+        season_score = get_seasonality_score_from_yf(symbol)
+        season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
         
         # Sentiment (standalone) - contrarian already
         sent = SentimentData.query.filter_by(pair=symbol).first()
@@ -2457,7 +2517,8 @@ def api_asset_scorecard(symbol):
         fundamentals_score = round(sum(v for k, v in category_bias.items() if k != 'Technical Bias'), 1)
 
         # Seasonality and sentiment
-        season_bias, season_score = get_seasonality_bias(symbol)
+        season_score = get_seasonality_score_from_yf(symbol)
+        season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
         sent = SentimentData.query.filter_by(pair=symbol).first()
         sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
 
@@ -2524,7 +2585,8 @@ def api_asset_scorecard(symbol):
 
         fundamentals_score = round(sum(v for k, v in category_bias.items() if k != 'Technical Bias'), 1)
 
-        season_bias, season_score = get_seasonality_bias(symbol)
+        season_score = get_seasonality_score_from_yf(symbol)
+        season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
 
         sent = SentimentData.query.filter_by(pair=symbol).first()
         if sent:
@@ -3476,7 +3538,7 @@ def create_templates():
     <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet" />
 
     <style>
-        /* ---------- RESET & BASE ---------- */
+        /* ---------- RESET & BASE (colours updated) ---------- */
         * {
             margin: 0;
             padding: 0;
@@ -3485,8 +3547,8 @@ def create_templates():
 
         body {
             font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-            background: #071A35;
-            color: #e0e8f0;
+            background: #0B0F1A;  /* Matches dashboard */
+            color: #E0E0E0;
             min-height: 100vh;
             display: flex;
             flex-direction: column;
@@ -3499,11 +3561,11 @@ def create_templates():
             display: flex;
             justify-content: space-between;
             align-items: center;
-            padding: 1rem 2.5rem;
-            background: rgba(7, 26, 53, 0.7);
-            backdrop-filter: blur(8px);
-            -webkit-backdrop-filter: blur(8px);
-            border-bottom: 1px solid rgba(59, 130, 246, 0.15);
+            padding: 0.8rem 2.5rem;
+            background: rgba(11, 15, 26, 0.8);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(0, 229, 255, 0.12);
             position: sticky;
             top: 0;
             z-index: 100;
@@ -3513,7 +3575,7 @@ def create_templates():
             font-size: 1.6rem;
             font-weight: 800;
             letter-spacing: -0.5px;
-            background: linear-gradient(135deg, #3B82F6, #60A5FA);
+            background: linear-gradient(135deg, #00e5ff, #00b8d4);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
@@ -3532,17 +3594,17 @@ def create_templates():
         .nav-links a {
             color: #94a3b8;
             text-decoration: none;
-            font-size: 0.9rem;
+            font-size: 0.85rem;
             font-weight: 500;
             transition: color 0.2s;
         }
         .nav-links a:hover {
-            color: #60A5FA;
+            color: #00e5ff;
         }
         .nav-links .login-btn {
-            background: #3B82F6;
-            color: #fff;
-            padding: 0.5rem 1.2rem;
+            background: #00e5ff;
+            color: #0B0F1A;
+            padding: 0.4rem 1.2rem;
             border-radius: 30px;
             font-weight: 600;
             border: none;
@@ -3550,17 +3612,17 @@ def create_templates():
             transition: background 0.2s, transform 0.1s;
         }
         .nav-links .login-btn:hover {
-            background: #2563EB;
+            background: #00b8d4;
             transform: scale(1.02);
         }
 
         /* ---------- MARKET TICKER ---------- */
         .market-ticker {
-            background: rgba(7, 26, 53, 0.5);
+            background: rgba(11, 15, 26, 0.5);
             backdrop-filter: blur(4px);
             -webkit-backdrop-filter: blur(4px);
-            padding: 0.4rem 0;
-            border-bottom: 1px solid rgba(59, 130, 246, 0.08);
+            padding: 0.3rem 0;
+            border-bottom: 1px solid rgba(0, 229, 255, 0.06);
             overflow: hidden;
             white-space: nowrap;
         }
@@ -3575,12 +3637,12 @@ def create_templates():
             display: inline-flex;
             align-items: center;
             gap: 0.5rem;
-            font-size: 0.75rem;
+            font-size: 0.7rem;
             font-weight: 500;
             color: #94a3b8;
         }
         .ticker-item .symbol {
-            color: #e0e8f0;
+            color: #E0E0E0;
             font-weight: 600;
         }
         .ticker-item .change {
@@ -3593,11 +3655,11 @@ def create_templates():
             color: #f87171;
         }
 
-        /* ---------- MAIN LAYOUT ---------- */
+        /* ---------- MAIN LAYOUT (unchanged) ---------- */
         .main-container {
             display: flex;
             flex: 1;
-            min-height: calc(100vh - 120px); /* adjust for navbar + ticker */
+            min-height: calc(100vh - 110px);
         }
 
         /* ---------- LEFT HERO (60%) ---------- */
@@ -3611,7 +3673,7 @@ def create_templates():
             overflow: hidden;
         }
 
-        /* Background animations */
+        /* Background animations – colours updated */
         .hero-bg {
             position: absolute;
             top: 0;
@@ -3623,7 +3685,7 @@ def create_templates():
         }
         .hero-bg .grid-line {
             position: absolute;
-            background: rgba(59, 130, 246, 0.04);
+            background: rgba(0, 229, 255, 0.04);
         }
         .hero-bg .grid-line.horizontal {
             width: 100%;
@@ -3646,7 +3708,7 @@ def create_templates():
 
         .hero-bg .glow-line {
             position: absolute;
-            background: radial-gradient(circle, rgba(59, 130, 246, 0.15) 0%, transparent 70%);
+            background: radial-gradient(circle, rgba(0, 229, 255, 0.10) 0%, transparent 70%);
             border-radius: 50%;
             animation: floatGlow 40s ease-in-out infinite alternate;
         }
@@ -3658,7 +3720,7 @@ def create_templates():
         .hero-bg .float-icon {
             position: absolute;
             font-size: 2rem;
-            opacity: 0.08;
+            opacity: 0.06;
             animation: floatIcon 50s linear infinite;
         }
         @keyframes floatIcon {
@@ -3693,28 +3755,28 @@ def create_templates():
             max-width: 480px;
         }
 
-        /* Cards */
+        /* Cards – background and border updated */
         .cards-grid {
             display: grid;
             grid-template-columns: repeat(3, 1fr);
             gap: 1.5rem;
         }
         .hero-card {
-            background: rgba(14, 76, 146, 0.12);
+            background: rgba(18, 24, 38, 0.7);
             backdrop-filter: blur(12px);
             -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(59, 130, 246, 0.15);
+            border: 1px solid rgba(0, 229, 255, 0.12);
             border-radius: 20px;
             padding: 1.5rem 1.2rem;
             transition: all 0.3s ease;
             cursor: default;
-            box-shadow: 0 8px 20px rgba(0,0,0,0.2);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.3);
         }
         .hero-card:hover {
-            background: rgba(14, 76, 146, 0.25);
-            border-color: rgba(59, 130, 246, 0.4);
+            background: rgba(18, 24, 38, 0.9);
+            border-color: rgba(0, 229, 255, 0.3);
             transform: translateY(-4px);
-            box-shadow: 0 12px 30px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 12px 30px rgba(0, 229, 255, 0.1);
         }
         .hero-card .icon {
             font-size: 1.8rem;
@@ -3724,7 +3786,7 @@ def create_templates():
         .hero-card h3 {
             font-size: 1rem;
             font-weight: 600;
-            color: #e0e8f0;
+            color: #E0E0E0;
             margin-bottom: 0.3rem;
         }
         .hero-card p {
@@ -3740,30 +3802,30 @@ def create_templates():
             display: flex;
             align-items: center;
             justify-content: center;
-            background: radial-gradient(ellipse at 30% 40%, rgba(14, 76, 146, 0.15), transparent 70%);
+            background: radial-gradient(ellipse at 30% 40%, rgba(0, 229, 255, 0.05), transparent 70%);
         }
 
         .login-card {
             width: 100%;
             max-width: 400px;
-            background: rgba(7, 26, 53, 0.65);
+            background: #121826;  /* Matches dashboard panels */
             backdrop-filter: blur(20px);
             -webkit-backdrop-filter: blur(20px);
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(0, 229, 255, 0.15);
             border-radius: 24px;
             padding: 2.5rem 2rem;
-            box-shadow: 0 30px 60px rgba(0,0,0,0.6), 0 0 0 1px rgba(59, 130, 246, 0.05);
+            box-shadow: 0 30px 60px rgba(0,0,0,0.5), 0 0 0 1px rgba(0, 229, 255, 0.05);
             transition: transform 0.3s ease, box-shadow 0.3s ease;
         }
         .login-card:hover {
             transform: translateY(-2px);
-            box-shadow: 0 40px 80px rgba(0,0,0,0.7), 0 0 0 1px rgba(59, 130, 246, 0.15);
+            box-shadow: 0 40px 80px rgba(0,0,0,0.6), 0 0 0 1px rgba(0, 229, 255, 0.15);
         }
 
         .login-card .card-logo {
             font-size: 1.8rem;
             font-weight: 800;
-            color: #3B82F6;
+            color: #00e5ff;
             margin-bottom: 0.2rem;
             letter-spacing: -0.5px;
         }
@@ -3787,7 +3849,7 @@ def create_templates():
             margin-bottom: 1.8rem;
         }
 
-        /* Form */
+        /* Form – colours updated */
         .input-group {
             margin-bottom: 1.2rem;
         }
@@ -3803,8 +3865,8 @@ def create_templates():
         .input-group input {
             width: 100%;
             padding: 0.75rem 1rem;
-            background: rgba(7, 26, 53, 0.6);
-            border: 1px solid rgba(59, 130, 246, 0.2);
+            background: rgba(11, 15, 26, 0.6);
+            border: 1px solid rgba(0, 229, 255, 0.2);
             border-radius: 12px;
             color: #fff;
             font-size: 0.95rem;
@@ -3813,8 +3875,8 @@ def create_templates():
         }
         .input-group input:focus {
             outline: none;
-            border-color: #3B82F6;
-            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+            border-color: #00e5ff;
+            box-shadow: 0 0 0 3px rgba(0, 229, 255, 0.15);
         }
         .input-group input::placeholder {
             color: #4b5a72;
@@ -3835,12 +3897,12 @@ def create_templates():
             cursor: pointer;
         }
         .options label input[type="checkbox"] {
-            accent-color: #3B82F6;
+            accent-color: #00e5ff;
             width: 16px;
             height: 16px;
         }
         .options a {
-            color: #3B82F6;
+            color: #00e5ff;
             text-decoration: none;
             font-weight: 500;
         }
@@ -3848,13 +3910,14 @@ def create_templates():
             text-decoration: underline;
         }
 
+        /* ---------- LOGIN BUTTON – matches dashboard "RUN ANALYSIS" ---------- */
         .btn-login {
             width: 100%;
             padding: 0.85rem;
-            background: #0E4C92;
+            background: linear-gradient(135deg, #00e5ff, #00b8d4);
             border: none;
             border-radius: 12px;
-            color: #fff;
+            color: #0B0F1A;
             font-weight: 700;
             font-size: 1rem;
             cursor: pointer;
@@ -3863,12 +3926,12 @@ def create_templates():
             letter-spacing: 0.3px;
         }
         .btn-login:hover {
-            background: #1D5EAA;
-            box-shadow: 0 8px 25px rgba(59, 130, 246, 0.3);
+            background: linear-gradient(135deg, #00b8d4, #0099aa);
+            box-shadow: 0 8px 25px rgba(0, 229, 255, 0.3);
             transform: scale(1.01);
         }
 
-        /* Security section */
+        /* Security section – colours updated */
         .security-divider {
             display: flex;
             align-items: center;
@@ -3885,7 +3948,7 @@ def create_templates():
             content: '';
             flex: 1;
             height: 1px;
-            background: rgba(59, 130, 246, 0.15);
+            background: rgba(0, 229, 255, 0.15);
         }
 
         .security-badges {
@@ -3911,7 +3974,7 @@ def create_templates():
             color: #94a3b8;
         }
         .login-footer-link a {
-            color: #3B82F6;
+            color: #00e5ff;
             text-decoration: none;
             font-weight: 600;
         }
@@ -3921,15 +3984,15 @@ def create_templates():
 
         /* ---------- FOOTER ---------- */
         .footer {
-            background: rgba(7, 26, 53, 0.8);
+            background: rgba(11, 15, 26, 0.8);
             backdrop-filter: blur(8px);
             -webkit-backdrop-filter: blur(8px);
-            padding: 1rem 2.5rem;
+            padding: 0.8rem 2.5rem;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            border-top: 1px solid rgba(59, 130, 246, 0.08);
-            font-size: 0.75rem;
+            border-top: 1px solid rgba(0, 229, 255, 0.08);
+            font-size: 0.7rem;
             color: #4b5a72;
             flex-wrap: wrap;
             gap: 0.5rem;
@@ -3953,14 +4016,14 @@ def create_templates():
         .footer .social a {
             color: #4b5a72;
             text-decoration: none;
-            font-size: 1.1rem;
+            font-size: 1rem;
             transition: color 0.2s;
         }
         .footer .social a:hover {
-            color: #60A5FA;
+            color: #00e5ff;
         }
 
-        /* ---------- RESPONSIVE ---------- */
+        /* ---------- RESPONSIVE (unchanged) ---------- */
         @media (max-width: 1024px) {
             .hero-section {
                 padding: 2rem;
@@ -3994,7 +4057,7 @@ def create_templates():
                 font-size: 2rem;
             }
             .navbar {
-                padding: 0.8rem 1.5rem;
+                padding: 0.6rem 1.5rem;
                 flex-wrap: wrap;
                 gap: 0.5rem;
             }
@@ -4015,7 +4078,7 @@ def create_templates():
             .footer {
                 flex-direction: column;
                 text-align: center;
-                padding: 1rem;
+                padding: 0.8rem 1rem;
             }
             .cards-grid {
                 grid-template-columns: 1fr;
@@ -4040,13 +4103,12 @@ def create_templates():
 
         /* ---------- ANIMATIONS ---------- */
         .fade-in {
-            animation: fadeIn 1s ease-out forwards;
+            animation: fadeIn 0.8s ease-out forwards;
         }
         @keyframes fadeIn {
             from { opacity: 0; transform: translateY(20px); }
             to { opacity: 1; transform: translateY(0); }
         }
-
         .delay-1 { animation-delay: 0.1s; }
         .delay-2 { animation-delay: 0.2s; }
         .delay-3 { animation-delay: 0.3s; }
@@ -4077,21 +4139,18 @@ def create_templates():
         </div>
     </div>
 
-    <!-- MAIN CONTENT -->
+    <!-- MAIN CONTENT – ORIGINAL LAYOUT WITH UPDATED COLOURS -->
     <div class="main-container">
 
-        <!-- LEFT HERO -->
+        <!-- LEFT HERO (with cards) -->
         <section class="hero-section fade-in">
             <div class="hero-bg">
-                <!-- Animated grid lines -->
                 <div class="grid-line horizontal" style="top: 20%; left: 0;"></div>
                 <div class="grid-line horizontal" style="top: 60%; left: 0; animation-delay: -10s;"></div>
                 <div class="grid-line vertical" style="left: 30%; top: 0;"></div>
                 <div class="grid-line vertical" style="left: 70%; top: 0; animation-delay: -15s;"></div>
-                <!-- Glowing blobs -->
                 <div class="glow-line" style="width: 300px; height: 300px; top: 10%; left: 5%;"></div>
                 <div class="glow-line" style="width: 200px; height: 200px; bottom: 10%; right: 5%; animation-delay: -20s;"></div>
-                <!-- Floating icons -->
                 <div class="float-icon" style="top: 15%; left: 10%;">📈</div>
                 <div class="float-icon" style="top: 45%; left: 80%;">🏦</div>
                 <div class="float-icon" style="bottom: 25%; left: 20%;">🌍</div>
@@ -4137,6 +4196,7 @@ def create_templates():
                 <h2>Welcome Back</h2>
                 <p class="sub">Access your institutional trading workspace.</p>
 
+                <!-- ⚠️ DO NOT CHANGE: form action, method, input names, or IDs -->
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="input-group">
                         <label for="username">Email / Username</label>
@@ -4189,9 +4249,8 @@ def create_templates():
         </div>
     </footer>
 
-    <!-- Optional: small script to handle any JS enhancements (parallax, etc.) -->
+    <!-- Parallax tilt (unchanged) -->
     <script>
-        // Simple mouse parallax on the login card (very subtle)
         document.addEventListener('DOMContentLoaded', function() {
             const card = document.querySelector('.login-card');
             if (card) {
@@ -4200,7 +4259,6 @@ def create_templates():
                     const y = (e.clientY / window.innerHeight - 0.5) * 4;
                     card.style.transform = `perspective(1000px) rotateY(${x}deg) rotateX(${-y}deg)`;
                 });
-                // Reset on mouse leave
                 document.addEventListener('mouseleave', function() {
                     card.style.transform = 'perspective(1000px) rotateY(0deg) rotateX(0deg)';
                 });
@@ -4278,461 +4336,395 @@ else{field.type='password';toggle.textContent='👁';}
                      # Dashboard (with Lucide icons and row background gradient matching score) - FIXED SEARCH
 with open('templates/dashboard.html', 'w') as f:
     f.write('''<!DOCTYPE html>
-    <html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-    *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.search-input{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;width:200px;margin-left:10px}.search-input:focus{outline:none;border-color:#00e5ff}.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-    .sidebar.collapsed{width:80px !important;min-width:80px !important}
-    .sidebar.collapsed ~ .main-content{margin-left:80px !important}
-    /* Conditional highlighting – same colors as Score column */
-    .indicator-positive {
-        background-color: rgba(0, 229, 160, 0.15);
-        color: #00e5a0;
-        font-weight: 500;
-    }
-    .indicator-negative {
-        background-color: rgba(255, 77, 109, 0.15);
-        color: #ff4d6d;
-        font-weight: 500;
-    }
-    /* Ensure cells without highlight keep normal styling */
-    td {
-        background-color: inherit;
-    }
-    /* Sticky clone table */
-    .sticky-header-clone {
-        position: fixed;
-        top: 0;
-        left: 0;
-        right: 0;
-        z-index: 1000;
-        display: none;
-        background: #121826;
-        border-collapse: collapse;
-        width: auto;
-        box-shadow: 0 2px 8px rgba(0,0,0,0.3);
-    }
-    .sticky-header-clone th {
-        background: rgba(0,229,255,0.1);
-        color: #00e5ff;
-        font-weight: 600;
-        padding: 10px 8px;
-        text-align: center;
-        border-bottom: 1px solid #2a3040;
-        white-space: nowrap;
-    }
-    @media (max-width:768px){
-        .sidebar{transform:translateX(-100%);width:260px !important}
-        .sidebar.open{transform:translateX(0)}
-        .sidebar.collapsed{width:260px !important; min-width:260px !important}
-        .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
-        .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
-        .sidebar.collapsed .menu-icon{margin-right:12px}
-        .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-        .sidebar.collapsed ~ .main-content{margin-left:0 !important}
-        .hamburger{display:block}
-        .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
-        th,td{padding:8px 4px;font-size:10px}
-        .search-input{width:100%;margin:10px 0 0 0}
-        .toolbar{flex-wrap:wrap}
-    }
-    </style>
-    </head>
-    <body>
-    <div class="hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="sidebar" id="sidebar">
-        <div class="logo">
-            <span class="logo-text">⚡ Tradion</span>
-            <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
-        </div>
-        <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
-        <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-        <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+<html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<script src="https://unpkg.com/lucide@latest"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.search-input{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;width:200px;margin-left:10px}.search-input:focus{outline:none;border-color:#00e5ff}.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+.sidebar.collapsed{width:80px !important;min-width:80px !important}
+.sidebar.collapsed ~ .main-content{margin-left:80px !important}
+.indicator-positive { background-color: rgba(0, 229, 160, 0.15); color: #00e5a0; font-weight: 500; }
+.indicator-negative { background-color: rgba(255, 77, 109, 0.15); color: #ff4d6d; font-weight: 500; }
+td { background-color: inherit; }
+.sticky-header-clone { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: none; background: #121826; border-collapse: collapse; width: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
+.sticky-header-clone th { background: rgba(0,229,255,0.1); color: #00e5ff; font-weight: 600; padding: 10px 8px; text-align: center; border-bottom: 1px solid #2a3040; white-space: nowrap; }
+@media (max-width:768px){
+    .sidebar{transform:translateX(-100%);width:260px !important}
+    .sidebar.open{transform:translateX(0)}
+    .sidebar.collapsed{width:260px !important; min-width:260px !important}
+    .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
+    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+    .sidebar.collapsed .menu-icon{margin-right:12px}
+    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+    .sidebar.collapsed ~ .main-content{margin-left:0 !important}
+    .hamburger{display:block}
+    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
+    th,td{padding:8px 4px;font-size:10px}
+    .search-input{width:100%;margin:10px 0 0 0}
+    .toolbar{flex-wrap:wrap}
+}
+</style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">
+        <span class="logo-text">⚡ Tradion</span>
+        <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
+    </div>
+    <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-        <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-        <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-        {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-        <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-        <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-        <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-    </div>
-    <div class="main-content" id="mainContent">
-        <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
-        <div id="analysisPane" class="content-pane active">
-            <div class="toolbar" style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
-                <button onclick="loadDetailedAnalysis()">🔥 RUN ANALYSIS</button>
-                <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
-                <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search pair..." onkeyup="filterTable()">
-            </div>
-            <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
-            <div class="table-container">
-                <table id="detailedTable">
-                    <thead>
-                        <tr>
-                            <th>Symbol</th><th>Bias</th><th>Score</th>
-                            <th colspan="2">Technical</th><th colspan="2">Sentiment</th>
-                            <th colspan="5">Economic Growth & Consumer Strength</th>
-                            <th colspan="3">Inflation</th><th>Interest Rates</th>
-                            <th colspan="6">Job Market</th>
-                        </tr>
-                        <tr>
-                            <th></th><th></th><th></th>
-                            <th>Trend</th><th>Seasonality</th>
-                            <th>COT</th><th>Crowd</th>
-                            <th>GDP</th><th>M-PMI</th><th>S-PMI</th><th>Retail</th><th>Cons Conf</th>
-                            <th>CPI</th><th>PPI</th><th>PCE</th><th>CB Score</th>
-                            <th>NFP</th><th>Avg Hrly</th><th>Unemp Rate</th><th>Unemp Claims</th><th>ADP</th><th>JOLTS</th>
-                        </tr>
-                    </thead>
-                    <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</tbody>
-                </table>
-            </div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <!-- ======== NEW SEASONALITY MENU ITEM ======== -->
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <!-- ========================================= -->
+    <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content" id="mainContent">
+    <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
+    <div id="analysisPane" class="content-pane active">
+        <div class="toolbar" style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+            <button onclick="loadDetailedAnalysis()">🔥 RUN ANALYSIS</button>
+            <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
+            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search pair..." onkeyup="filterTable()">
         </div>
-        <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
+        <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
+        <div class="table-container">
+            <table id="detailedTable">
+                <thead>
+                    <tr>
+                        <th>Symbol</th><th>Bias</th><th>Score</th>
+                        <th colspan="2">Technical</th><th colspan="2">Sentiment</th>
+                        <th colspan="5">Economic Growth & Consumer Strength</th>
+                        <th colspan="3">Inflation</th><th>Interest Rates</th>
+                        <th colspan="6">Job Market</th>
+                    </tr>
+                    <tr>
+                        <th></th><th></th><th></th>
+                        <th>Trend</th><th>Seasonality</th>
+                        <th>COT</th><th>Crowd</th>
+                        <th>GDP</th><th>M-PMI</th><th>S-PMI</th><th>Retail</th><th>Cons Conf</th>
+                        <th>CPI</th><th>PPI</th><th>PCE</th><th>CB Score</th>
+                        <th>NFP</th><th>Avg Hrly</th><th>Unemp Rate</th><th>Unemp Claims</th><th>ADP</th><th>JOLTS</th>
+                    </tr>
+                </thead>
+                <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</tbody>
+            </table>
+        </div>
     </div>
-    <script>
-    let currentDetailed = [];
+    <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
+</div>
+<script>
+let currentDetailed = [];
 
-    // Cache keys
-    const CACHE_KEY = 'tradion_detailed_analysis';
-    const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
-    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+// Cache keys
+const CACHE_KEY = 'tradion_detailed_analysis';
+const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
-    // Helper to get cell class based on numeric value
-    function getIndicatorClass(value) {
-        if (value > 0) return 'indicator-positive';
-        if (value < 0) return 'indicator-negative';
-        return '';
+function getIndicatorClass(value) {
+    if (value > 0) return 'indicator-positive';
+    if (value < 0) return 'indicator-negative';
+    return '';
+}
+
+function updateSidebarToggleIcon() {
+    const sidebar = document.getElementById('sidebar');
+    const btn = document.getElementById('sidebarToggleBtn');
+    if (!btn) return;
+    if (sidebar.classList.contains('collapsed')) {
+        btn.innerHTML = '▶';
+    } else {
+        btn.innerHTML = '◀';
     }
+}
 
-    function updateSidebarToggleIcon() {
-        const sidebar = document.getElementById('sidebar');
-        const btn = document.getElementById('sidebarToggleBtn');
-        if (!btn) return;
-        if (sidebar.classList.contains('collapsed')) {
-            btn.innerHTML = '▶'; // collapsed → show right arrow (expand)
-        } else {
-            btn.innerHTML = '◀'; // expanded → show left arrow (collapse)
+function toggleSidebar() {
+    document.getElementById('sidebar').classList.toggle('open');
+}
+function toggleSidebarCollapse() {
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth > 768) {
+        sidebar.classList.toggle('collapsed');
+        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        updateSidebarToggleIcon();
+    }
+}
+function restoreSidebarState() {
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth > 768) {
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+        else sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    }
+}
+window.addEventListener('resize', function() {
+    const sidebar = document.getElementById('sidebar');
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    } else {
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+        else sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    }
+});
+function showPane(pane) {
+    document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
+    document.getElementById(pane+'Pane').classList.add('active');
+    if (pane === 'history') loadHistory();
+}
+
+async function loadDetailedAnalysis(forceRefresh = false) {
+    if (!forceRefresh) {
+        const cachedData = sessionStorage.getItem(CACHE_KEY);
+        const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+        if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
+            try {
+                let data = JSON.parse(cachedData);
+                data.sort((a, b) => b.score - a.score);
+                currentDetailed = data;
+                renderDetailedTable(data);
+                document.getElementById('lastUpdateTime').innerHTML = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
+                return;
+            } catch(e) { console.warn('Cache parse error', e); }
         }
     }
 
-    function toggleSidebar() {
-        document.getElementById('sidebar').classList.toggle('open');
+    document.getElementById('loading').style.display = 'block';
+    try {
+        const res = await fetch('/api/detailed_analysis');
+        if (!res.ok) throw new Error('HTTP ' + res.status);
+        let data = await res.json();
+        data.sort((a, b) => b.score - a.score);
+        currentDetailed = data;
+        renderDetailedTable(data);
+        const now = Date.now();
+        sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+        sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
+        document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+    } catch(e) {
+        console.error('Analysis error:', e);
+        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
+    } finally {
+        document.getElementById('loading').style.display = 'none';
     }
-    function toggleSidebarCollapse() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth > 768) {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-            updateSidebarToggleIcon();
-        }
-    }
-    function restoreSidebarState() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth > 768) {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (isCollapsed) sidebar.classList.add('collapsed');
-            else sidebar.classList.remove('collapsed');
-            updateSidebarToggleIcon();
-        }
-    }
-    window.addEventListener('resize', function() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('collapsed');
-            updateSidebarToggleIcon();
-        } else {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (isCollapsed) sidebar.classList.add('collapsed');
-            else sidebar.classList.remove('collapsed');
-            updateSidebarToggleIcon();
+}
+
+function renderDetailedTable(data) {
+    const tbody = document.getElementById('detailedTableBody');
+    tbody.innerHTML = '';
+    data.forEach(item => {
+        const row = tbody.insertRow();
+        row.insertCell(0).innerText = item.symbol;
+        row.insertCell(1).innerHTML = `<strong>${item.bias}</strong>`;
+        const scoreCell = row.insertCell(2);
+        const score = item.score;
+        let bgColor = '';
+        if (score >= 8) bgColor = 'rgba(0, 229, 160, 0.5)';
+        else if (score >= 6) bgColor = 'rgba(0, 229, 160, 0.4)';
+        else if (score >= 4) bgColor = 'rgba(0, 229, 160, 0.3)';
+        else if (score >= 2) bgColor = 'rgba(0, 229, 160, 0.2)';
+        else if (score > 0)  bgColor = 'rgba(0, 229, 160, 0.1)';
+        else if (score <= -8) bgColor = 'rgba(255, 77, 109, 0.5)';
+        else if (score <= -6) bgColor = 'rgba(255, 77, 109, 0.4)';
+        else if (score <= -4) bgColor = 'rgba(255, 77, 109, 0.3)';
+        else if (score <= -2) bgColor = 'rgba(255, 77, 109, 0.2)';
+        else if (score < 0)  bgColor = 'rgba(255, 77, 109, 0.1)';
+        scoreCell.innerHTML = `<span class="${score > 0 ? 'score-positive' : (score < 0 ? 'score-negative' : 'score-neutral')}">${score}</span>`;
+        if (bgColor) scoreCell.style.backgroundColor = bgColor;
+
+        const addCell = (value) => {
+            const cell = row.insertCell();
+            cell.innerText = value;
+            const cls = getIndicatorClass(value);
+            if (cls) cell.classList.add(cls);
+        };
+
+        addCell(item.trend);
+        addCell(item.seasonality);
+        addCell(item.cot);
+        addCell(item.crowd);
+        addCell(item.gdp);
+        addCell(item.m_pmi);
+        addCell(item.s_pmi);
+        addCell(item.retail);
+        addCell(item.consumer_conf);
+        addCell(item.cpi);
+        addCell(item.ppi);
+        addCell(item.pce);
+        addCell(item.interest);
+        addCell(item.nfp);
+        addCell(item.avg_hourly_earnings);
+        addCell(item.unemp_rate);
+        addCell(item.unemp_claims);
+        addCell(item.adp);
+        addCell(item.jolts);
+    });
+    const existingMsg = document.getElementById('noResultsMsg');
+    if (existingMsg) existingMsg.remove();
+    filterTable();
+    initStickyHeader();
+}
+
+function filterTable() {
+    const input = document.getElementById('searchInput');
+    if (!input) return;
+    const filter = input.value.trim().toLowerCase();
+    const table = document.getElementById('detailedTable');
+    const tbody = table.querySelector('tbody');
+    if (!tbody) return;
+    const rows = tbody.querySelectorAll('tr');
+    let hasVisible = false;
+    
+    rows.forEach(row => {
+        const symbolCell = row.cells[0];
+        if (symbolCell) {
+            const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
+            const matches = filter === '' || symbol.indexOf(filter) > -1;
+            row.style.display = matches ? '' : 'none';
+            if (matches) hasVisible = true;
         }
     });
-    function showPane(pane) {
-        document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
-        document.getElementById(pane+'Pane').classList.add('active');
-        if (pane === 'history') loadHistory();
-    }
-
-    async function loadDetailedAnalysis(forceRefresh = false) {
-        if (!forceRefresh) {
-            const cachedData = sessionStorage.getItem(CACHE_KEY);
-            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
-            if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
-                try {
-                    let data = JSON.parse(cachedData);
-                    data.sort((a, b) => b.score - a.score);
-                    currentDetailed = data;
-                    renderDetailedTable(data);
-                    document.getElementById('lastUpdateTime').innerHTML = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
-                    return;
-                } catch(e) { console.warn('Cache parse error', e); }
-            }
+    
+    let noResultMsg = document.getElementById('noResultsMsg');
+    if (!hasVisible && filter !== '') {
+        if (!noResultMsg) {
+            noResultMsg = document.createElement('div');
+            noResultMsg.id = 'noResultsMsg';
+            noResultMsg.style.textAlign = 'center';
+            noResultMsg.style.padding = '20px';
+            noResultMsg.style.color = '#ffb800';
+            tbody.parentNode.insertBefore(noResultMsg, tbody.nextSibling);
         }
-
-        document.getElementById('loading').style.display = 'block';
-        try {
-            const res = await fetch('/api/detailed_analysis');
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            let data = await res.json();
-            data.sort((a, b) => b.score - a.score);
-            currentDetailed = data;
-            renderDetailedTable(data);
-            const now = Date.now();
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-            sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
-            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
-        } catch(e) {
-            console.error('Analysis error:', e);
-            document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
-        } finally {
-            document.getElementById('loading').style.display = 'none';
-        }
+        noResultMsg.innerText = `🔍 No pairs matching "${filter}"`;
+        noResultMsg.style.display = 'block';
+    } else if (noResultMsg) {
+        noResultMsg.style.display = 'none';
     }
+}
 
-    function renderDetailedTable(data) {
-        const tbody = document.getElementById('detailedTableBody');
-        tbody.innerHTML = '';
-        data.forEach(item => {
-            const row = tbody.insertRow();
-            // Symbol cell (no highlight)
-            row.insertCell(0).innerText = item.symbol;
-            // Bias cell (text only)
-            row.insertCell(1).innerHTML = `<strong>${item.bias}</strong>`;
-            // Score cell (already has its own styling)
-            const scoreCell = row.insertCell(2);
-            const score = item.score;
-            let bgColor = '';
-            if (score >= 8) bgColor = 'rgba(0, 229, 160, 0.5)';
-            else if (score >= 6) bgColor = 'rgba(0, 229, 160, 0.4)';
-            else if (score >= 4) bgColor = 'rgba(0, 229, 160, 0.3)';
-            else if (score >= 2) bgColor = 'rgba(0, 229, 160, 0.2)';
-            else if (score > 0)  bgColor = 'rgba(0, 229, 160, 0.1)';
-            else if (score <= -8) bgColor = 'rgba(255, 77, 109, 0.5)';
-            else if (score <= -6) bgColor = 'rgba(255, 77, 109, 0.4)';
-            else if (score <= -4) bgColor = 'rgba(255, 77, 109, 0.3)';
-            else if (score <= -2) bgColor = 'rgba(255, 77, 109, 0.2)';
-            else if (score < 0)  bgColor = 'rgba(255, 77, 109, 0.1)';
-            scoreCell.innerHTML = `<span class="${score > 0 ? 'score-positive' : (score < 0 ? 'score-negative' : 'score-neutral')}">${score}</span>`;
-            if (bgColor) scoreCell.style.backgroundColor = bgColor;
-
-            // Indicator columns (all numeric)
-            const trend = item.trend;
-            const seasonality = item.seasonality;
-            const cot = item.cot;
-            const crowd = item.crowd;
-            const gdp = item.gdp;
-            const mPmi = item.m_pmi;
-            const sPmi = item.s_pmi;
-            const retail = item.retail;
-            const consConf = item.consumer_conf;
-            const cpi = item.cpi;
-            const ppi = item.ppi;
-            const pce = item.pce;
-            const interest = item.interest;
-            const nfp = item.nfp;
-            const avgHrly = item.avg_hourly_earnings;
-            const unempRate = item.unemp_rate;
-            const unempClaims = item.unemp_claims;
-            const adp = item.adp;
-            const jolts = item.jolts;
-
-            // Helper to create a cell with conditional class
-            const addCell = (value) => {
-                const cell = row.insertCell();
-                cell.innerText = value;
-                const cls = getIndicatorClass(value);
-                if (cls) cell.classList.add(cls);
-            };
-
-            addCell(trend);
-            addCell(seasonality);
-            addCell(cot);
-            addCell(crowd);
-            addCell(gdp);
-            addCell(mPmi);
-            addCell(sPmi);
-            addCell(retail);
-            addCell(consConf);
-            addCell(cpi);
-            addCell(ppi);
-            addCell(pce);
-            addCell(interest);
-            addCell(nfp);
-            addCell(avgHrly);
-            addCell(unempRate);
-            addCell(unempClaims);
-            addCell(adp);
-            addCell(jolts);
+async function refreshAnalysis() {
+    try {
+        const response = await fetch('/admin/update_fastbull_sentiment', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
         });
-        // Remove any existing "no results" message
-        const existingMsg = document.getElementById('noResultsMsg');
-        if (existingMsg) existingMsg.remove();
-        // Re-apply search filter after loading new data
-        filterTable();
-        initStickyHeader();
+        const result = await response.json();
+        if (result.success) {
+            console.log('✅ Sentiment data updated via FastBull');
+        } else {
+            console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error');
+        }
+    } catch (e) {
+        console.error('❌ Error updating sentiment:', e);
     }
 
-    // ========== FIXED SEARCH FUNCTION ==========
-    function filterTable() {
-        const input = document.getElementById('searchInput');
-        if (!input) return;
-        const filter = input.value.trim().toLowerCase();
-        const table = document.getElementById('detailedTable');
-        const tbody = table.querySelector('tbody');
-        if (!tbody) return;
-        const rows = tbody.querySelectorAll('tr');
-        let hasVisible = false;
-        
-        rows.forEach(row => {
-            const symbolCell = row.cells[0];
-            if (symbolCell) {
-                const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
-                const matches = filter === '' || symbol.indexOf(filter) > -1;
-                row.style.display = matches ? '' : 'none';
-                if (matches) hasVisible = true;
-            }
+    try {
+        const response = await fetch('/debug/save_all_now', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
         });
-        
-        // Show "no results" message if needed
-        let noResultMsg = document.getElementById('noResultsMsg');
-        if (!hasVisible && filter !== '') {
-            if (!noResultMsg) {
-                noResultMsg = document.createElement('div');
-                noResultMsg.id = 'noResultsMsg';
-                noResultMsg.style.textAlign = 'center';
-                noResultMsg.style.padding = '20px';
-                noResultMsg.style.color = '#ffb800';
-                tbody.parentNode.insertBefore(noResultMsg, tbody.nextSibling);
-            }
-            noResultMsg.innerText = `🔍 No pairs matching "${filter}"`;
-            noResultMsg.style.display = 'block';
-        } else if (noResultMsg) {
-            noResultMsg.style.display = 'none';
+        const result = await response.json();
+        if (result.success) {
+            console.log('✅ Asset scores saved (3-day interval respected)');
+        } else {
+            console.warn('⚠️ Score save failed:', result.message || 'Unknown error');
         }
-    }
-    // ==========================================
-
-    // ========== UPDATED: Force Refresh now updates sentiment, saves scores (3-day interval), and reloads ==========
-    async function refreshAnalysis() {
-        // 1. Update sentiment from FastBull
-        try {
-            const response = await fetch('/admin/update_fastbull_sentiment', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const result = await response.json();
-            if (result.success) {
-                console.log('✅ Sentiment data updated via FastBull');
-            } else {
-                console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error');
-            }
-        } catch (e) {
-            console.error('❌ Error updating sentiment:', e);
-        }
-
-        // 2. Save asset scores (only if at least 3 days have passed)
-        try {
-            const response = await fetch('/debug/save_all_now', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' }
-            });
-            const result = await response.json();
-            if (result.success) {
-                console.log('✅ Asset scores saved (3-day interval respected)');
-            } else {
-                console.warn('⚠️ Score save failed:', result.message || 'Unknown error');
-            }
-        } catch (e) {
-            console.error('❌ Error saving scores:', e);
-        }
-
-        // 3. Clear cache and reload analysis
-        sessionStorage.removeItem(CACHE_KEY);
-        sessionStorage.removeItem(CACHE_TIME_KEY);
-        await loadDetailedAnalysis(true);
-    }
-    // =======================================================================
-
-    async function loadHistory() {
-        const r = await fetch('/api/history');
-        const d = await r.json();
-        let html = '<td><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
-        d.forEach(i=>{html+=`<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td>`});
-        html+='</tbody><table>';
-        document.getElementById('historyContent').innerHTML = html;
+    } catch (e) {
+        console.error('❌ Error saving scores:', e);
     }
 
-    function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+    sessionStorage.removeItem(CACHE_KEY);
+    sessionStorage.removeItem(CACHE_TIME_KEY);
+    await loadDetailedAnalysis(true);
+}
 
-    // Sticky header (same as before, unchanged)
-    let stickyHeader = null;
+async function loadHistory() {
+    const r = await fetch('/api/history');
+    const d = await r.json();
+    let html = '<table><thead><tr><th>Date</th><th>Pair</th><th>COT</th><th>Economic</th><th>Trend</th><th>Seasonality</th><th>Overall</th></tr></thead><tbody>';
+    d.forEach(i=>{html+=`<tr><td>${i.date}</td><td>${i.pair}</td><td>${i.cot_bias}</td><td>${i.econ_bias}</td><td>${i.trend_score}</td><td>${i.seasonality_bias||'N/A'}</td><td>${i.overall_bias}</td>`});
+    html+='</tbody></table>';
+    document.getElementById('historyContent').innerHTML = html;
+}
 
-    function initStickyHeader() {
-        if (stickyHeader && stickyHeader.parentNode) stickyHeader.parentNode.removeChild(stickyHeader);
-        const originalTable = document.getElementById('detailedTable');
+function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+
+let stickyHeader = null;
+
+function initStickyHeader() {
+    if (stickyHeader && stickyHeader.parentNode) stickyHeader.parentNode.removeChild(stickyHeader);
+    const originalTable = document.getElementById('detailedTable');
+    if (!originalTable) return;
+    const cloneTable = originalTable.cloneNode(true);
+    const tbody = cloneTable.querySelector('tbody');
+    if (tbody) tbody.remove();
+    cloneTable.style.position = 'fixed';
+    cloneTable.style.top = '0';
+    cloneTable.style.left = '0';
+    cloneTable.style.zIndex = '1000';
+    cloneTable.style.display = 'none';
+    cloneTable.style.background = '#121826';
+    cloneTable.style.borderCollapse = 'collapse';
+    cloneTable.style.width = originalTable.offsetWidth + 'px';
+    cloneTable.classList.add('sticky-header-clone');
+    originalTable.parentNode.insertBefore(cloneTable, originalTable);
+    stickyHeader = cloneTable;
+    syncColumnWidths(originalTable, cloneTable);
+    function handleScroll() {
         if (!originalTable) return;
-        const cloneTable = originalTable.cloneNode(true);
-        const tbody = cloneTable.querySelector('tbody');
-        if (tbody) tbody.remove();
-        cloneTable.style.position = 'fixed';
-        cloneTable.style.top = '0';
-        cloneTable.style.left = '0';
-        cloneTable.style.zIndex = '1000';
-        cloneTable.style.display = 'none';
-        cloneTable.style.background = '#121826';
-        cloneTable.style.borderCollapse = 'collapse';
-        cloneTable.style.width = originalTable.offsetWidth + 'px';
-        cloneTable.classList.add('sticky-header-clone');
-        originalTable.parentNode.insertBefore(cloneTable, originalTable);
-        stickyHeader = cloneTable;
-        syncColumnWidths(originalTable, cloneTable);
-        function handleScroll() {
-            if (!originalTable) return;
-            const rect = originalTable.getBoundingClientRect();
-            const shouldSticky = rect.top <= 0;
-            if (shouldSticky && stickyHeader.style.display !== 'table') {
-                stickyHeader.style.display = 'table';
-                syncColumnWidths(originalTable, stickyHeader);
-                stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
-                stickyHeader.style.width = originalTable.offsetWidth + 'px';
-            } else if (!shouldSticky && stickyHeader.style.display === 'table') {
-                stickyHeader.style.display = 'none';
-            }
-        }
-        window.addEventListener('scroll', handleScroll);
-        window.addEventListener('resize', function() {
-            if (stickyHeader.style.display === 'table') {
-                syncColumnWidths(originalTable, stickyHeader);
-                stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
-                stickyHeader.style.width = originalTable.offsetWidth + 'px';
-            }
-        });
-        handleScroll();
-    }
-
-    function syncColumnWidths(sourceTable, targetTable) {
-        const sourceRows = sourceTable.querySelectorAll('thead tr');
-        const targetRows = targetTable.querySelectorAll('thead tr');
-        for (let r = 0; r < sourceRows.length && r < targetRows.length; r++) {
-            const sourceCells = sourceRows[r].cells;
-            const targetCells = targetRows[r].cells;
-            for (let c = 0; c < sourceCells.length && c < targetCells.length; c++) {
-                targetCells[c].style.width = sourceCells[c].offsetWidth + 'px';
-            }
+        const rect = originalTable.getBoundingClientRect();
+        const shouldSticky = rect.top <= 0;
+        if (shouldSticky && stickyHeader.style.display !== 'table') {
+            stickyHeader.style.display = 'table';
+            syncColumnWidths(originalTable, stickyHeader);
+            stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
+            stickyHeader.style.width = originalTable.offsetWidth + 'px';
+        } else if (!shouldSticky && stickyHeader.style.display === 'table') {
+            stickyHeader.style.display = 'none';
         }
     }
+    window.addEventListener('scroll', handleScroll);
+    window.addEventListener('resize', function() {
+        if (stickyHeader.style.display === 'table') {
+            syncColumnWidths(originalTable, stickyHeader);
+            stickyHeader.style.left = originalTable.parentNode.getBoundingClientRect().left + 'px';
+            stickyHeader.style.width = originalTable.offsetWidth + 'px';
+        }
+    });
+    handleScroll();
+}
 
-    restoreSidebarState();
-    loadDetailedAnalysis();
+function syncColumnWidths(sourceTable, targetTable) {
+    const sourceRows = sourceTable.querySelectorAll('thead tr');
+    const targetRows = targetTable.querySelectorAll('thead tr');
+    for (let r = 0; r < sourceRows.length && r < targetRows.length; r++) {
+        const sourceCells = sourceRows[r].cells;
+        const targetCells = targetRows[r].cells;
+        for (let c = 0; c < sourceCells.length && c < targetCells.length; c++) {
+            targetCells[c].style.width = sourceCells[c].offsetWidth + 'px';
+        }
+    }
+}
 
-    setTimeout(() => {
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }, 100);
-    </script>
-    </body>
-    </html>''')
+restoreSidebarState();
+loadDetailedAnalysis();
+
+setTimeout(() => {
+    if (typeof lucide !== 'undefined') lucide.createIcons();
+}, 100);
+</script>
+</body>
+</html>''')
 
 #Asset scorecard template
     # Scorecard template (with Lucide icons) - Bond indicator fixed
@@ -4777,6 +4769,7 @@ with open('templates/dashboard.html', 'w') as f:
             margin-bottom:8px;
         }
         .gauge-svg{width:100%;height:100%}
+        /* premium gauge styles */
         .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
         .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
         .gauge-needle-group{transition:transform 0.5s ease-out}
@@ -4889,6 +4882,14 @@ with open('templates/dashboard.html', 'w') as f:
     <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <!-- ===== MISSING MENU ITEMS ADDED ===== -->
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <!-- Admin link (optional – add if is_admin is available) -->
+    <!-- <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div> -->
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <!-- ================================= -->
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -4910,23 +4911,83 @@ with open('templates/dashboard.html', 'w') as f:
                     <div class="spinner"></div>
                 </div>
                 <div class="gauge-container">
+                    <!-- PREMIUM GAUGE SVG -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
-                            <linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%" stop-color="#ff4d6d"/>
-                                <stop offset="50%" stop-color="#ffb800"/>
+                            <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%"   stop-color="#5a7a8a"/>
+                                <stop offset="25%"  stop-color="#8ab0c0"/>
+                                <stop offset="50%"  stop-color="#c0d8e0"/>
+                                <stop offset="75%"  stop-color="#6a8a9a"/>
+                                <stop offset="100%" stop-color="#3a5a6a"/>
+                            </linearGradient>
+                            <linearGradient id="gaugeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%"   stop-color="#ff4d6d"/>
+                                <stop offset="40%"  stop-color="#ffb800"/>
+                                <stop offset="60%"  stop-color="#ffb800"/>
                                 <stop offset="100%" stop-color="#00e5a0"/>
                             </linearGradient>
-                            <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-                                <feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/>
+                            <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
                             </filter>
+                            <filter id="needleShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            <radialGradient id="glassGlow" cx="50%" cy="30%" r="60%">
+                                <stop offset="0%"   stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+                            </radialGradient>
                         </defs>
-                        <path class="gauge-bg" d="M20,110 A90,90 0 0,1 200,110"/>
-                        <path id="gaugeFill" class="gauge-fill" d="M20,110 A90,90 0 0,1 200,110" stroke="url(#gaugeGradient)"/>
-                        <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)" filter="url(#shadow)">
-                            <line class="needle-body" x1="110" y1="110" x2="110" y2="30"/>
-                            <circle class="needle-tip" cx="110" cy="30" r="4"/>
+
+                        <!-- metallic outer ring -->
+                        <path d="M14,105 A91,91 0 0,1 206,105"
+                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+
+                        <!-- glass overlay -->
+                        <path d="M16,105 A89,89 0 0,1 204,105"
+                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
+
+                        <!-- background arc -->
+                        <path d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+
+                        <!-- active arc (progress) -->
+                        <path id="gaugeFill"
+                              d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
+                              stroke-dasharray="0 267"
+                              style="transition: stroke-dasharray 0.7s ease;"
+                              filter="url(#glowFilter)"/>
+
+                        <!-- tick marks -->
+                        <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
+                            <line x1="14" y1="105" x2="22" y2="105" />
+                            <line x1="206" y1="105" x2="198" y2="105" />
+                            <line x1="110" y1="20" x2="110" y2="28" />
+                            <line x1="54" y1="46" x2="60" y2="52" />
+                            <line x1="166" y1="46" x2="160" y2="52" />
                         </g>
+
+                        <!-- labels -->
+                        <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
+                        <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
+                        <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
+
+                        <!-- needle group -->
+                        <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                            <line x1="110" y1="105" x2="110" y2="30"
+                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
+                            <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
+                            <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
+                        </g>
+
+                        <!-- center cap glow -->
+                        <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
                 <div class="gauge-center">
@@ -5064,10 +5125,16 @@ with open('templates/dashboard.html', 'w') as f:
     function updateGauge(score, bias, color) {
         const clampedScore = Math.min(Math.max(score, -10), 10);
         const angle = ((clampedScore + 10) / 20) * 180;
-        document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 110)`);
+        document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 105)`);
         document.getElementById('gaugeBias').textContent = bias;
         document.getElementById('gaugeValue').textContent = score.toFixed(1);
         document.querySelector('.gauge-bias').style.color = color;
+
+        // Update the arc dasharray
+        const circumference = 267; // 2 * pi * 85 ≈ 534, but we have half circle so ~267
+        const fraction = (clampedScore + 10) / 20;
+        const dash = fraction * circumference;
+        document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
     function updateScores(data) {
@@ -5256,533 +5323,606 @@ with open('templates/dashboard.html', 'w') as f:
     # Forex Scorecard template (correct)
     with open('templates/forex_scorecard.html', 'w', encoding='utf-8') as f:
         f.write('''<!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Forex Scorecard - Tradion</title>
-        <script src="https://unpkg.com/lucide@latest"></script>
-        <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
-        <style>
-            *{margin:0;padding:0;box-sizing:border-box}
-            body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-            .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
-            .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
-            .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
-            .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
-            .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
-            .sidebar .menu-icon{font-size:20px;margin-right:12px}
-            .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-            .main-content{flex:1;margin-left:280px;padding:12px 20px}
-            .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
-            .header h2{color:#00e5ff;font-size:1.8rem}
-            .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
-            .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
-            .gauge-panel{
-                background:#121826;
-                border-radius:16px;
-                padding:12px 12px 16px 12px;
-                display:flex;
-                flex-direction:column;
-                align-items:center;
-                border:1px solid #2a3040;
-                position:relative;
-            }
-            .gauge-container{
-                position:relative;
-                width:160px;
-                height:90px;
-                margin-bottom:8px;
-            }
-            .gauge-svg{width:100%;height:100%}
-            .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
-            .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
-            .gauge-needle-group{transition:transform 0.5s ease-out}
-            .needle-body{stroke:#fff;stroke-width:2;fill:none}
-            .needle-tip{fill:#fff;stroke:#fff;stroke-width:1}
-            .gauge-center{
-                position:relative;
-                bottom:auto;
-                left:auto;
-                transform:none;
-                text-align:center;
-                margin-top:4px;
-            }
-            .gauge-label{font-size:1.1rem;font-weight:bold;color:#00e5ff}
-            .gauge-bias{font-size:0.85rem;color:#00e5a0}
-            .loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.8);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}
-            .loading-overlay.hidden{display:none}
-            .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
-            @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-            .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
-            .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
-            .score-label{font-weight:500;font-size:0.85rem}
-            .score-value{font-weight:bold;padding:2px 8px;border-radius:20px;font-size:0.75rem}
-            .score-value.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
-            .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
-            .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
-            .right-col{display:flex;flex-direction:column;gap:10px}
-            .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-            .panel{
-                background:#121826;
-                border-radius:12px;
-                padding:10px;
-                border:1px solid #2a3040;
-            }
-            .panel h3{
-                color:#00e5ff;
-                font-size:0.9rem;
-                margin-bottom:6px;
-                border-bottom:1px solid #2a3040;
-                padding-bottom:4px;
-            }
-            .indicator-row{
-                display:flex;
-                justify-content:space-between;
-                padding:3px 0;
-                border-bottom:1px solid rgba(42,48,64,0.3);
-            }
-            .indicator-row:last-child{border-bottom:none}
-            .indicator-label{font-size:0.75rem}
-            .indicator-values{display:flex;gap:8px;align-items:center}
-            .value{font-weight:500;width:45px;text-align:right;font-size:0.75rem}
-            .value.positive{color:#00e5a0}
-            .value.negative{color:#ff4d6d}
-            .value.neutral{color:#a0b0c0}
-            .surprise{font-size:0.7rem;padding:1px 4px;border-radius:4px}
-            .surprise.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
-            .surprise.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
-            .panel table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            .panel th, .panel td {
-                padding: 4px 3px;
-                text-align: left;
-                font-size: 0.7rem;
-            }
-            .panel th:nth-child(1), .panel td:nth-child(1) { width: 40%; }
-            .panel th:nth-child(2), .panel td:nth-child(2) { width: 15%; }
-            .panel th:nth-child(3), .panel td:nth-child(3) { width: 15%; }
-            .panel th:nth-child(4), .panel td:nth-child(4) { width: 15%; }
-            .panel th:nth-child(5), .panel td:nth-child(5) { width: 15%; }
-            .panel.crowd-table th:nth-child(1), .panel.crowd-table td:nth-child(1) { width: 50%; }
-            .panel.crowd-table th:nth-child(2), .panel.crowd-table td:nth-child(2) { width: 50%; }
-            .history-chart-container {
-                background: #121826;
-                border-radius: 12px;
-                padding: 10px;
-                margin-top: 10px;
-                border: 1px solid #2a3040;
-            }
-            .history-chart-container h3 {
-                color: #00e5ff;
-                font-size: 0.9rem;
-                margin-bottom: 8px;
-                border-bottom: 1px solid #2a3040;
-                padding-bottom: 4px;
-            }
-            .chart-wrapper {
-                position: relative;
-                height: 240px;
-                width: 100%;
-            }
-            @media (max-width:768px){
-                .main-content{margin-left:0;padding:60px 15px 20px;}
-                .scorecard-grid{grid-template-columns:1fr;gap:15px}
-                .gauge-container{width:140px;height:80px}
-                .panel{padding:8px}
-                .indicator-values{gap:6px}
-                .value{width:40px}
-                .chart-wrapper{height:200px;}
-                .two-cols{grid-template-columns:1fr;}
-            }
-        </style>
-    </head>
-    <body>
-    <div class="sidebar">
-        <div class="logo">⚡ Tradion</div>
-        <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-        <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-        <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-        <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-        <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-        <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-        <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-    </div>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forex Scorecard - Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
+        .header h2{color:#00e5ff;font-size:1.8rem}
+        .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
+        .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
+        .gauge-panel{
+            background:#121826;
+            border-radius:16px;
+            padding:12px 12px 16px 12px;
+            display:flex;
+            flex-direction:column;
+            align-items:center;
+            border:1px solid #2a3040;
+            position:relative;
+        }
+        .gauge-container{
+            position:relative;
+            width:160px;
+            height:90px;
+            margin-bottom:8px;
+        }
+        .gauge-svg{width:100%;height:100%}
+        .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
+        .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
+        .gauge-needle-group{transition:transform 0.5s ease-out}
+        .needle-body{stroke:#fff;stroke-width:2;fill:none}
+        .needle-tip{fill:#fff;stroke:#fff;stroke-width:1}
+        .gauge-center{
+            position:relative;
+            bottom:auto;
+            left:auto;
+            transform:none;
+            text-align:center;
+            margin-top:4px;
+        }
+        .gauge-label{font-size:1.1rem;font-weight:bold;color:#00e5ff}
+        .gauge-bias{font-size:0.85rem;color:#00e5a0}
+        .loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.8);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}
+        .loading-overlay.hidden{display:none}
+        .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
+        @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+        .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
+        .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
+        .score-label{font-weight:500;font-size:0.85rem}
+        .score-value{font-weight:bold;padding:2px 8px;border-radius:20px;font-size:0.75rem}
+        .score-value.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
+        .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
+        .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
+        .right-col{display:flex;flex-direction:column;gap:10px}
+        .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+        .panel{
+            background:#121826;
+            border-radius:12px;
+            padding:10px;
+            border:1px solid #2a3040;
+        }
+        .panel h3{
+            color:#00e5ff;
+            font-size:0.9rem;
+            margin-bottom:6px;
+            border-bottom:1px solid #2a3040;
+            padding-bottom:4px;
+        }
+        .indicator-row{
+            display:flex;
+            justify-content:space-between;
+            padding:3px 0;
+            border-bottom:1px solid rgba(42,48,64,0.3);
+        }
+        .indicator-row:last-child{border-bottom:none}
+        .indicator-label{font-size:0.75rem}
+        .indicator-values{display:flex;gap:8px;align-items:center}
+        .value{font-weight:500;width:45px;text-align:right;font-size:0.75rem}
+        .value.positive{color:#00e5a0}
+        .value.negative{color:#ff4d6d}
+        .value.neutral{color:#a0b0c0}
+        .surprise{font-size:0.7rem;padding:1px 4px;border-radius:4px}
+        .surprise.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
+        .surprise.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
+        .panel table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        .panel th, .panel td {
+            padding: 4px 3px;
+            text-align: left;
+            font-size: 0.7rem;
+        }
+        .panel th:nth-child(1), .panel td:nth-child(1) { width: 40%; }
+        .panel th:nth-child(2), .panel td:nth-child(2) { width: 15%; }
+        .panel th:nth-child(3), .panel td:nth-child(3) { width: 15%; }
+        .panel th:nth-child(4), .panel td:nth-child(4) { width: 15%; }
+        .panel th:nth-child(5), .panel td:nth-child(5) { width: 15%; }
+        .panel.crowd-table th:nth-child(1), .panel.crowd-table td:nth-child(1) { width: 50%; }
+        .panel.crowd-table th:nth-child(2), .panel.crowd-table td:nth-child(2) { width: 50%; }
+        .history-chart-container {
+            background: #121826;
+            border-radius: 12px;
+            padding: 10px;
+            margin-top: 10px;
+            border: 1px solid #2a3040;
+        }
+        .history-chart-container h3 {
+            color: #00e5ff;
+            font-size: 0.9rem;
+            margin-bottom: 8px;
+            border-bottom: 1px solid #2a3040;
+            padding-bottom: 4px;
+        }
+        .chart-wrapper {
+            position: relative;
+            height: 240px;
+            width: 100%;
+        }
+        @media (max-width:768px){
+            .main-content{margin-left:0;padding:60px 15px 20px;}
+            .scorecard-grid{grid-template-columns:1fr;gap:15px}
+            .gauge-container{width:140px;height:80px}
+            .panel{padding:8px}
+            .indicator-values{gap:6px}
+            .value{width:40px}
+            .chart-wrapper{height:200px;}
+            .two-cols{grid-template-columns:1fr;}
+        }
+    </style>
+</head>
+<body>
+<div class="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
 
-    <div class="main-content">
-        <div class="header">
-            <h2>Forex Scorecard</h2>
-            <div class="symbol-selector">
-                <select id="symbolSelect" onchange="loadScorecard()">
-                    <option value="">Select Forex Pair...</option>
-                </select>
-            </div>
-        </div>
-
-        <div class="scorecard-grid">
-            <div>
-                <div class="gauge-panel" id="gaugePanel">
-                    <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
-                    <div class="gauge-container">
-                        <svg class="gauge-svg" viewBox="0 0 220 110">
-                            <defs><linearGradient id="gaugeGradient" x1="0%" y1="0%" x2="100%" y2="0%"><stop offset="0%" stop-color="#ff4d6d"/><stop offset="50%" stop-color="#ffb800"/><stop offset="100%" stop-color="#00e5a0"/></linearGradient><filter id="shadow" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="1" dy="1" stdDeviation="1" flood-color="#000" flood-opacity="0.5"/></filter></defs>
-                            <path class="gauge-bg" d="M20,110 A90,90 0 0,1 200,110"/>
-                            <path id="gaugeFill" class="gauge-fill" d="M20,110 A90,90 0 0,1 200,110" stroke="url(#gaugeGradient)"/>
-                            <g id="gaugeNeedleGroup" class="gauge-needle-group" transform="rotate(-90,110,110)" filter="url(#shadow)"><line class="needle-body" x1="110" y1="110" x2="110" y2="30"/><circle class="needle-tip" cx="110" cy="30" r="4"/></g>
-                        </svg>
-                    </div>
-                    <div class="gauge-center">
-                        <div class="gauge-label" id="gaugeBias">Neutral</div>
-                        <div class="gauge-bias" id="gaugeValue">0.0</div>
-                    </div>
-                    <div class="score-summary">
-                        <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
-                        <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
-                        <div class="score-item"><span class="score-label">COT Alignment</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
-                        <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
-                    </div>
-                </div>
-
-                <!-- Score History Chart -->
-                <div class="history-chart-container">
-                    <h3>Tradion Score Overtime</h3>
-                    <div class="chart-wrapper">
-                        <canvas id="scoreHistoryChart"></canvas>
-                    </div>
-                </div>
-            </div>
-            <div class="right-col" id="categoryCards"></div>
+<div class="main-content">
+    <div class="header">
+        <h2>Forex Scorecard</h2>
+        <div class="symbol-selector">
+            <select id="symbolSelect" onchange="loadScorecard()">
+                <option value="">Select Forex Pair...</option>
+            </select>
         </div>
     </div>
 
-    <script>
-        const allPairs = {{ all_pairs|tojson }};
-        const select = document.getElementById('symbolSelect');
-        allPairs.forEach(pair => {
-            const pairStr = pair[0] + '/' + pair[1];
-            const opt = document.createElement('option');
-            opt.value = pairStr;
-            opt.textContent = pairStr;
-            select.appendChild(opt);
-        });
-        const standaloneAssets = ['XAU', 'BTC'];
+    <div class="scorecard-grid">
+        <div>
+            <div class="gauge-panel" id="gaugePanel">
+                <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
+                <div class="gauge-container">
+                    <!-- PREMIUM GAUGE SVG -->
+                    <svg class="gauge-svg" viewBox="0 0 220 110">
+                        <defs>
+                            <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                                <stop offset="0%"   stop-color="#5a7a8a"/>
+                                <stop offset="25%"  stop-color="#8ab0c0"/>
+                                <stop offset="50%"  stop-color="#c0d8e0"/>
+                                <stop offset="75%"  stop-color="#6a8a9a"/>
+                                <stop offset="100%" stop-color="#3a5a6a"/>
+                            </linearGradient>
+                            <linearGradient id="gaugeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                                <stop offset="0%"   stop-color="#ff4d6d"/>
+                                <stop offset="40%"  stop-color="#ffb800"/>
+                                <stop offset="60%"  stop-color="#ffb800"/>
+                                <stop offset="100%" stop-color="#00e5a0"/>
+                            </linearGradient>
+                            <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
+                                <feGaussianBlur stdDeviation="3" result="blur"/>
+                                <feMerge>
+                                    <feMergeNode in="blur"/>
+                                    <feMergeNode in="SourceGraphic"/>
+                                </feMerge>
+                            </filter>
+                            <filter id="needleShadow" x="-20%" y="-20%" width="140%" height="140%">
+                                <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
+                            </filter>
+                            <radialGradient id="glassGlow" cx="50%" cy="30%" r="60%">
+                                <stop offset="0%"   stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
+                            </radialGradient>
+                        </defs>
 
-        const CATEGORY_ORDER = [
-            "Crowd Sentiment (COT)",
-            "Technical Bias",
-            "Economic Growth Bias",
-            "Inflation Bias",
-            "Jobs Market Bias"
-        ];
+                        <!-- metallic outer ring -->
+                        <path d="M14,105 A91,91 0 0,1 206,105"
+                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
 
-        let historyChart = null;
+                        <!-- glass overlay -->
+                        <path d="M16,105 A89,89 0 0,1 204,105"
+                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
 
-        async function loadScorecard() {
-            const symbol = select.value;
-            if (!symbol) return;
-            const overlay = document.getElementById('loadingOverlay');
-            overlay.classList.remove('hidden');
-            try {
-                const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
-                if (!res.ok) throw new Error(`HTTP ${res.status}`);
-                const data = await res.json();
-                const baseCurr = data.base;
-                const quoteCurr = data.quote;
-                const isStandalone = standaloneAssets.includes(baseCurr) && quoteCurr === 'USD';
-                if (isStandalone) {
-                    updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-                    updateScores(data);
-                    renderCategoryCards(data);
-                } else {
-                    // For forex pairs, use the same data (technical_score from API is already correct)
-                    updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-                    updateScores(data);
-                    renderCategoryCards(data);
-                }
-                loadScoreHistory(symbol);
-            } catch(e) { console.error(e); document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`; }
-            finally { overlay.classList.add('hidden'); }
+                        <!-- background arc -->
+                        <path d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+
+                        <!-- active arc (progress) -->
+                        <path id="gaugeFill"
+                              d="M20,105 A85,85 0 0,1 200,105"
+                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
+                              stroke-dasharray="0 267"
+                              style="transition: stroke-dasharray 0.7s ease;"
+                              filter="url(#glowFilter)"/>
+
+                        <!-- tick marks -->
+                        <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
+                            <line x1="14" y1="105" x2="22" y2="105" />
+                            <line x1="206" y1="105" x2="198" y2="105" />
+                            <line x1="110" y1="20" x2="110" y2="28" />
+                            <line x1="54" y1="46" x2="60" y2="52" />
+                            <line x1="166" y1="46" x2="160" y2="52" />
+                        </g>
+
+                        <!-- labels -->
+                        <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
+                        <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
+                        <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
+
+                        <!-- needle group -->
+                        <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                            <line x1="110" y1="105" x2="110" y2="30"
+                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
+                            <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
+                            <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
+                        </g>
+
+                        <!-- center cap glow -->
+                        <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
+                    </svg>
+                </div>
+                <div class="gauge-center">
+                    <div class="gauge-label" id="gaugeBias">Neutral</div>
+                    <div class="gauge-bias" id="gaugeValue">0.0</div>
+                </div>
+                <div class="score-summary">
+                    <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
+                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
+                    <div class="score-item"><span class="score-label">COT Alignment</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
+                    <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
+                </div>
+            </div>
+
+            <!-- Score History Chart -->
+            <div class="history-chart-container">
+                <h3>Tradion Score Overtime</h3>
+                <div class="chart-wrapper">
+                    <canvas id="scoreHistoryChart"></canvas>
+                </div>
+            </div>
+        </div>
+        <div class="right-col" id="categoryCards"></div>
+    </div>
+</div>
+
+<script>
+    const allPairs = {{ all_pairs|tojson }};
+    const select = document.getElementById('symbolSelect');
+    allPairs.forEach(pair => {
+        const pairStr = pair[0] + '/' + pair[1];
+        const opt = document.createElement('option');
+        opt.value = pairStr;
+        opt.textContent = pairStr;
+        select.appendChild(opt);
+    });
+    const standaloneAssets = ['XAU', 'BTC'];
+
+    const CATEGORY_ORDER = [
+        "Crowd Sentiment (COT)",
+        "Technical Bias",
+        "Economic Growth Bias",
+        "Inflation Bias",
+        "Jobs Market Bias"
+    ];
+
+    let historyChart = null;
+
+    async function loadScorecard() {
+        const symbol = select.value;
+        if (!symbol) return;
+        const overlay = document.getElementById('loadingOverlay');
+        overlay.classList.remove('hidden');
+        try {
+            const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
+            if (!res.ok) throw new Error(`HTTP ${res.status}`);
+            const data = await res.json();
+            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
+            updateScores(data);
+            renderCategoryCards(data);
+            loadScoreHistory(symbol);
+        } catch(e) { console.error(e); document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`; }
+        finally { overlay.classList.add('hidden'); }
+    }
+
+    async function loadScoreHistory(asset) {
+        try {
+            const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
+            const data = await res.json();
+            renderHistoryChart(data.history);
+        } catch(e) {
+            console.error('Error loading score history:', e);
         }
+    }
 
-        async function loadScoreHistory(asset) {
-            try {
-                const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
-                const data = await res.json();
-                renderHistoryChart(data.history);
-            } catch(e) {
-                console.error('Error loading score history:', e);
-            }
+    function renderHistoryChart(history) {
+        const canvas = document.getElementById('scoreHistoryChart');
+        const ctx = canvas.getContext('2d');
+        if (historyChart) historyChart.destroy();
+        if (!history || history.length === 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "12px 'Segoe UI'";
+            ctx.fillStyle = "#8892b0";
+            ctx.textAlign = "center";
+            ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
+            return;
         }
-
-        function renderHistoryChart(history) {
-            const canvas = document.getElementById('scoreHistoryChart');
-            const ctx = canvas.getContext('2d');
-            if (historyChart) historyChart.destroy();
-            if (!history || history.length === 0) {
-                ctx.clearRect(0, 0, canvas.width, canvas.height);
-                ctx.font = "12px 'Segoe UI'";
-                ctx.fillStyle = "#8892b0";
-                ctx.textAlign = "center";
-                ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
-                return;
-            }
-            const labels = history.map(h => h.date);
-            const scores = history.map(h => h.score);
-            historyChart = new Chart(ctx, {
-                type: 'bar',
-                data: {
-                    labels: labels,
-                    datasets: [{
-                        label: 'Score',
-                        data: scores,
-                        backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
-                        borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
-                        borderWidth: 1,
-                        borderRadius: 4,
-                    }]
+        const labels = history.map(h => h.date);
+        const scores = history.map(h => h.score);
+        historyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Score',
+                    data: scores,
+                    backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
+                    borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
                 },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: true,
-                    plugins: {
-                        legend: { display: false },
-                        tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
-                    },
-                    scales: {
-                        y: {
-                            title: { display: true, text: 'Score', color: '#a0b0c0' },
-                            ticks: { color: '#e0e0e0' },
-                            grid: {
-                                color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
-                                lineWidth: (context) => context.tick.value === 0 ? 1 : 0
-                            },
-                            min: -20,
-                            max: 20
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Score', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0' },
+                        grid: {
+                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
+                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
                         },
-                        x: {
-                            title: { display: true, text: 'Date', color: '#a0b0c0' },
-                            ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
-                            grid: { display: false }
-                        }
+                        min: -20,
+                        max: 20
+                    },
+                    x: {
+                        title: { display: true, text: 'Date', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
+                        grid: { display: false }
                     }
                 }
-            });
-        }
-
-        function updateGauge(score, bias, color) {
-            const clampedScore = Math.min(Math.max(score, -10), 10);
-            const angle = ((clampedScore + 10) / 20) * 180;
-            document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 110)`);
-            document.getElementById('gaugeBias').textContent = bias;
-            document.getElementById('gaugeValue').textContent = score.toFixed(1);
-            document.querySelector('.gauge-bias').style.color = color;
-        }
-
-        function updateScores(data) {
-            setScoreValue('tradionScore', data.tradion_score);
-            setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
-            setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-            setScoreValue('fundamentalsScore', data.fundamentals_score, data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
-        }
-
-        function setScoreValue(id, text, classNameOverride) {
-            const el = document.getElementById(id);
-            el.textContent = text;
-            if (classNameOverride) el.className = 'score-value ' + classNameOverride;
-            else {
-                const val = parseFloat(text);
-                el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
             }
+        });
+    }
+
+    function updateGauge(score, bias, color) {
+        const clampedScore = Math.min(Math.max(score, -10), 10);
+        const angle = ((clampedScore + 10) / 20) * 180;
+        document.getElementById('gaugeNeedleGroup').setAttribute('transform', `rotate(${angle - 90}, 110, 105)`);
+        document.getElementById('gaugeBias').textContent = bias;
+        document.getElementById('gaugeValue').textContent = score.toFixed(1);
+        document.querySelector('.gauge-bias').style.color = color;
+
+        const circumference = 267;
+        const fraction = (clampedScore + 10) / 20;
+        const dash = fraction * circumference;
+        document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
+    }
+
+    function updateScores(data) {
+        setScoreValue('tradionScore', data.tradion_score);
+        setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
+        setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
+        setScoreValue('fundamentalsScore', data.fundamentals_score, data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
+    }
+
+    function setScoreValue(id, text, classNameOverride) {
+        const el = document.getElementById(id);
+        el.textContent = text;
+        if (classNameOverride) el.className = 'score-value ' + classNameOverride;
+        else {
+            const val = parseFloat(text);
+            el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
         }
+    }
 
-        function getBiasLabelAndClass(score) {
-            if (score >= 5) return { label: 'Bullish', className: 'positive' };
-            if (score <= -5) return { label: 'Bearish', className: 'negative' };
-            return { label: 'Neutral', className: 'neutral' };
-        }
-
-        function buildFullTable(indicators, data) {
-            let html = `<div style="overflow-x:auto;">
-                            <table class="data-table">
-                                <thead>
-                                    <tr>
-                                        <th>Indicator</th>
-                                        <th>Signal</th>
-                                        <th>Actual</th>
-                                        <th>Forecast</th>
-                                        <th>Surprise</th>
-                                    </tr>
-                                </thead>
-                                <tbody>`;
-            indicators.forEach(ind => {
-                // Check if this is a pair comparison with dashes
-                if (ind.forecast === '-' || ind.actual === '-') {
-                    // Use the signal value directly (already a string like "Bullish", "Bearish", "Neutral")
-                    let signalDisplay = ind.signal || 'Neutral';
-                    let signalClass = (signalDisplay === 'Bullish') ? 'positive' : (signalDisplay === 'Bearish' ? 'negative' : 'neutral');
-                    html += `<tr>
-                                <td>${ind.name}</td>
-                                <td class="value ${signalClass}">${signalDisplay}</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                            </tr>`;
-                    return;
-                }
-
-                // Special handling for 2-Year Bond Yield Trend (has score)
-                if (ind.name === '2-Year Bond Yield Trend') {
-                    const score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
-                    let signal = score > 0 ? 'Bullish' : (score < 0 ? 'Bearish' : 'Neutral');
-                    let signalClass = score > 0 ? 'positive' : (score < 0 ? 'negative' : 'neutral');
-                    html += `<tr>
-                                <td>${ind.name}</td>
-                                <td class="value ${signalClass}">${signal}</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                            </tr>`;
-                    return;
-                }
-
-                // Special handling for COT Alignment
-                if (ind.name === 'COT Alignment') {
-                    let score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
-                    if (isNaN(score)) score = 0;
-                    let label = 'Neutral', labelClass = 'neutral';
-                    if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
-                    else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
-                    html += `<tr>
-                                <td>${ind.name}</td>
-                                <td class="value ${labelClass}">${label}</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                                <td class="value">-</td>
-                            </tr>`;
-                    return;
-                }
-
-                // Normal indicators with real numbers (for Asset Scorecard)
-                const surprise = ind.actual - ind.forecast;
-                const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
-                const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
-                let signal = better ? 'Bullish' : (surprise === 0 ? 'Neutral' : 'Bearish');
-                let signalClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
+    function buildFullTable(indicators, data) {
+        let html = `<div style="overflow-x:auto;">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Indicator</th>
+                                    <th>Signal</th>
+                                    <th>Actual</th>
+                                    <th>Forecast</th>
+                                    <th>Surprise</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+        indicators.forEach(ind => {
+            if (ind.forecast === '-' || ind.actual === '-') {
+                let signalDisplay = ind.signal || 'Neutral';
+                let signalClass = (signalDisplay === 'Bullish') ? 'positive' : (signalDisplay === 'Bearish' ? 'negative' : 'neutral');
+                html += `<tr>
+                            <td>${ind.name}</td>
+                            <td class="value ${signalClass}">${signalDisplay}</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
+                        </tr>`;
+                return;
+            }
+            if (ind.name === '2-Year Bond Yield Trend') {
+                const score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
+                let signal = score > 0 ? 'Bullish' : (score < 0 ? 'Bearish' : 'Neutral');
+                let signalClass = score > 0 ? 'positive' : (score < 0 ? 'negative' : 'neutral');
                 html += `<tr>
                             <td>${ind.name}</td>
                             <td class="value ${signalClass}">${signal}</td>
-                            <td class="value">${ind.actual}</td>
-                            <td class="value">${ind.forecast}</td>
-                            <td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
                         </tr>`;
-            });
-            html += `</tbody></table></div>`;
-            return html;
-        }
+                return;
+            }
+            if (ind.name === 'COT Alignment') {
+                let score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
+                if (isNaN(score)) score = 0;
+                let label = 'Neutral', labelClass = 'neutral';
+                if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
+                else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+                html += `<tr>
+                            <td>${ind.name}</td>
+                            <td class="value ${labelClass}">${label}</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
+                            <td class="value">-</td>
+                        </tr>`;
+                return;
+            }
+            const surprise = ind.actual - ind.forecast;
+            const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
+            const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
+            let signal = better ? 'Bullish' : (surprise === 0 ? 'Neutral' : 'Bearish');
+            let signalClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
+            html += `<tr>
+                        <td>${ind.name}</td>
+                        <td class="value ${signalClass}">${signal}</td>
+                        <td class="value">${ind.actual}</td>
+                        <td class="value">${ind.forecast}</td>
+                        <td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td>
+                    </tr>`;
+        });
+        html += `</tbody></table></div>`;
+        return html;
+    }
 
-        function buildCrowdTable(data) {
-            const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
-            if (!cotInd) return '<p>No data</p>';
-            let score = (cotInd.score !== undefined && cotInd.score !== null) ? Number(cotInd.score) : 0;
-            if (isNaN(score)) score = 0;
-            let label = 'Neutral', labelClass = 'neutral';
-            if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
-            else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
-            return `<div style="overflow-x:auto;">
-                        <table class="crowd-table">
-                            <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                            <tbody>
-                                <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
-                            </tbody>
-                        </table>
-                    </div>`;
-        }
+    function buildCrowdTable(data) {
+        const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
+        if (!cotInd) return '<p>No data</p>';
+        let score = (cotInd.score !== undefined && cotInd.score !== null) ? Number(cotInd.score) : 0;
+        if (isNaN(score)) score = 0;
+        let label = 'Neutral', labelClass = 'neutral';
+        if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
+        else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+        return `<div style="overflow-x:auto;">
+                    <table class="crowd-table">
+                        <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
+                        <tbody>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                        </tbody>
+                    </table>
+                </div>`;
+    }
 
-        function renderCategoryCards(data) {
-            const container = document.getElementById('categoryCards');
-            container.innerHTML = '';
+    function renderCategoryCards(data) {
+        const container = document.getElementById('categoryCards');
+        container.innerHTML = '';
 
-            const firstTwo = CATEGORY_ORDER.slice(0,2);
-            const rest = CATEGORY_ORDER.slice(2);
+        const firstTwo = CATEGORY_ORDER.slice(0,2);
+        const rest = CATEGORY_ORDER.slice(2);
 
-            const twoColsDiv = document.createElement('div');
-            twoColsDiv.className = 'two-cols';
+        const twoColsDiv = document.createElement('div');
+        twoColsDiv.className = 'two-cols';
 
-            // Crowd Sentiment (COT) card – no badge
-            const crowdCategory = firstTwo[0];
-            const crowdBiasScore = data.category_bias[crowdCategory] || 0;
-            const crowdCard = document.createElement('div');
-            crowdCard.className = 'panel';
-            let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <h3 style="margin:0;">${crowdCategory}</h3>
+        // Crowd Sentiment (COT) card
+        const crowdCategory = firstTwo[0];
+        const crowdBiasScore = data.category_bias[crowdCategory] || 0;
+        const crowdCard = document.createElement('div');
+        crowdCard.className = 'panel';
+        let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <h3 style="margin:0;">${crowdCategory}</h3>
+                        </div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
+                            <span>Bias Score</span>
+                            <span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span>
+                        </div>`;
+        crowdHtml += buildCrowdTable(data);
+        crowdCard.innerHTML = crowdHtml;
+        twoColsDiv.appendChild(crowdCard);
+
+        // Technical Bias card – with Seasonality added
+        const techCategory = firstTwo[1];
+        const techBiasScore = data.category_bias[techCategory] || 0;
+        const techCard = document.createElement('div');
+        techCard.className = 'panel';
+        const techScore = data.technical_score || 0;
+        const techSignal = techScore > 0 ? 'Bullish' : (techScore < 0 ? 'Bearish' : 'Neutral');
+        const techSignalClass = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
+
+        // Seasonality data from API
+        const seasonSignal = data.seasonality_bias || 'Neutral';
+        const seasonScore = data.seasonality_score || 0;
+        const seasonClass = seasonScore > 0 ? 'positive' : (seasonScore < 0 ? 'negative' : 'neutral');
+
+        let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <h3 style="margin:0;">${techCategory}</h3>
+                        </div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
+                            <span>Bias Score</span>
+                            <span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span>
+                        </div>
+                        <div class="indicator-row">
+                            <span class="indicator-label">21-day SMA Trend</span>
+                            <div class="indicator-values">
+                                <span class="value ${techSignalClass}">${techSignal}</span>
+                                <span class="value">-</span>
+                                <span class="value">-</span>
+                                <span class="value">-</span>
                             </div>
-                            <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                                <span>Bias Score</span>
-                                <span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span>
-                            </div>`;
-            crowdHtml += buildCrowdTable(data);
-            crowdCard.innerHTML = crowdHtml;
-            twoColsDiv.appendChild(crowdCard);
-
-            // Technical Bias card – no badge
-            const techCategory = firstTwo[1];
-            const techBiasScore = data.category_bias[techCategory] || 0;
-            const techCard = document.createElement('div');
-            techCard.className = 'panel';
-            const techScore = data.technical_score || 0;
-            const techSignal = techScore > 0 ? 'Bullish' : (techScore < 0 ? 'Bearish' : 'Neutral');
-            const techSignalClass = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
-            let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <h3 style="margin:0;">${techCategory}</h3>
+                        </div>
+                        <!-- NEW: Seasonality row -->
+                        <div class="indicator-row">
+                            <span class="indicator-label">Seasonality</span>
+                            <div class="indicator-values">
+                                <span class="value ${seasonClass}">${seasonSignal}</span>
+                                <span class="value">${seasonScore > 0 ? '+' : ''}${seasonScore}</span>
+                                <span class="value">-</span>
+                                <span class="value">-</span>
                             </div>
-                            <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                                <span>Bias Score</span>
-                                <span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span>
-                            </div>
-                            <div class="indicator-row">
-                                <span class="indicator-label">21-day SMA Trend</span>
-                                <div class="indicator-values">
-                                    <span class="value ${techSignalClass}">${techSignal}</span>
-                                    <span class="value">-</span>
-                                    <span class="value">-</span>
-                                    <span class="value">-</span>
-                                </div>
-                            </div>`;
-            techCard.innerHTML = techHtml;
-            twoColsDiv.appendChild(techCard);
-            container.appendChild(twoColsDiv);
+                        </div>`;
+        techCard.innerHTML = techHtml;
+        twoColsDiv.appendChild(techCard);
+        container.appendChild(twoColsDiv);
 
-            // Remaining cards – no badge
-            rest.forEach(category => {
-                const indicators = data.base_indicators.filter(ind => ind.category === category);
-                const biasScore = data.category_bias[category] || 0;
-                const card = document.createElement('div');
-                card.className = 'panel';
-                let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                                <h3 style="margin:0;">${category}</h3>
-                            </div>
-                            <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                                <span>Bias Score</span>
-                                <span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span>
-                            </div>`;
-                if (indicators.length === 0) {
-                    html += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
-                } else {
-                    html += buildFullTable(indicators, data);
-                }
-                card.innerHTML = html;
-                container.appendChild(card);
-            });
-        }
+        // Remaining cards
+        rest.forEach(category => {
+            const indicators = data.base_indicators.filter(ind => ind.category === category);
+            const biasScore = data.category_bias[category] || 0;
+            const card = document.createElement('div');
+            card.className = 'panel';
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                            <h3 style="margin:0;">${category}</h3>
+                        </div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
+                            <span>Bias Score</span>
+                            <span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span>
+                        </div>`;
+            if (indicators.length === 0) {
+                html += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
+            } else {
+                html += buildFullTable(indicators, data);
+            }
+            card.innerHTML = html;
+            container.appendChild(card);
+        });
+    }
 
-        function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
-        if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
-        setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
-    </script>
-    </body>
-    </html>''')
+    function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+    if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
 
            #central_bank_scorecard.html
            
@@ -5836,6 +5976,11 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <!-- ===== ADDED SEASONALITY ===== -->
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <!-- ===== ADDED HISTORY ===== -->
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <!-- =========================== -->
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
@@ -7071,94 +7216,44 @@ setTimeout(() => {
 .bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
 .percentage-col{width:80px;text-align:right}
 .pair-col{font-weight:bold;width:120px}
-/* ===== Mobile / Responsive Styles ===== */
-.hamburger {
-    display: none;
-    font-size: 28px;
-    cursor: pointer;
-    color: #00e5ff;
-    position: fixed;
-    top: 15px;
-    left: 20px;
-    z-index: 1100;
-    background: #121826;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #2a3040;
-}
-
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        width: 260px;
-        z-index: 1050;
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100%;
-        background: #121826;
-    }
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    .main-content {
-        margin-left: 0 !important;
-        padding: 60px 15px 20px 15px !important;
-        width: 100%;
-    }
-    .hamburger {
-        display: block;
-    }
-    .navbar {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 10px 15px;
-    }
-    table, .currency-grid, .gauge-panel, .scorecard-grid {
-        font-size: 12px;
-    }
-    th, td {
-        padding: 8px 4px;
-    }
-    .currency-card {
-        padding: 12px;
-    }
-    .gauge-wrapper {
-        width: 90px;
-        height: 90px;
-    }
-    .gauge-value {
-        font-size: 18px;
-    }
-    .scorecard-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-    .panel {
-        padding: 12px;
-    }
-    .cot-data-table th, .cot-data-table td {
-        padding: 8px 6px;
-        font-size: 12px;
-    }
-    .inline-edit {
-        width: 80px;
-        padding: 4px 6px;
-        font-size: 0.75rem;
-    }
+.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+@media (max-width:768px){
+    .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;width:260px;z-index:1050;position:fixed;top:0;left:0;height:100%;background:#121826}
+    .sidebar.open{transform:translateX(0)}
+    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+    .hamburger{display:block}
+    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
+    table,.currency-grid,.gauge-panel,.scorecard-grid{font-size:12px}
+    th,td{padding:8px 4px}
+    .currency-card{padding:12px}
+    .gauge-wrapper{width:90px;height:90px}
+    .gauge-value{font-size:18px}
+    .scorecard-grid{grid-template-columns:1fr;gap:15px}
+    .panel{padding:12px}
+    .cot-data-table th,.cot-data-table td{padding:8px 6px;font-size:12px}
+    .inline-edit{width:80px;padding:4px 6px;font-size:0.75rem}
 }
 </style>
 </head>
 <body>
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Scorecard</span></div>
+    <!-- "Scorecard" renamed to "Asset Scorecard" -->
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <!-- Added missing menus -->
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <!-- Admin (conditional) -->
+    {% if is_admin %}
+    <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
+    {% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -7168,13 +7263,10 @@ setTimeout(() => {
     <table class="sentiment-table" id="sentimentTable"><thead><tr><th>Pair</th><th>Sentiment Bar</th><th>Long %</th><th>Short %</th></tr></thead><tbody></tbody></table>
 </div>
 <script>
-// Toggle mobile sidebar
 function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('open');
+    document.getElementById('sidebar').classList.toggle('open');
 }
 
-// Close sidebar when clicking outside (optional)
 document.addEventListener('click', function(event) {
     const sidebar = document.getElementById('sidebar');
     const hamburger = document.querySelector('.hamburger');
@@ -7182,19 +7274,373 @@ document.addEventListener('click', function(event) {
         sidebar.classList.remove('open');
     }
 });
-async function loadSentiment(){const res=await fetch('/api/sentiment');const data=await res.json();renderSentiment(data)}
-function renderSentiment(data){const tbody=document.querySelector('#sentimentTable tbody');tbody.innerHTML='';data.forEach(s=>{const long=s.long_pct,short=s.short_pct;const row=document.createElement('tr');row.innerHTML=`<td class="pair-col">${s.pair}</td><td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td><td class="percentage-col" style="color:#00e5a0">${long}%</td><td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;tbody.appendChild(row)})}
-document.getElementById('searchSentiment').addEventListener('input',function(){const term=this.value.toLowerCase();const rows=document.querySelectorAll('#sentimentTable tbody tr');rows.forEach(row=>{const pair=row.querySelector('.pair-col').textContent.toLowerCase();row.style.display=pair.includes(term)?'':'none'})});
-function logout(){fetch('/logout').then(()=>window.location.href='/login')}
+
+async function loadSentiment() {
+    const res = await fetch('/api/sentiment');
+    const data = await res.json();
+    renderSentiment(data);
+}
+
+function renderSentiment(data) {
+    const tbody = document.querySelector('#sentimentTable tbody');
+    tbody.innerHTML = '';
+    data.forEach(s => {
+        const long = s.long_pct, short = s.short_pct;
+        const row = document.createElement('tr');
+        row.innerHTML = `<td class="pair-col">${s.pair}</td>
+                         <td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td>
+                         <td class="percentage-col" style="color:#00e5a0">${long}%</td>
+                         <td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;
+        tbody.appendChild(row);
+    });
+}
+
+document.getElementById('searchSentiment').addEventListener('input', function() {
+    const term = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#sentimentTable tbody tr');
+    rows.forEach(row => {
+        const pair = row.querySelector('.pair-col').textContent.toLowerCase();
+        row.style.display = pair.includes(term) ? '' : 'none';
+    });
+});
+
+function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
 loadSentiment();
 
-// Initialise Lucide icons after page loads
 setTimeout(() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }, 100);
 </script>
 </body>
 </html>''')
+
+         #seasonality html
+      
+with open('templates/seasonality.html', 'w') as f:
+    f.write('''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Seasonality – Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s ease, transform 0.3s ease;overflow-x:hidden;white-space:nowrap}
+        .sidebar .logo{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:800;color:#00e5ff;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040}
+        .sidebar .logo-text{transition:opacity 0.2s}
+        .sidebar.collapsed .logo-text{opacity:0;width:0;visibility:hidden}
+        .sidebar-toggle{background:none;border:none;color:#00e5ff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:0.2s}
+        .sidebar-toggle:hover{background:rgba(0,229,255,0.2)}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px;transition:margin 0.2s}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .sidebar.collapsed .menu-icon{margin-right:0}
+        .sidebar .menu-item span:not(.menu-icon){transition:opacity 0.2s}
+        .sidebar.collapsed .menu-item span:not(.menu-icon){opacity:0;width:0;display:none}
+        .main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}
+        .navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+        .navbar-title{font-size:18px;color:#00e5ff}
+        button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}
+        button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
+        button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
+        .selector-group{display:flex;gap:15px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
+        .selector-group select{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;min-width:180px;cursor:pointer}
+        .selector-group select:focus{outline:none;border-color:#00e5ff}
+        .chart-container{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040;margin-bottom:20px;height:500px;position:relative}
+        .chart-loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(18,24,38,0.7);z-index:10;border-radius:16px;color:#8892b0;font-size:1.2rem}
+        .chart-loading.hidden{display:none}
+        #plotlyDiv{width:100%;height:100%}
+        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:10px}
+        .stat-card{background:#121826;border-radius:12px;padding:16px;border:1px solid #2a3040;text-align:center}
+        .stat-card .label{font-size:0.8rem;color:#8892b0;text-transform:uppercase;letter-spacing:0.5px}
+        .stat-card .value{font-size:1.6rem;font-weight:bold;margin-top:4px;color:#00e5ff}
+        .stat-card .value.positive{color:#00e5a0}
+        .stat-card .value.negative{color:#ff4d6d}
+        .hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+        .sidebar.collapsed{width:80px !important;min-width:80px !important}
+        .sidebar.collapsed ~ .main-content{margin-left:80px !important}
+        @media (max-width:768px){
+            .sidebar{transform:translateX(-100%);width:260px !important}
+            .sidebar.open{transform:translateX(0)}
+            .sidebar.collapsed{width:260px !important; min-width:260px !important}
+            .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
+            .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+            .sidebar.collapsed .menu-icon{margin-right:12px}
+            .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+            .sidebar.collapsed ~ .main-content{margin-left:0 !important}
+            .hamburger{display:block}
+            .selector-group{flex-direction:column;align-items:stretch}
+            .selector-group select{width:100%}
+            .stats-grid{grid-template-columns:1fr 1fr}
+            .chart-container{height:350px}
+        }
+    </style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">
+        <span class="logo-text">⚡ Tradion</span>
+        <button class="sidebar-toggle" onclick="toggleSidebarCollapse()">◀</button>
+    </div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item active" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content">
+    <div class="navbar">
+        <div class="navbar-title">📅 Seasonality</div>
+        <div><span id="lastUpdateTime" style="font-size:12px;color:#8892b0"></span></div>
+    </div>
+
+    <div class="selector-group">
+        <select id="pairSelect">
+            <option value="">Select pair...</option>
+            {% for base, quote in all_pairs %}
+                <option value="{{ base }}/{{ quote }}">{{ base }}/{{ quote }}</option>
+            {% endfor %}
+        </select>
+        <select id="typeSelect">
+            <option value="monthly">Monthly Seasonality</option>
+            <option value="annual">Annual Seasonality</option>
+        </select>
+        <button onclick="loadSeasonality()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Load</button>
+    </div>
+
+    <div class="chart-container" id="chartContainer">
+        <div class="chart-loading hidden" id="chartLoading">Loading chart...</div>
+        <div id="plotlyDiv"></div>
+    </div>
+
+    <div class="stats-grid" id="statsContainer">
+        <div class="stat-card"><div class="label">Avg Monthly Return</div><div class="value" id="statAvgMonthly">—</div></div>
+        <div class="stat-card"><div class="label">Best Month</div><div class="value positive" id="statBestMonth">—</div></div>
+        <div class="stat-card"><div class="label">Worst Month</div><div class="value negative" id="statWorstMonth">—</div></div>
+        <div class="stat-card"><div class="label">10-Yr Avg Annual</div><div class="value" id="statAvgAnnual">—</div></div>
+    </div>
+</div>
+
+<script>
+    // Sidebar functions
+    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+    function toggleSidebarCollapse() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            sidebar.classList.toggle('collapsed');
+            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+        }
+    }
+    function restoreSidebarState() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth > 768) {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+        }
+    }
+    window.addEventListener('resize', function() {
+        const sidebar = document.getElementById('sidebar');
+        if (window.innerWidth <= 768) {
+            sidebar.classList.remove('collapsed');
+        } else {
+            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+            if (isCollapsed) sidebar.classList.add('collapsed');
+        }
+    });
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
+    // Load seasonality with loading overlay
+    async function loadSeasonality() {
+        const pair = document.getElementById('pairSelect').value;
+        const type = document.getElementById('typeSelect').value;
+        if (!pair) {
+            alert('Please select a forex pair.');
+            return;
+        }
+
+        const loading = document.getElementById('chartLoading');
+        loading.classList.remove('hidden');
+
+        try {
+            const resp = await fetch(`/api/seasonality?pair=${encodeURIComponent(pair)}&type=${type}`);
+            if (!resp.ok) throw new Error('Failed to fetch data');
+            const data = await resp.json();
+            if (data.error) throw new Error(data.error);
+
+            renderChart(data, type);
+            updateStats(data.stats, type);
+            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
+        } catch (err) {
+            const plotDiv = document.getElementById('plotlyDiv');
+            Plotly.react(plotDiv, [], {
+                paper_bgcolor: 'rgba(0,0,0,0)',
+                plot_bgcolor: 'rgba(0,0,0,0)',
+                annotations: [{
+                    text: `❌ ${err.message}`,
+                    showarrow: false,
+                    font: { color: '#ff4d6d', size: 16 },
+                    x: 0.5, y: 0.5, xref: 'paper', yref: 'paper'
+                }]
+            });
+        } finally {
+            loading.classList.add('hidden');
+        }
+    }
+
+    function renderChart(data, type) {
+        const plotDiv = document.getElementById('plotlyDiv');
+
+        // Shared dark theme layout properties
+        const darkLayout = {
+            paper_bgcolor: 'rgba(0,0,0,0)',
+            plot_bgcolor: 'rgba(18,24,38,0.8)',
+            font: { color: '#e0e0e0' },
+            xaxis: {
+                titlefont: { color: '#e0e0e0' },
+                tickfont: { color: '#a0b0c0' },
+                gridcolor: '#2a3040',
+                zerolinecolor: '#555'
+            },
+            yaxis: {
+                titlefont: { color: '#e0e0e0' },
+                tickfont: { color: '#a0b0c0' },
+                gridcolor: '#2a3040',
+                zerolinecolor: '#555'
+            },
+            legend: {
+                font: { color: '#e0e0e0' },
+                orientation: 'h',
+                y: 1.05,
+                x: 0.5,
+                xanchor: 'center'
+            }
+        };
+
+        if (type === 'monthly') {
+            const trace1 = {
+                x: data.labels,
+                y: data.avg_returns,
+                type: 'bar',
+                name: '10-Year Avg',
+                marker: { color: '#00b8d4', borderRadius: 4 },
+                hovertemplate: '%{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
+            };
+            const trace2 = {
+                x: data.labels,
+                y: data.current_returns,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'This Year',
+                line: { color: '#00e5a0', dash: 'dot', width: 2 },
+                marker: { color: '#00e5a0', size: 6 },
+                hovertemplate: '%{x}<br>This Year: %{y:.2f}%<extra></extra>'
+            };
+            const layout = {
+                ...darkLayout,
+                title: { text: 'Monthly Average Returns', font: { color: '#e0e0e0' } },
+                xaxis: { ...darkLayout.xaxis, title: 'Month', tickangle: -45 },
+                yaxis: { ...darkLayout.yaxis, title: 'Return (%)', zeroline: true },
+                barmode: 'group',
+                hovermode: 'x unified',
+                margin: { l: 50, r: 30, t: 50, b: 80 }
+            };
+            Plotly.react(plotDiv, [trace1, trace2], layout);
+        } else { // annual
+            const trace1 = {
+                x: data.weeks,
+                y: data.ten_year_avg,
+                type: 'scatter',
+                mode: 'lines',
+                name: '10-Year Avg (%)',
+                line: { color: '#aaaaaa', dash: 'dash', width: 2 },
+                yaxis: 'y2',
+                hovertemplate: 'Week %{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
+            };
+            const trace2 = {
+                x: data.weeks,
+                y: data.current_year_prices,
+                type: 'scatter',
+                mode: 'lines+markers',
+                name: 'Current Year (Price)',
+                line: { color: '#ff4a5a', width: 2.5 },
+                marker: { color: '#ff4a5a', size: 4 },
+                hovertemplate: 'Week %{x}<br>Price: %{y:.2f}<extra></extra>'
+            };
+            const annotations = data.month_midpoints.map((m, i) => ({
+                x: m,
+                y: 0,
+                text: data.month_names[i],
+                showarrow: false,
+                font: { color: '#a0b0c0', size: 10 },
+                yshift: -25
+            }));
+            const layout = {
+                ...darkLayout,
+                title: { text: 'Annual Seasonality', font: { color: '#e0e0e0' } },
+                xaxis: { ...darkLayout.xaxis, title: 'Week', tickvals: data.month_midpoints, ticktext: data.month_names },
+                yaxis: { ...darkLayout.yaxis, title: 'Price', side: 'left' },
+                yaxis2: {
+                    title: 'Avg Return (%)',
+                    titlefont: { color: '#e0e0e0' },
+                    tickfont: { color: '#a0b0c0' },
+                    gridcolor: '#2a3040',
+                    zerolinecolor: '#555',
+                    overlaying: 'y',
+                    side: 'right'
+                },
+                hovermode: 'x unified',
+                margin: { l: 60, r: 60, t: 50, b: 80 },
+                annotations: annotations
+            };
+            Plotly.react(plotDiv, [trace1, trace2], layout);
+        }
+    }
+
+    function updateStats(stats, type) {
+        if (type === 'monthly') {
+            document.getElementById('statAvgMonthly').textContent = stats.avg_monthly_return + '%';
+            document.getElementById('statBestMonth').textContent = stats.best_month + '%';
+            document.getElementById('statWorstMonth').textContent = stats.worst_month + '%';
+            document.getElementById('statAvgAnnual').textContent = stats.avg_annual_return + '%';
+        } else {
+            document.getElementById('statAvgMonthly').textContent = stats.avg_annual_return + '%';
+            document.getElementById('statBestMonth').textContent = stats.best_week + '%';
+            document.getElementById('statWorstMonth').textContent = stats.worst_week + '%';
+            document.getElementById('statAvgAnnual').textContent = stats.latest_price || '—';
+        }
+    }
+
+    // Auto-load when selectors change
+    document.getElementById('pairSelect').addEventListener('change', loadSeasonality);
+    document.getElementById('typeSelect').addEventListener('change', loadSeasonality);
+
+    // Initialise
+    restoreSidebarState();
+    const pairSelect = document.getElementById('pairSelect');
+    if (pairSelect.options.length > 1) {
+        pairSelect.selectedIndex = 1;
+        loadSeasonality();
+    }
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
+
+
+
 
                # Heatmap (with gauges, caching, and Lucide icons)
     with open('templates/heatmap.html', 'w') as f:
@@ -7411,6 +7857,148 @@ def debug_jobs():
             'func': str(job.func)
         })
     return jsonify(jobs)
+
+# -------------------------------------------------------------------
+# NEW: Seasonality Page & API
+# -------------------------------------------------------------------
+
+@app.route('/seasonality')
+@login_required
+def seasonality_page():
+    """Render the Seasonality page."""
+    return render_template('seasonality.html',
+                           username=session['username'],
+                           is_admin=session.get('is_admin', False),
+                           all_pairs=ALL_PAIRS)
+
+@app.route('/api/seasonality')
+@login_required
+def api_seasonality():
+    """Return JSON data for the requested pair and seasonality type."""
+    pair = request.args.get('pair')
+    chart_type = request.args.get('type', 'monthly')  # 'monthly' or 'annual'
+    if not pair:
+        return jsonify({'error': 'Missing pair parameter'}), 400
+
+    # Get yfinance symbol from mapping, fallback to generic
+    yf_symbol = SYMBOL_MAPPING.get(pair)
+    if not yf_symbol:
+        yf_symbol = pair.replace('/', '') + '=X'
+
+    try:
+        ticker = yf.Ticker(yf_symbol)
+        df = ticker.history(period="10y", interval="1d")
+        if df.empty:
+            return jsonify({'error': 'No data found for this symbol'}), 404
+
+        if chart_type == 'monthly':
+            data = calculate_monthly_seasonality(df, pair)
+        elif chart_type == 'annual':
+            data = calculate_annual_seasonality(df, pair)
+        else:
+            return jsonify({'error': 'Invalid type parameter'}), 400
+
+        return jsonify(data)
+
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# -------------------------------------------------------------------
+# Seasonality Calculation Functions (exact replicas of the provided code)
+# -------------------------------------------------------------------
+
+def calculate_monthly_seasonality(df, pair):
+    """Return monthly average returns and current year data."""
+    # Resample daily data to month-end
+    monthly_df = df.resample('ME').agg({'Open': 'first', 'Close': 'last'})
+    monthly_df['Monthly_Return_Pct'] = ((monthly_df['Close'] - monthly_df['Open']) /
+                                        monthly_df['Open']) * 100
+    monthly_df['Month'] = monthly_df.index.month
+    monthly_df['Year'] = monthly_df.index.year
+
+    # 10-year historical average per month
+    seasonality = monthly_df.groupby('Month')['Monthly_Return_Pct'].mean()
+
+    # Current year data
+    current_year = datetime.now().year
+    this_year_df = monthly_df[monthly_df['Year'] == current_year]
+    this_year_data = this_year_df.set_index('Month')['Monthly_Return_Pct']
+
+    months = list(range(1, 13))
+    month_names = ["January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"]
+    avg_returns = [seasonality.get(m, 0) for m in months]
+    current_returns = [this_year_data.get(m, None) for m in months]
+
+    # Statistics
+    avg_monthly_return = sum(avg_returns) / len(avg_returns) if avg_returns else 0
+    best_month = max(avg_returns) if avg_returns else 0
+    worst_month = min(avg_returns) if avg_returns else 0
+    avg_annual_return = sum(avg_returns)  # sum of monthly averages
+
+    return {
+        'labels': month_names,
+        'avg_returns': avg_returns,
+        'current_returns': current_returns,
+        'stats': {
+            'avg_monthly_return': round(avg_monthly_return, 2),
+            'best_month': round(best_month, 2),
+            'worst_month': round(worst_month, 2),
+            'avg_annual_return': round(avg_annual_return, 2)
+        }
+    }
+
+
+def calculate_annual_seasonality(df, pair):
+    """Return 10-year average cumulative return curve and current year performance."""
+    df['Year'] = df.index.year
+    df['Week'] = ((df.index.dayofyear - 1) // 7) + 1
+
+    # Cumulative return from start of year
+    df['Year_Start_Close'] = df.groupby('Year')['Close'].transform('first')
+    df['Cum_Return'] = ((df['Close'] - df['Year_Start_Close']) /
+                        df['Year_Start_Close']) * 100
+
+    current_year = datetime.now().year
+    historical_df = df[df['Year'] < current_year]
+    ten_year_avg_curve = historical_df.groupby('Week')['Cum_Return'].mean()
+
+    # Current year (prices)
+    ytd_df = df[df['Year'] == current_year]
+    ytd_curve = ytd_df.groupby('Week')['Close'].last()
+
+    # Create a full week range (1–52)
+    all_weeks = sorted(set(df['Week'].unique()) |
+                       set(ten_year_avg_curve.index) |
+                       set(ytd_curve.index))
+    # Fill missing weeks with None (so Plotly can handle gaps)
+    ten_year_avg = [ten_year_avg_curve.get(w, None) for w in all_weeks]
+    current_year_prices = [ytd_curve.get(w, None) for w in all_weeks]
+
+    # Month midpoint mapping (same as original)
+    month_midpoints = [1, 5, 9, 14, 18, 22, 27, 31, 36, 40, 44, 49]
+    month_names = ["January", "February", "March", "April", "May", "June",
+                   "July", "August", "September", "October", "November", "December"]
+
+    # Statistics
+    avg_annual_return = ten_year_avg_curve.iloc[-1] if not ten_year_avg_curve.empty else 0
+    best_week = ten_year_avg_curve.max() if not ten_year_avg_curve.empty else 0
+    worst_week = ten_year_avg_curve.min() if not ten_year_avg_curve.empty else 0
+
+    return {
+        'weeks': all_weeks,
+        'ten_year_avg': ten_year_avg,
+        'current_year_prices': current_year_prices,
+        'month_midpoints': month_midpoints,
+        'month_names': month_names,
+        'stats': {
+            'avg_annual_return': round(avg_annual_return, 2),
+            'best_week': round(best_week, 2),
+            'worst_week': round(worst_week, 2),
+            'latest_price': round(ytd_curve.iloc[-1], 2) if not ytd_curve.empty else None
+        }
+    }
 
 
 if __name__ == '__main__':

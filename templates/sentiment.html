@@ -22,94 +22,44 @@
 .bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
 .percentage-col{width:80px;text-align:right}
 .pair-col{font-weight:bold;width:120px}
-/* ===== Mobile / Responsive Styles ===== */
-.hamburger {
-    display: none;
-    font-size: 28px;
-    cursor: pointer;
-    color: #00e5ff;
-    position: fixed;
-    top: 15px;
-    left: 20px;
-    z-index: 1100;
-    background: #121826;
-    padding: 8px 12px;
-    border-radius: 8px;
-    border: 1px solid #2a3040;
-}
-
-@media (max-width: 768px) {
-    .sidebar {
-        transform: translateX(-100%);
-        transition: transform 0.3s ease;
-        width: 260px;
-        z-index: 1050;
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 100%;
-        background: #121826;
-    }
-    .sidebar.open {
-        transform: translateX(0);
-    }
-    .main-content {
-        margin-left: 0 !important;
-        padding: 60px 15px 20px 15px !important;
-        width: 100%;
-    }
-    .hamburger {
-        display: block;
-    }
-    .navbar {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: 10px;
-        padding: 10px 15px;
-    }
-    table, .currency-grid, .gauge-panel, .scorecard-grid {
-        font-size: 12px;
-    }
-    th, td {
-        padding: 8px 4px;
-    }
-    .currency-card {
-        padding: 12px;
-    }
-    .gauge-wrapper {
-        width: 90px;
-        height: 90px;
-    }
-    .gauge-value {
-        font-size: 18px;
-    }
-    .scorecard-grid {
-        grid-template-columns: 1fr;
-        gap: 15px;
-    }
-    .panel {
-        padding: 12px;
-    }
-    .cot-data-table th, .cot-data-table td {
-        padding: 8px 6px;
-        font-size: 12px;
-    }
-    .inline-edit {
-        width: 80px;
-        padding: 4px 6px;
-        font-size: 0.75rem;
-    }
+.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+@media (max-width:768px){
+    .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;width:260px;z-index:1050;position:fixed;top:0;left:0;height:100%;background:#121826}
+    .sidebar.open{transform:translateX(0)}
+    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+    .hamburger{display:block}
+    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
+    table,.currency-grid,.gauge-panel,.scorecard-grid{font-size:12px}
+    th,td{padding:8px 4px}
+    .currency-card{padding:12px}
+    .gauge-wrapper{width:90px;height:90px}
+    .gauge-value{font-size:18px}
+    .scorecard-grid{grid-template-columns:1fr;gap:15px}
+    .panel{padding:12px}
+    .cot-data-table th,.cot-data-table td{padding:8px 6px;font-size:12px}
+    .inline-edit{width:80px;padding:4px 6px;font-size:0.75rem}
 }
 </style>
 </head>
 <body>
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar">
+<div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Scorecard</span></div>
+    <!-- "Scorecard" renamed to "Asset Scorecard" -->
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <!-- Added missing menus -->
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <!-- Admin (conditional) -->
+    {% if is_admin %}
+    <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
+    {% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -119,13 +69,10 @@
     <table class="sentiment-table" id="sentimentTable"><thead><tr><th>Pair</th><th>Sentiment Bar</th><th>Long %</th><th>Short %</th></tr></thead><tbody></tbody></table>
 </div>
 <script>
-// Toggle mobile sidebar
 function toggleSidebar() {
-    const sidebar = document.getElementById('sidebar');
-    sidebar.classList.toggle('open');
+    document.getElementById('sidebar').classList.toggle('open');
 }
 
-// Close sidebar when clicking outside (optional)
 document.addEventListener('click', function(event) {
     const sidebar = document.getElementById('sidebar');
     const hamburger = document.querySelector('.hamburger');
@@ -133,13 +80,40 @@ document.addEventListener('click', function(event) {
         sidebar.classList.remove('open');
     }
 });
-async function loadSentiment(){const res=await fetch('/api/sentiment');const data=await res.json();renderSentiment(data)}
-function renderSentiment(data){const tbody=document.querySelector('#sentimentTable tbody');tbody.innerHTML='';data.forEach(s=>{const long=s.long_pct,short=s.short_pct;const row=document.createElement('tr');row.innerHTML=`<td class="pair-col">${s.pair}</td><td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td><td class="percentage-col" style="color:#00e5a0">${long}%</td><td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;tbody.appendChild(row)})}
-document.getElementById('searchSentiment').addEventListener('input',function(){const term=this.value.toLowerCase();const rows=document.querySelectorAll('#sentimentTable tbody tr');rows.forEach(row=>{const pair=row.querySelector('.pair-col').textContent.toLowerCase();row.style.display=pair.includes(term)?'':'none'})});
-function logout(){fetch('/logout').then(()=>window.location.href='/login')}
+
+async function loadSentiment() {
+    const res = await fetch('/api/sentiment');
+    const data = await res.json();
+    renderSentiment(data);
+}
+
+function renderSentiment(data) {
+    const tbody = document.querySelector('#sentimentTable tbody');
+    tbody.innerHTML = '';
+    data.forEach(s => {
+        const long = s.long_pct, short = s.short_pct;
+        const row = document.createElement('tr');
+        row.innerHTML = `<td class="pair-col">${s.pair}</td>
+                         <td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td>
+                         <td class="percentage-col" style="color:#00e5a0">${long}%</td>
+                         <td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;
+        tbody.appendChild(row);
+    });
+}
+
+document.getElementById('searchSentiment').addEventListener('input', function() {
+    const term = this.value.toLowerCase();
+    const rows = document.querySelectorAll('#sentimentTable tbody tr');
+    rows.forEach(row => {
+        const pair = row.querySelector('.pair-col').textContent.toLowerCase();
+        row.style.display = pair.includes(term) ? '' : 'none';
+    });
+});
+
+function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
 loadSentiment();
 
-// Initialise Lucide icons after page loads
 setTimeout(() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }, 100);
