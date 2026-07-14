@@ -9,5 +9,5 @@ yfinance
 openpyxl
 psycopg2-binary
 gunicorn
-tvdatafeed
 websocket-client
+git+https://github.com/rongardF/tvdatafeed.git
