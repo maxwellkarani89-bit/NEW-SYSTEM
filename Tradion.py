@@ -18,10 +18,19 @@ import yfinance as yf
 from pathlib import Path
 import sqlite3
 import hashlib
-
+import investpy
+from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
 # -------- PASTE THE DATABASE CONFIGURATION HERE --------
 import os
+# Override websocket.create_connection to add a longer timeout
+import websocket
+original_create = websocket.create_connection
+
+def create_connection_with_timeout(url, timeout=60, **kwargs):
+    return original_create(url, timeout=timeout, **kwargs)
+
+websocket.create_connection = create_connection_with_timeout
 
 database_url = os.environ.get('DATABASE_URL')
 if database_url:
@@ -44,6 +53,59 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['MAX_CONTENT_LENGTH'] = 50 * 1024 * 1024
 
 db = SQLAlchemy(app)
+
+# ---------- BOND YIELDS FROM TRADINGVIEW (except USD) ----------
+# ---------- BOND YIELDS FROM TRADINGVIEW (except USD) ----------
+_YIELD_CACHE = {}
+_YIELD_CACHE_TTL = 300  # 5 minutes
+
+def get_bond_yield_from_tradingview(symbol: str) -> float:
+    """
+    Fetch latest yield for a TradingView bond symbol (e.g., 'GB02Y', 'EU02Y').
+    Returns 0.0 if failed.
+    """
+    now = time.time()
+    if symbol in _YIELD_CACHE:
+        val, timestamp = _YIELD_CACHE[symbol]
+        if now - timestamp < _YIELD_CACHE_TTL:
+            return val
+
+    try:
+        tv = TvDatafeed()   # optionally add username/password if you have them
+        data = tv.get_hist(symbol=symbol, exchange='', interval=Interval.in_daily, n_bars=1)
+        if not data.empty:
+            val = float(data['close'].iloc[-1])
+            _YIELD_CACHE[symbol] = (val, now)
+            return val
+    except Exception as e:
+        print(f"❌ TradingView error for {symbol}: {e}")
+    return 0.0
+
+
+def get_all_bond_yields_except_us():
+    # ... (keep the docstring and fallback logic) ...
+    symbols = {
+        "EUR": "EU02Y",      # Eurozone 2Y
+        "GBP": "GB02Y",      # UK 2Y
+        "AUD": "AU02Y",      # Australia 2Y
+        "NZD": "NZ02Y",      # New Zealand 2Y
+        "CAD": "CA02Y",      # Canada 2Y
+        "CHF": "CH02Y",      # Switzerland 2Y
+        "JPY": "JP02Y",      # Japan 2Y
+    }
+    yields = {}
+    for currency, symbol in symbols.items():
+        yield_val = get_bond_yield_from_tradingview(symbol)
+        if yield_val == 0.0:
+            # Fallback to policy rate from database
+            yield_val = get_currency_rate(currency)
+            if yield_val != 0.0:
+                print(f"⚠️ Using fallback policy rate for {currency}: {yield_val}%")
+        else:
+            print(f"✅ {currency} 2Y yield from TradingView: {yield_val}%")
+        yields[currency] = yield_val
+    return yields
+
 
 
 # -----------------------------
@@ -455,6 +517,22 @@ def debug_econ(currency):
     result['percentage'] = round(percent, 1)
     
     return jsonify(result)
+
+@app.route('/debug/tv/<symbol>')
+@login_required
+@admin_required
+def debug_tv(symbol):
+    from tvdatafeed import TvDatafeed, Interval
+    try:
+        tv = TvDatafeed()
+        data = tv.get_hist(symbol=symbol, exchange='', interval=Interval.in_1_day, n_bars=1)
+        if data.empty:
+            return jsonify({"symbol": symbol, "error": "No data returned"})
+        return jsonify({"symbol": symbol, "close": float(data['close'].iloc[-1])})
+    except Exception as e:
+        return jsonify({"symbol": symbol, "error": str(e)})
+
+
 # -----------------------------
 # UTILITY FUNCTIONS
 # -----------------------------
@@ -468,6 +546,11 @@ def safe_convert(value):
         return float(str_val) if str_val else 0
     except:
         return 0
+
+# ========== BOND YIELD FETCHING FROM INVESTING.COM (except USD) ==========
+
+
+
 
 def get_bias(value):
     if value > 0: return "Bullish"
@@ -2280,7 +2363,7 @@ def api_asset_scorecard(symbol):
     if is_standalone:
         # Technical score for standalone (XAU, BTC) – 21-day SMA
         yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
-        technical_score = get_trend_score_21d(yf_symbol)
+        technical_score = get_trend_score_21d(yf_symbol)   # returns -1,0,1
         
         # COT: net direction + momentum direction (each ±1 → total -2..+2)
         base_cot = COTData.query.filter_by(currency=base).first()
@@ -4377,6 +4460,9 @@ td { background-color: inherit; }
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
+</div>
     <!-- ======== NEW SEASONALITY MENU ITEM ======== -->
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <!-- ========================================= -->
@@ -4885,6 +4971,10 @@ setTimeout(() => {
     <!-- ===== MISSING MENU ITEMS ADDED ===== -->
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
     <!-- Admin link (optional – add if is_admin is available) -->
     <!-- <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div> -->
@@ -5476,6 +5566,10 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
@@ -5976,6 +6070,10 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <!-- ===== ADDED SEASONALITY ===== -->
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <!-- ===== ADDED HISTORY ===== -->
@@ -6332,6 +6430,10 @@ with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
     <div class="menu-item" onclick="showPane('cotData')"><i data-lucide="database" class="menu-icon"></i> COT Data</div>
     <div class="menu-item" onclick="showPane('seasonality')"><i data-lucide="calendar" class="menu-icon"></i> Seasonality</div>
     <div class="menu-item" onclick="showPane('sentiment')"><i data-lucide="message-circle" class="menu-icon"></i> Sentiment</div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <!-- NEW: Central Bank admin pane -->
     <div class="menu-item" onclick="showPane('centralBank')"><i data-lucide="landmark" class="menu-icon"></i> Central Bank</div>
     <div class="menu-item" onclick="showPane('users')"><i data-lucide="users" class="menu-icon"></i> Users</div>
@@ -6974,6 +7076,10 @@ canvas{max-height:400px;width:100%}
     <div class="menu-item active" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
@@ -7248,6 +7354,10 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
     <!-- Admin (conditional) -->
     {% if is_admin %}
@@ -7395,6 +7505,10 @@ with open('templates/seasonality.html', 'w') as f:
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item active" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
@@ -7641,6 +7755,307 @@ with open('templates/seasonality.html', 'w') as f:
 
 
 
+###carry_trade html
+with open('templates/carry_scanner.html','w')as f:
+    f.write('''<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Carry Trade Scanner – Tradion</title>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        *{margin:0;padding:0;box-sizing:border-box}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
+        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+        .sidebar .menu-icon{font-size:20px;margin-right:12px}
+        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+        .header h2{color:#00e5ff;font-size:1.8rem}
+        .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
+        .kpi-card{background:#121826;border-radius:16px;padding:16px;border:1px solid #2a3040;text-align:center}
+        .kpi-label{font-size:0.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px}
+        .kpi-value{font-size:1.8rem;font-weight:700;margin-top:4px;color:#00e5ff}
+        .kpi-value.bullish{color:#00e5a0}
+        .kpi-value.bearish{color:#ff4d6d}
+        .kpi-value.neutral{color:#ffb800}
+        .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040;margin-bottom:20px}
+        table{width:100%;border-collapse:collapse;background:#121826;font-size:0.85rem}
+        th,td{padding:12px 10px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
+        th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;position:sticky;top:0}
+        tr:hover{background:rgba(0,229,255,0.05)}
+        .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.75rem}
+        .badge-bullish{background:rgba(0,229,160,0.2);color:#00e5a0}
+        .badge-bearish{background:rgba(255,77,109,0.2);color:#ff4d6d}
+        .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
+        .badge-strong-buy{background:rgba(0,229,160,0.4);color:#00e5a0}
+        .badge-strong-sell{background:rgba(255,77,109,0.4);color:#ff4d6d}
+        .badge-buy{background:rgba(0,229,160,0.25);color:#00e5a0}
+        .badge-sell{background:rgba(255,77,109,0.25);color:#ff4d6d}
+        .value-positive{color:#00e5a0}
+        .value-negative{color:#ff4d6d}
+        .value-neutral{color:#ffb800}
+        .search-box{padding:8px 12px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:300px;margin-bottom:15px}
+        .gauge-container{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;margin-bottom:20px}
+        .gauge-panel{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040;text-align:center;flex:1;min-width:200px}
+        .gauge-panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:10px}
+        .gauge-wrapper{position:relative;width:160px;height:90px;margin:0 auto}
+        .gauge-svg{width:100%;height:100%}
+        .gauge-value{font-size:1.8rem;font-weight:700;color:#00e5ff;margin-top:5px}
+        .gauge-label{font-size:0.8rem;color:#94a3b8}
+        @media(max-width:768px){
+            .main-content{margin-left:0;padding:60px 15px 20px}
+            .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
+            .gauge-container{flex-direction:column;align-items:center}
+            .sidebar{transform:translateX(-100%)}
+            .sidebar.open{transform:translateX(0)}
+            .hamburger{display:block}
+        }
+        .hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+    </style>
+</head>
+<body>
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item active" onclick="window.location.href='/carry-scanner'"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+<div class="main-content">
+    <div class="header"><h2>Carry Trade Scanner</h2><span id="lastUpdate" style="font-size:0.8rem;color:#94a3b8"></span></div>
+
+    <!-- KPI Cards -->
+    <div class="kpi-grid" id="kpiGrid">
+        <div class="kpi-card"><div class="kpi-label">Bullish Trades</div><div class="kpi-value bullish" id="kpiBullish">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Bearish Trades</div><div class="kpi-value bearish" id="kpiBearish">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Avg Carry Score</div><div class="kpi-value" id="kpiAvgCarry">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">Fear & Greed</div><div class="kpi-value" id="kpiFearGreed">—</div></div>
+        <div class="kpi-card"><div class="kpi-label">US 2Y Trend</div><div class="kpi-value" id="kpiUsTrend">—</div></div>
+    </div>
+
+    <!-- Search & Table -->
+    <input type="text" id="searchCarry" class="search-box" placeholder="🔍 Search pair..." onkeyup="filterTable()">
+    <div class="table-container">
+        <table id="carryTable">
+            <thead><tr>
+                <th>Pair</th>
+                <th>Base Rate</th>
+                <th>JPY Rate</th>
+                <th>Spread</th>
+                <th>Spread Score</th>
+                <th>US2Y Trend</th>
+                <th>Fear & Greed</th>
+                <th>Carry Score</th>
+                <th>Signal</th>
+            </tr></thead>
+            <tbody id="carryTableBody"><tr><td colspan="9" style="text-align:center">Loading...</td></tr></tbody>
+        </table>
+    </div>
+
+    <!-- Gauges -->
+    <div class="gauge-container">
+        <div class="gauge-panel">
+            <h3>Fear & Greed Index</h3>
+            <div class="gauge-wrapper">
+                <svg class="gauge-svg" viewBox="0 0 220 110">
+                    <defs>
+                        <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+                            <stop offset="0%" stop-color="#ff4d6d"/>
+                            <stop offset="25%" stop-color="#ffb800"/>
+                            <stop offset="50%" stop-color="#ffb800"/>
+                            <stop offset="75%" stop-color="#66ffb3"/>
+                            <stop offset="100%" stop-color="#00e5a0"/>
+                        </linearGradient>
+                    </defs>
+                    <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none"/>
+                    <path id="fgFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#fgGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;"/>
+                    <g id="fgNeedle" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
+                        <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                        <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
+                        <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
+                        <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
+                    </g>
+                    <text x="18" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">0</text>
+                    <text x="110" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">50</text>
+                    <text x="202" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">100</text>
+                </svg>
+            </div>
+            <div class="gauge-value" id="fgValue">—</div>
+            <div class="gauge-label" id="fgLabel">Fear & Greed</div>
+        </div>
+        <div class="gauge-panel">
+            <h3>US 2‑Year Yield</h3>
+            <div style="font-size:2rem;font-weight:700;color:#00e5ff" id="usYield">—</div>
+            <div style="font-size:0.9rem;color:#94a3b8">SMA: <span id="usSma">—</span></div>
+            <div style="margin-top:8px" id="usTrendBadge"></div>
+        </div>
+    </div>
+</div>
+
+<script>
+    const CACHE_KEY = 'tradion_carry_data';
+    const CACHE_TIME_KEY = 'tradion_carry_data_time';
+    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+    function logout() {
+        fetch('/logout').then(() => window.location.href = '/login');
+    }
+
+    async function loadCarryData(forceRefresh = false) {
+        // Check cache (unless force refresh)
+        if (!forceRefresh) {
+            const cachedData = sessionStorage.getItem(CACHE_KEY);
+            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+            if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
+                try {
+                    const data = JSON.parse(cachedData);
+                    updateUI(data);
+                    document.getElementById('lastUpdate').textContent = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
+                    return;
+                } catch (e) {
+                    console.warn('Cache parse error', e);
+                }
+            }
+        }
+
+        // Fetch fresh
+        try {
+            const res = await fetch('/api/carry-data');
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            const data = await res.json();
+            if (data.error) throw new Error(data.error);
+
+            updateUI(data);
+
+            const now = Date.now();
+            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
+            sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
+            document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
+        } catch (e) {
+            console.error(e);
+            document.getElementById('carryTableBody').innerHTML = `<tr><td colspan="9" style="color:#ff4d6d">Error loading data</td></tr>`;
+        }
+    }
+
+    function updateUI(data) {
+        // KPI
+        document.getElementById('kpiBullish').textContent = data.kpi.bullish;
+        document.getElementById('kpiBearish').textContent = data.kpi.bearish;
+        document.getElementById('kpiAvgCarry').textContent = data.kpi.avg_carry;
+        document.getElementById('kpiFearGreed').textContent = data.kpi.fear_greed;
+        const trend = data.kpi.us_trend;
+        const trendEl = document.getElementById('kpiUsTrend');
+        trendEl.textContent = trend;
+        trendEl.className = 'kpi-value ' + (trend === 'Bullish' ? 'bullish' : (trend === 'Bearish' ? 'bearish' : 'neutral'));
+
+        // Table
+        const tbody = document.getElementById('carryTableBody');
+        tbody.innerHTML = '';
+        data.pairs.forEach(p => {
+            const row = tbody.insertRow();
+            const signalClass = p.signal === 'Strong Carry Buy' ? 'badge-strong-buy' :
+                               p.signal === 'Carry Buy' ? 'badge-buy' :
+                               p.signal === 'Strong Carry Sell' ? 'badge-strong-sell' :
+                               p.signal === 'Carry Sell' ? 'badge-sell' : 'badge-neutral';
+            const spreadClass = p.spread > 0 ? 'value-positive' : (p.spread < 0 ? 'value-negative' : 'value-neutral');
+            const scoreClass = p.carry_score > 0 ? 'value-positive' : (p.carry_score < 0 ? 'value-negative' : 'value-neutral');
+            row.innerHTML = `
+                <td><strong>${p.pair}</strong></td>
+                <td>${p.base_rate.toFixed(2)}%</td>
+                <td>${p.jpy_rate.toFixed(2)}%</td>
+                <td class="${spreadClass}">${p.spread.toFixed(2)}%</td>
+                <td>${p.spread_score}</td>
+                <td><span class="badge ${p.us_trend_bias === 'Bullish' ? 'badge-bullish' : p.us_trend_bias === 'Bearish' ? 'badge-bearish' : 'badge-neutral'}">${p.us_trend_bias}</span></td>
+                <td>${p.fear_greed_score}</td>
+                <td class="${scoreClass}">${p.carry_score}</td>
+                <td><span class="badge ${signalClass}">${p.signal}</span></td>
+            `;
+        });
+
+        // Fear & Greed gauge
+        const fg = data.fear_greed;
+        const circumference = 267;
+        const fraction = Math.min(Math.max(fg, 0), 100) / 100;
+        const dash = fraction * circumference;
+        document.getElementById('fgFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
+        const angle = (fraction * 180) - 90;
+        document.getElementById('fgNeedle').setAttribute('transform', `rotate(${angle}, 110, 105)`);
+        document.getElementById('fgValue').textContent = fg;
+        const fgLabel = document.getElementById('fgLabel');
+        if (fg <= 25) fgLabel.textContent = 'Extreme Fear';
+        else if (fg <= 45) fgLabel.textContent = 'Fear';
+        else if (fg <= 55) fgLabel.textContent = 'Neutral';
+        else if (fg <= 75) fgLabel.textContent = 'Greed';
+        else fgLabel.textContent = 'Extreme Greed';
+
+        // US Yield
+        document.getElementById('usYield').textContent = data.us_yield + '%';
+        document.getElementById('usSma').textContent = data.us_sma + '%';
+        const usBadge = document.getElementById('usTrendBadge');
+        const trendText = data.us_trend_bias;
+        const cls = trendText === 'Bullish' ? 'badge-bullish' : (trendText === 'Bearish' ? 'badge-bearish' : 'badge-neutral');
+        usBadge.innerHTML = `<span class="badge ${cls}">${trendText}</span>`;
+
+        // Last update already handled in loadCarryData
+    }
+
+    function filterTable() {
+        const input = document.getElementById('searchCarry');
+        const filter = input.value.toLowerCase();
+        const rows = document.querySelectorAll('#carryTableBody tr');
+        rows.forEach(row => {
+            const pair = row.cells[0].textContent.toLowerCase();
+            row.style.display = pair.includes(filter) ? '' : 'none';
+        });
+    }
+
+    // Initial load (cached or fresh)
+    loadCarryData();
+
+    // Auto-refresh every 5 minutes (but only if page is active)
+    setInterval(() => {
+        // Force refresh by clearing cache and reloading
+        sessionStorage.removeItem(CACHE_KEY);
+        sessionStorage.removeItem(CACHE_TIME_KEY);
+        loadCarryData(true);
+    }, 300000);
+
+    // When page becomes visible again, check cache freshness
+    document.addEventListener('visibilitychange', function() {
+        if (!document.hidden) {
+            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
+            if (cachedTime && (Date.now() - parseInt(cachedTime)) > CACHE_TTL) {
+                sessionStorage.removeItem(CACHE_KEY);
+                sessionStorage.removeItem(CACHE_TIME_KEY);
+                loadCarryData(true);
+            }
+        }
+    });
+
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
+
 
                # Heatmap (with gauges, caching, and Lucide icons)
     with open('templates/heatmap.html', 'w') as f:
@@ -7711,6 +8126,10 @@ button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
     <div class="menu-item active" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
     {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
@@ -7858,6 +8277,23 @@ def debug_jobs():
         })
     return jsonify(jobs)
 
+@app.route('/debug/bonds')
+@login_required
+@admin_required
+def debug_bonds():
+    result = {}
+    countries = ["Germany", "United Kingdom", "Australia", "New Zealand", "Canada", "Switzerland", "Japan"]
+    for country in countries:
+        try:
+            bonds = investpy.get_bonds(country=country)
+            # Filter for 2Y, 2-Year, etc.
+            filtered = [b for b in bonds if '2Y' in b or '2 Year' in b or '2-year' in b]
+            result[country] = filtered[:10]  # show up to 10 matches
+        except Exception as e:
+            result[country] = f"Error: {e}"
+    return jsonify(result)
+
+
 # -------------------------------------------------------------------
 # NEW: Seasonality Page & API
 # -------------------------------------------------------------------
@@ -7999,6 +8435,256 @@ def calculate_annual_seasonality(df, pair):
             'latest_price': round(ytd_curve.iloc[-1], 2) if not ytd_curve.empty else None
         }
     }
+
+# -------------------------------------------------------------------
+# CARRY TRADE SCANNER
+# -------------------------------------------------------------------
+
+# New model for storing carry score history (optional, for charts)
+class CarryScoreHistory(db.Model):
+    __tablename__ = 'carry_score_history'
+    id = db.Column(db.Integer, primary_key=True)
+    pair = db.Column(db.String(20), nullable=False)
+    carry_score = db.Column(db.Float, nullable=False)
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
+
+    __table_args__ = (db.Index('idx_carry_pair_date', 'pair', 'recorded_at'),)
+
+
+@app.route('/carry-scanner')
+@login_required
+def carry_scanner():
+    """Render the Carry Trade Scanner page."""
+    return render_template('carry_scanner.html',
+                           username=session['username'],
+                           is_admin=session.get('is_admin', False))
+
+
+@app.route('/api/carry-data')
+@login_required
+def api_carry_data():
+    try:
+        # 1. US 2Y from FRED
+        us_yield, us_sma, us_trend_score = get_us_2yr_yield_and_sma()
+        us_trend_bias = "Bullish" if us_trend_score > 0 else "Bearish" if us_trend_score < 0 else "Neutral"
+
+        # 2. Fear & Greed
+        fg_value, fg_score, fg_history = get_fear_and_greed_with_history()
+
+        # 3. Get bond yields from TradingView (all except USD)
+        bond_yields = get_all_bond_yields_except_us()
+        bond_yields["USD"] = us_yield   # US from FRED
+
+        jpy_pairs = [
+            ("USD", "JPY"),
+            ("EUR", "JPY"),
+            ("GBP", "JPY"),
+            ("AUD", "JPY"),
+            ("NZD", "JPY"),
+            ("CAD", "JPY"),
+            ("CHF", "JPY")
+        ]
+
+        jpy_yield = bond_yields.get("JPY", 0.0)
+        pair_data = []
+        carry_scores = []
+
+        for base, quote in jpy_pairs:
+            base_yield = bond_yields.get(base, 0.0)
+            spread = base_yield - jpy_yield
+            spread_score = score_spread(spread)
+            us_trend_weighted = us_trend_score * 2
+            carry_score = spread_score + us_trend_weighted + fg_score
+            signal = classify_carry_score(carry_score)
+
+            pair_data.append({
+                'pair': f"{base}/{quote}",
+                'base_rate': round(base_yield, 2),
+                'jpy_rate': round(jpy_yield, 2),
+                'spread': round(spread, 2),
+                'spread_score': spread_score,
+                'us_trend_score': us_trend_score,
+                'us_trend_bias': us_trend_bias,
+                'fear_greed_score': fg_score,
+                'carry_score': carry_score,
+                'signal': signal
+            })
+            carry_scores.append(carry_score)
+
+        # KPI
+        bullish = sum(1 for p in pair_data if p['signal'] in ['Strong Carry Buy', 'Carry Buy'])
+        bearish = sum(1 for p in pair_data if p['signal'] in ['Strong Carry Sell', 'Carry Sell'])
+        avg_carry = sum(carry_scores) / len(carry_scores) if carry_scores else 0
+
+        # History (unchanged)
+        us_yield_history = get_us_2yr_yield_history(days=30)
+        carry_history = get_carry_score_history()
+
+        return jsonify({
+            'us_yield': round(us_yield, 2),
+            'us_sma': round(us_sma, 2),
+            'us_trend_score': us_trend_score,
+            'us_trend_bias': us_trend_bias,
+            'fear_greed': fg_value,
+            'fear_greed_score': fg_score,
+            'pairs': pair_data,
+            'kpi': {
+                'bullish': bullish,
+                'bearish': bearish,
+                'avg_carry': round(avg_carry, 2),
+                'fear_greed': fg_value,
+                'us_trend': us_trend_bias
+            },
+            'us_yield_history': us_yield_history,
+            'fear_greed_history': fg_history,
+            'carry_score_history': carry_history
+        })
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+
+# -------------------------------------------------------------------
+# Helper Functions
+# -------------------------------------------------------------------
+
+def get_currency_rate(currency: str) -> float:
+    """Return the current interest rate from EconomicIndicator table."""
+    ind = EconomicIndicator.query.filter_by(
+        currency=currency.upper(),
+        indicator_name="Interest Rate Decision"
+    ).first()
+    if ind:
+        print(f"✅ Found rate for {currency}: {ind.actual}")
+        return ind.actual
+    else:
+        print(f"❌ No Interest Rate Decision for {currency}")
+        return 0.0
+
+
+def score_spread(spread: float) -> int:
+    """Score the yield spread based on the table."""
+    if spread < -3: return -3
+    elif spread < -2: return -2
+    elif spread < -1: return -1
+    elif spread <= 1: return 0
+    elif spread <= 2: return 1
+    elif spread <= 3: return 2
+    else: return 3
+
+
+def classify_carry_score(score: float) -> str:
+    """Classify carry score into signal."""
+    if score >= 6: return "Strong Carry Buy"
+    elif score >= 3: return "Carry Buy"
+    elif score >= -2: return "Neutral"
+    elif score >= -5: return "Carry Sell"
+    else: return "Strong Carry Sell"
+
+
+def get_us_2yr_yield_and_sma():
+    """Return (current_yield, sma_21, trend_score)."""
+    import time
+    global cached_bond_score, cached_bond_score_time
+    api_key = '98adbefbd0ae0c2360298858644f3a19'
+    url = f'https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&api_key={api_key}&file_type=json&sort_order=desc&limit=100'
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        obs = data.get('observations', [])
+        yields = []
+        for o in obs:
+            val = o.get('value')
+            if val and val != '.':
+                yields.append(float(val))
+        if len(yields) < 21:
+            return 0.0, 0.0, 0
+        # Reverse to get chronological
+        yields.reverse()
+        series = pd.Series(yields)
+        sma = series.rolling(21).mean().iloc[-1]
+        current = series.iloc[-1]
+        score = 1 if current > sma else (-1 if current < sma else 0)
+        return current, sma, score
+    except:
+        return 0.0, 0.0, 0
+
+
+def get_us_2yr_yield_history(days=30):
+    """Return list of {date, yield} for last 'days' days."""
+    api_key = '98adbefbd0ae0c2360298858644f3a19'
+    url = f'https://api.stlouisfed.org/fred/series/observations?series_id=DGS2&api_key={api_key}&file_type=json&sort_order=desc&limit={days*2}'
+    try:
+        resp = requests.get(url, timeout=10)
+        data = resp.json()
+        obs = data.get('observations', [])
+        result = []
+        for o in obs:
+            val = o.get('value')
+            if val and val != '.':
+                date = o.get('date')
+                result.append({'date': date, 'yield': float(val)})
+        # reverse to chronological
+        result.reverse()
+        # limit to days
+        return result[-days:]
+    except:
+        return []
+
+
+def get_fear_and_greed_with_history():
+    """Fetch Fear & Greed index from CNN with rounding."""
+    url = "https://production.dataviz.cnn.io/index/fearandgreed/graphdata"
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+        'Accept': 'application/json',
+    }
+    try:
+        resp = requests.get(url, headers=headers, timeout=10)
+        resp.raise_for_status()
+        data = resp.json()
+        
+        fg_data = data.get('fear_and_greed', {})
+        fg_value = round(float(fg_data.get('score', 50)))  # ← ROUNDED
+        
+        historical = data.get('historical') or fg_data.get('historical') or []
+        history = []
+        for item in historical:
+            date = item.get('date')
+            score = item.get('score')
+            if date and score is not None:
+                history.append({'date': date, 'value': round(float(score))})  # ← ROUNDED
+        
+        # Score mapping (using the rounded value)
+        if fg_value <= 25: fg_score = -2
+        elif fg_value <= 45: fg_score = -1
+        elif fg_value <= 55: fg_score = 0
+        elif fg_value <= 75: fg_score = 1
+        else: fg_score = 2
+        
+        return fg_value, fg_score, history
+        
+    except Exception as e:
+        print(f"❌ Fear & Greed error: {e}")
+        return 50, 0, []
+
+
+def get_carry_score_history(days=30):
+    """Retrieve average carry score per day from CarryScoreHistory table."""
+    # If no records, return empty; we can generate from current scores as fallback
+    # We'll use a simple query
+    from sqlalchemy import func
+    try:
+        results = db.session.query(
+            func.date(CarryScoreHistory.recorded_at).label('date'),
+            func.avg(CarryScoreHistory.carry_score).label('avg_score')
+        ).filter(CarryScoreHistory.recorded_at >= datetime.utcnow() - timedelta(days=days))\
+         .group_by(func.date(CarryScoreHistory.recorded_at))\
+         .order_by('date').all()
+        return [{'date': r.date.isoformat(), 'avg_score': round(r.avg_score, 2)} for r in results]
+    except:
+        # If table doesn't exist yet, return empty
+        return []
+
 
 
 if __name__ == '__main__':
