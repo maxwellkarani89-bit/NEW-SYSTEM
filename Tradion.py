@@ -18,7 +18,6 @@ import yfinance as yf
 from pathlib import Path
 import sqlite3
 import hashlib
-import investpy
 from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
 # -------- PASTE THE DATABASE CONFIGURATION HERE --------
@@ -8276,23 +8275,6 @@ def debug_jobs():
             'func': str(job.func)
         })
     return jsonify(jobs)
-
-@app.route('/debug/bonds')
-@login_required
-@admin_required
-def debug_bonds():
-    result = {}
-    countries = ["Germany", "United Kingdom", "Australia", "New Zealand", "Canada", "Switzerland", "Japan"]
-    for country in countries:
-        try:
-            bonds = investpy.get_bonds(country=country)
-            # Filter for 2Y, 2-Year, etc.
-            filtered = [b for b in bonds if '2Y' in b or '2 Year' in b or '2-year' in b]
-            result[country] = filtered[:10]  # show up to 10 matches
-        except Exception as e:
-            result[country] = f"Error: {e}"
-    return jsonify(result)
-
 
 # -------------------------------------------------------------------
 # NEW: Seasonality Page & API
