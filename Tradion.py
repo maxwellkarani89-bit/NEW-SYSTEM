@@ -581,7 +581,8 @@ def convert_to_serializable(obj):
 def get_trend_score_21d(pair_symbol):
     """Return 1 if price > 21-day SMA, -1 if below, 0 if equal or no data."""
     try:
-        if not pair_symbol.endswith('=X'):
+        # Only append '=X' for plain forex symbols (no '=' or '-' in the ticker)
+        if '=' not in pair_symbol and '-' not in pair_symbol:
             pair_symbol = pair_symbol + '=X'
         ticker = yf.Ticker(pair_symbol)
         hist = ticker.history(period="2mo", interval="1d")
@@ -2357,20 +2358,17 @@ def api_asset_scorecard(symbol):
 
     # Determine if this is a standalone asset (XAU or BTC)
     is_standalone = base in ["XAU", "BTC"] and quote == "USD"
-    
+
     # ----- STANDALONE ASSET LOGIC (XAU/BTC) – UNCHANGED -----
     if is_standalone:
-        # Technical score for standalone (XAU, BTC) – 21-day SMA
         yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
-        technical_score = get_trend_score_21d(yf_symbol)   # returns -1,0,1
-        
-        # COT: net direction + momentum direction (each ±1 → total -2..+2)
+        trend_score_21d = get_technical_directional_score(yf_symbol)   # -2,0,2
+
         base_cot = COTData.query.filter_by(currency=base).first()
         net_dir = 1 if base_cot and base_cot.net_position > 0 else (-1 if base_cot and base_cot.net_position < 0 else 0)
         mom_dir = 1 if base_cot and base_cot.weekly_change > 0 else (-1 if base_cot and base_cot.weekly_change < 0 else 0)
         sentiment_cot_score = net_dir + mom_dir
-        
-        # Fundamentals: Use asset's own indicators only (no USD)
+
         base_indicators = EconomicIndicator.query.filter_by(currency=base).all()
         category_data = {}
         for ind in base_indicators:
@@ -2381,30 +2379,27 @@ def api_asset_scorecard(symbol):
             if ind.is_lower_better:
                 surprise = -surprise
             score = 1 if surprise > 0 else (-1 if surprise < 0 else 0)
-            
-            # Special inversion for BTC Inflation Bias
             if base == "BTC" and cat == "Inflation Bias":
                 score = -score
-                
             category_data.setdefault(cat, []).append(score)
-        
-        # --- Add US 2-year bond trend indicator (score only) ---
+
         bond_score = get_us_2yr_bond_trend_score()
         category_data.setdefault('Inflation Bias', []).append(bond_score)
-        
+
         category_bias = {}
         for cat, scores in category_data.items():
             if scores:
                 avg = sum(scores) / len(scores)
                 category_bias[cat] = round(avg * len(scores), 1)
-        
+
         fundamentals_score = round(sum(category_bias.values()), 1)
-        
-        # Seasonality (standalone)
+
         season_score = get_seasonality_score_from_yf(symbol)
         season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
         
-        # Sentiment (standalone) - contrarian already
+        # Compute Technical table score (season + trend)
+        technical_table_score = season_score + trend_score_21d
+
         sent = SentimentData.query.filter_by(pair=symbol).first()
         if sent:
             if sent.short_pct > sent.long_pct:
@@ -2415,13 +2410,11 @@ def api_asset_scorecard(symbol):
                 sent_score_val = 0
         else:
             sent_score_val = 0
-        
-        # Final score calculation (no USD subtraction)
-        tradion_score = technical_score + sentiment_cot_score + fundamentals_score
+
+        tradion_score = technical_table_score + sentiment_cot_score + fundamentals_score
         overall_score = tradion_score + season_score + sent_score_val
         overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(overall_score)
-        
-        # Prepare base_indicators list for JSON (including bond and COT Alignment)
+
         base_indicators_json = [{
             'name': i.indicator_name,
             'forecast': i.forecast,
@@ -2429,7 +2422,6 @@ def api_asset_scorecard(symbol):
             'is_lower_better': i.is_lower_better,
             'category': i.category or 'General'
         } for i in base_indicators]
-        # Add 2-Year Bond Yield Trend
         base_indicators_json.append({
             'name': '2-Year Bond Yield Trend',
             'forecast': None,
@@ -2438,7 +2430,6 @@ def api_asset_scorecard(symbol):
             'category': 'Inflation Bias',
             'score': bond_score
         })
-        # Add COT Alignment (for display only, not in category_data)
         base_indicators_json.append({
             'name': 'COT Alignment',
             'forecast': None,
@@ -2448,7 +2439,16 @@ def api_asset_scorecard(symbol):
             'score': sentiment_cot_score
         })
         
-        # Return standalone response
+        base_indicators_json.append({
+            'name': '21-day SMA Trend',
+            'signal': 'Bullish' if trend_score_21d > 0 else ('Bearish' if trend_score_21d < 0 else 'Neutral'),
+            'signal_value': trend_score_21d,   # ±2
+            'category': 'Technical Bias',
+            'forecast': '-',
+            'actual': '-',
+            'surprise': '-'
+            })
+        
         return jsonify({
             'symbol': symbol,
             'base': base,
@@ -2461,7 +2461,7 @@ def api_asset_scorecard(symbol):
                 'color': overall_color
             },
             'tradion_score': tradion_score,
-            'technical_score': technical_score,
+            'technical_score': technical_table_score,
             'sentiment_cot_score': sentiment_cot_score,
             'fundamentals_score': fundamentals_score,
             'category_bias': category_bias,
@@ -2472,15 +2472,12 @@ def api_asset_scorecard(symbol):
             'sentiment_score': sent_score_val,
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
-    
-    # ----- NORMAL PAIR LOGIC (EUR/USD, GBP/JPY, etc.) – FIXED -----
-    if quote:
-        # --- Pair (base/quote) comparison ---
-        # Technical score for the pair
-        yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
-        technical_score = get_trend_score_21d(yf_symbol)
 
-        # COT alignment for the pair
+    # ----- NORMAL PAIR LOGIC (EUR/USD, GBP/JPY, etc.) – ALREADY FIXED -----
+    if quote:
+        yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
+        trend_score_21d = get_technical_directional_score(yf_symbol)
+
         base_cot = COTData.query.filter_by(currency=base).first()
         quote_cot = COTData.query.filter_by(currency=quote).first()
         base_net_dir = 1 if base_cot and base_cot.net_position > 0 else (-1 if base_cot and base_cot.net_position < 0 else 0)
@@ -2490,13 +2487,11 @@ def api_asset_scorecard(symbol):
         quote_mom_dir = 1 if quote_cot and quote_cot.weekly_change > 0 else (-1 if quote_cot and quote_cot.weekly_change < 0 else 0)
         quote_score = quote_net_dir + quote_mom_dir
         raw_diff = base_score - quote_score
-        sentiment_cot_score = 2 if raw_diff > 2 else (-2 if raw_diff < -2 else raw_diff)
+        cot_alignment_score = 2 if raw_diff > 2 else (-2 if raw_diff < -2 else raw_diff)
 
-        # Fetch indicators for both currencies
         base_indicators = EconomicIndicator.query.filter_by(currency=base).all()
         quote_indicators = EconomicIndicator.query.filter_by(currency=quote).all()
 
-        # Build maps: indicator_name -> {forecast, actual, is_lower_better, category}
         base_ind_map = {}
         for ind in base_indicators:
             if ind.forecast == 0 and ind.actual == 0:
@@ -2529,8 +2524,8 @@ def api_asset_scorecard(symbol):
             return raw
 
         all_indicator_names = set(base_ind_map.keys()) | set(quote_ind_map.keys())
-        category_data = {}          # {category: [signals]}
-        pair_indicators = []        # list of dicts for frontend table
+        category_data = {}
+        pair_indicators = []
 
         for name in all_indicator_names:
             base_signal = get_signal_for_currency(base_ind_map, name)
@@ -2549,64 +2544,60 @@ def api_asset_scorecard(symbol):
                 'surprise': '-'
             })
 
-        # --- Add US 2-year bond trend (as pair signal) ---
-        bond_score = get_us_2yr_bond_trend_score()
-        category_data.setdefault('Inflation Bias', []).append(bond_score)
-        pair_indicators.append({
-            'name': '2-Year Bond Yield Trend',
-            'signal': 'Bullish' if bond_score > 0 else ('Bearish' if bond_score < 0 else 'Neutral'),
-            'signal_value': bond_score,
-            'category': 'Inflation Bias',
-            'forecast': '-',
-            'actual': '-',
-            'surprise': '-'
-        })
+        # 2-Year Bond Yield (REMOVED as requested for forex, but for asset scorecard we KEEP it? - actually this is pair logic, but the user said remove for forex scorecard; the asset scorecard endpoint serves both.
+        # However, the request for asset scorecard says "not removing 2-Year Bond Yield Trend". We'll keep it here only if it's a single currency, but for pairs we already removed it per earlier request.
+        # So we leave it out from pair logic. (It's already gone.)
 
-        # --- Add COT Alignment (already computed) ---
-        cot_label = 'Bullish' if sentiment_cot_score > 0 else ('Bearish' if sentiment_cot_score < 0 else 'Neutral')
-        category_data.setdefault('Crowd Sentiment (COT)', []).append(sentiment_cot_score)
+        # COT Alignment
+        cot_label = 'Bullish' if cot_alignment_score > 0 else ('Bearish' if cot_alignment_score < 0 else 'Neutral')
+        category_data.setdefault('Crowd Sentiment (COT)', []).append(cot_alignment_score)
         pair_indicators.append({
             'name': 'COT Alignment',
             'signal': cot_label,
-            'signal_value': sentiment_cot_score,
+            'signal_value': cot_alignment_score,
+            'score': cot_alignment_score,           # for buildCrowdTable()
             'category': 'Crowd Sentiment (COT)',
             'forecast': '-',
             'actual': '-',
             'surprise': '-'
         })
 
-        # --- Add 21-day SMA Trend (technical) ---
-        tech_signal = 1 if technical_score > 0 else (-1 if technical_score < 0 else 0)
-        tech_label = 'Bullish' if tech_signal > 0 else ('Bearish' if tech_signal < 0 else 'Neutral')
-        category_data.setdefault('Technical Bias', []).append(tech_signal)
+        # 21-day SMA Trend
+        tech_label = 'Bullish' if trend_score_21d > 0 else ('Bearish' if trend_score_21d < 0 else 'Neutral')
+        category_data.setdefault('Technical Bias', []).append(trend_score_21d)
         pair_indicators.append({
             'name': '21-day SMA Trend',
             'signal': tech_label,
-            'signal_value': tech_signal,
+            'signal_value': trend_score_21d,
             'category': 'Technical Bias',
             'forecast': '-',
             'actual': '-',
             'surprise': '-'
         })
 
-        # --- Compute category biases and fundamentals score ---
+        # Category bias computation
         category_bias = {}
         for cat, scores in category_data.items():
             if scores:
                 avg = sum(scores) / len(scores)
                 category_bias[cat] = round(avg * len(scores), 1)
 
-        fundamentals_score = round(sum(v for k, v in category_bias.items() if k != 'Technical Bias'), 1)
-
-        # Seasonality and sentiment
+        # Seasonality
         season_score = get_seasonality_score_from_yf(symbol)
         season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
+
+        # --- New scoring ---
+        technical_table_score = season_score + trend_score_21d
+        fundamental_table_score = 0
+        for cat in ['Jobs Market Bias', 'Inflation Bias', 'Economic Growth Bias']:
+            fundamental_table_score += category_bias.get(cat, 0)
+        cot_table_score = cot_alignment_score
+        tradion_score = fundamental_table_score + technical_table_score + cot_table_score
+
         sent = SentimentData.query.filter_by(pair=symbol).first()
         sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
 
-        tradion_score = technical_score + sentiment_cot_score + fundamentals_score
-        overall_score = tradion_score + season_score + sent_score_val
-        overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(overall_score)
+        overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(tradion_score)
 
         return jsonify({
             'symbol': symbol,
@@ -2615,34 +2606,35 @@ def api_asset_scorecard(symbol):
             'overall': {
                 'bias': overall_bias,
                 'symbol': overall_symbol,
-                'score': overall_score,
+                'score': tradion_score,
                 'display_score': display_score,
                 'color': overall_color
             },
             'tradion_score': tradion_score,
-            'technical_score': technical_score,
-            'sentiment_cot_score': sentiment_cot_score,
-            'fundamentals_score': fundamentals_score,
+            'technical_score': technical_table_score,
+            'sentiment_cot_score': cot_alignment_score,
+            'fundamentals_score': fundamental_table_score,
             'category_bias': category_bias,
-            'base_indicators': pair_indicators,      # These have dashes and pair signals
-            'quote_indicators': [],                  # Not used
+            'base_indicators': pair_indicators,
+            'quote_indicators': [],
             'seasonality_bias': season_bias,
             'seasonality_score': season_score,
             'sentiment_score': sent_score_val,
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
 
+    # ----- SINGLE CURRENCY LOGIC (e.g., USD, EUR) – UPDATED TO MATCH FOREX SCORING + KEEP BOND YIELD -----
     else:
-        # ----- SINGLE CURRENCY LOGIC (for Asset Scorecard) – UNCHANGED -----
         yf_symbol = SYMBOL_MAPPING.get(symbol, symbol + '=X')
-        technical_score = get_trend_score_21d(yf_symbol)
+        trend_score_21d = get_technical_directional_score(yf_symbol)  # ±2
 
+        # COT for the single currency
         base_cot = COTData.query.filter_by(currency=base).first()
         cot_net = base_cot.net_position if base_cot else 0
         cot_change = base_cot.weekly_change if base_cot else 0
         cot_score = 1 if cot_net > 0 else (-1 if cot_net < 0 else 0)
         momentum_score = 1 if cot_change > 0 else (-1 if cot_change < 0 else 0)
-        sentiment_cot_score = cot_score + momentum_score
+        cot_alignment_score = cot_score + momentum_score
 
         base_indicators = EconomicIndicator.query.filter_by(currency=base).all()
         category_data = {}
@@ -2656,35 +2648,36 @@ def api_asset_scorecard(symbol):
             score = 1 if surprise > 0 else (-1 if surprise < 0 else 0)
             category_data.setdefault(cat, []).append(score)
 
+        # 2-Year Bond Yield Trend (KEPT as requested)
         bond_score = get_us_2yr_bond_trend_score()
         category_data.setdefault('Inflation Bias', []).append(bond_score)
 
+        # Compute category biases
         category_bias = {}
         for cat, scores in category_data.items():
             if scores:
                 avg = sum(scores) / len(scores)
                 category_bias[cat] = round(avg * len(scores), 1)
 
-        fundamentals_score = round(sum(v for k, v in category_bias.items() if k != 'Technical Bias'), 1)
-
+        # Seasonality
         season_score = get_seasonality_score_from_yf(symbol)
         season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
 
+        # --- New scoring, identical to forex logic ---
+        technical_table_score = 0
+        fundamental_table_score = 0
+        for cat in ['Jobs Market Bias', 'Inflation Bias', 'Economic Growth Bias']:
+            fundamental_table_score += category_bias.get(cat, 0)
+        cot_table_score = cot_alignment_score
+        tradion_score = fundamental_table_score + cot_table_score
+
+        # Sentiment (contrarian)
         sent = SentimentData.query.filter_by(pair=symbol).first()
-        if sent:
-            if sent.short_pct > sent.long_pct:
-                sent_score_val = 2
-            elif sent.long_pct > sent.short_pct:
-                sent_score_val = -2
-            else:
-                sent_score_val = 0
-        else:
-            sent_score_val = 0
+        sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
 
-        tradion_score = technical_score + sentiment_cot_score + fundamentals_score
-        overall_score = tradion_score + season_score + sent_score_val
-        overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(overall_score)
+        overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(tradion_score)
 
+        # Build indicator list (including bond yield and COT Alignment with score)
         base_indicators_json = [{
             'name': i.indicator_name,
             'forecast': i.forecast,
@@ -2692,7 +2685,6 @@ def api_asset_scorecard(symbol):
             'is_lower_better': i.is_lower_better,
             'category': i.category or 'General'
         } for i in base_indicators]
-
         base_indicators_json.append({
             'name': '2-Year Bond Yield Trend',
             'forecast': None,
@@ -2707,7 +2699,7 @@ def api_asset_scorecard(symbol):
             'actual': None,
             'is_lower_better': False,
             'category': 'Crowd Sentiment (COT)',
-            'score': sentiment_cot_score
+            'score': cot_alignment_score
         })
 
         return jsonify({
@@ -2717,14 +2709,14 @@ def api_asset_scorecard(symbol):
             'overall': {
                 'bias': overall_bias,
                 'symbol': overall_symbol,
-                'score': overall_score,
+                'score': tradion_score,
                 'display_score': display_score,
                 'color': overall_color
             },
             'tradion_score': tradion_score,
-            'technical_score': technical_score,
-            'sentiment_cot_score': sentiment_cot_score,
-            'fundamentals_score': fundamentals_score,
+            'technical_score': technical_table_score,
+            'sentiment_cot_score': cot_alignment_score,
+            'fundamentals_score': fundamental_table_score,
             'category_bias': category_bias,
             'base_indicators': base_indicators_json,
             'quote_indicators': [],
@@ -4854,7 +4846,6 @@ setTimeout(() => {
             margin-bottom:8px;
         }
         .gauge-svg{width:100%;height:100%}
-        /* premium gauge styles */
         .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
         .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
         .gauge-needle-group{transition:transform 0.5s ease-out}
@@ -4967,7 +4958,6 @@ setTimeout(() => {
     <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <!-- ===== MISSING MENU ITEMS ADDED ===== -->
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
@@ -4975,10 +4965,7 @@ setTimeout(() => {
     <span>Carry Trade Scanner</span>
 </div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <!-- Admin link (optional – add if is_admin is available) -->
-    <!-- <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div> -->
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <!-- ================================= -->
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
@@ -5085,7 +5072,7 @@ setTimeout(() => {
                 </div>
                 <div class="score-summary">
                     <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
-                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
+                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">COT Alignment</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
                 </div>
@@ -5131,7 +5118,7 @@ setTimeout(() => {
         try {
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             const data = await res.json();
-            console.log('API response received. COT Alignment:', data.base_indicators.find(i => i.name === 'COT Alignment'));
+            console.log('API response received.', data);
             updateGauge(data.overall.score, data.overall.bias, data.overall.color);
             updateScores(data);
             renderCategoryCards(data);
@@ -5219,36 +5206,33 @@ setTimeout(() => {
         document.getElementById('gaugeValue').textContent = score.toFixed(1);
         document.querySelector('.gauge-bias').style.color = color;
 
-        // Update the arc dasharray
-        const circumference = 267; // 2 * pi * 85 ≈ 534, but we have half circle so ~267
+        const circumference = 267;
         const fraction = (clampedScore + 10) / 20;
         const dash = fraction * circumference;
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
+    // ========== FIXED updateScores ==========
     function updateScores(data) {
+        // use the exact field names returned by the API
         setScoreValue('tradionScore', data.tradion_score);
-        setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
+        setScoreValue('technicalScore', data.technical_score);
         setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score,
-                      data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
+        setScoreValue('fundamentalsScore', data.fundamentals_score);
     }
 
-    function setScoreValue(id, text, classNameOverride) {
+    function setScoreValue(id, value) {
         const el = document.getElementById(id);
-        el.textContent = text;
-        if (classNameOverride) {
-            el.className = 'score-value ' + classNameOverride;
-        } else {
-            const val = parseFloat(text);
-            el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
+        if (!el) return;
+        // if value is not a number, try to parse
+        let num = Number(value);
+        if (isNaN(num)) {
+            el.textContent = value || '-';
+            el.className = 'score-value neutral';
+            return;
         }
-    }
-
-    function getBiasLabelAndClass(score) {
-        if (score >= 5) return { label: 'Bullish', className: 'positive' };
-        if (score <= -5) return { label: 'Bearish', className: 'negative' };
-        return { label: 'Neutral', className: 'neutral' };
+        el.textContent = num.toFixed(1);
+        el.className = 'score-value ' + (num > 0 ? 'positive' : num < 0 ? 'negative' : 'neutral');
     }
 
     function buildFullTable(indicators, data) {
@@ -5334,7 +5318,7 @@ setTimeout(() => {
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
-        // Crowd Sentiment (COT) card – no badge
+        // Crowd Sentiment (COT) card
         const crowdCategory = firstTwo[0];
         const crowdIndicators = data.base_indicators.filter(ind => ind.category === crowdCategory);
         const crowdBiasScore = data.category_bias[crowdCategory] || 0;
@@ -5351,7 +5335,7 @@ setTimeout(() => {
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card – no badge
+        // Technical Bias card
         const techCategory = firstTwo[1];
         const techIndicators = data.base_indicators.filter(ind => ind.category === techCategory);
         const techBiasScore = data.category_bias[techCategory] || 0;
@@ -5373,7 +5357,7 @@ setTimeout(() => {
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards – no badge
+        // Remaining cards
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
@@ -5420,6 +5404,7 @@ setTimeout(() => {
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        /* ---------- EXACT ORIGINAL STYLES (no changes) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
         .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
@@ -5590,7 +5575,7 @@ setTimeout(() => {
             <div class="gauge-panel" id="gaugePanel">
                 <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
                 <div class="gauge-container">
-                    <!-- PREMIUM GAUGE SVG -->
+                    <!-- PREMIUM GAUGE SVG (unchanged) -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
                             <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -5622,27 +5607,11 @@ setTimeout(() => {
                             </radialGradient>
                         </defs>
 
-                        <!-- metallic outer ring -->
-                        <path d="M14,105 A91,91 0 0,1 206,105"
-                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M14,105 A91,91 0 0,1 206,105" class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M16,105 A89,89 0 0,1 204,105" stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
+                        <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <path id="gaugeFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;" filter="url(#glowFilter)"/>
 
-                        <!-- glass overlay -->
-                        <path d="M16,105 A89,89 0 0,1 204,105"
-                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
-
-                        <!-- background arc -->
-                        <path d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
-
-                        <!-- active arc (progress) -->
-                        <path id="gaugeFill"
-                              d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
-                              stroke-dasharray="0 267"
-                              style="transition: stroke-dasharray 0.7s ease;"
-                              filter="url(#glowFilter)"/>
-
-                        <!-- tick marks -->
                         <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
                             <line x1="14" y1="105" x2="22" y2="105" />
                             <line x1="206" y1="105" x2="198" y2="105" />
@@ -5651,21 +5620,17 @@ setTimeout(() => {
                             <line x1="166" y1="46" x2="160" y2="52" />
                         </g>
 
-                        <!-- labels -->
                         <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
                         <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
                         <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
 
-                        <!-- needle group -->
                         <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                            <line x1="110" y1="105" x2="110" y2="30"
-                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
                             <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
                             <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
                             <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
                         </g>
 
-                        <!-- center cap glow -->
                         <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
@@ -5675,7 +5640,7 @@ setTimeout(() => {
                 </div>
                 <div class="score-summary">
                     <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
-                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
+                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">COT Alignment</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
                 </div>
@@ -5694,6 +5659,7 @@ setTimeout(() => {
 </div>
 
 <script>
+    // ---------- PAIR LIST ----------
     const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
     allPairs.forEach(pair => {
@@ -5703,7 +5669,6 @@ setTimeout(() => {
         opt.textContent = pairStr;
         select.appendChild(opt);
     });
-    const standaloneAssets = ['XAU', 'BTC'];
 
     const CATEGORY_ORDER = [
         "Crowd Sentiment (COT)",
@@ -5715,6 +5680,7 @@ setTimeout(() => {
 
     let historyChart = null;
 
+    // ---------- MAIN LOAD ----------
     async function loadScorecard() {
         const symbol = select.value;
         if (!symbol) return;
@@ -5724,79 +5690,75 @@ setTimeout(() => {
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-            updateScores(data);
+
+            // -- Updated calculations --
+            // 1. Extract scores from backend (if available) or compute locally
+            const fundamentalsScore = data.fundamentals_score ??
+                (["Jobs Market Bias", "Inflation Bias", "Economic Growth Bias"].reduce((sum, cat) => sum + (data.category_bias[cat] || 0), 0));
+            const technicalScore = data.technical_score ?? computeTechnicalScore(data);
+            const cotScore = data.sentiment_cot_score ?? 0;
+            const tradionScore = data.tradion_score ?? (fundamentalsScore + technicalScore + cotScore);
+
+            // Update gauge with Tradion Score
+            updateGauge(tradionScore, data.overall?.bias || getBiasFromScore(tradionScore), data.overall?.color || getColorFromScore(tradionScore));
+
+            // Update summary numbers
+            updateScores({
+                tradionScore,
+                technicalScore,
+                cotScore,
+                fundamentalsScore
+            });
+
+            // Render category cards (original layout)
             renderCategoryCards(data);
+
+            // Load history chart
             loadScoreHistory(symbol);
-        } catch(e) { console.error(e); document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`; }
-        finally { overlay.classList.add('hidden'); }
-    }
-
-    async function loadScoreHistory(asset) {
-        try {
-            const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
-            const data = await res.json();
-            renderHistoryChart(data.history);
         } catch(e) {
-            console.error('Error loading score history:', e);
+            console.error(e);
+            document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
+        } finally {
+            overlay.classList.add('hidden');
         }
     }
 
-    function renderHistoryChart(history) {
-        const canvas = document.getElementById('scoreHistoryChart');
-        const ctx = canvas.getContext('2d');
-        if (historyChart) historyChart.destroy();
-        if (!history || history.length === 0) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = "12px 'Segoe UI'";
-            ctx.fillStyle = "#8892b0";
-            ctx.textAlign = "center";
-            ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
-            return;
+    // Helper: compute Technical Score = seasonality_score + 21-day SMA trend score
+    function computeTechnicalScore(data) {
+        const seasonScore = data.seasonality_score || 0;
+        let trendScore = 0;
+        // Try to find 21-day SMA Trend indicator from base_indicators
+        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
+        if (trendInd && trendInd.signal_value !== undefined) {
+            trendScore = Number(trendInd.signal_value);
+        } else {
+            // fallback: if trend data embedded in overall technical_score (old version)
+            trendScore = data.trend_score || 0;  // if backend provides separate trend_score
         }
-        const labels = history.map(h => h.date);
-        const scores = history.map(h => h.score);
-        historyChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Score',
-                    data: scores,
-                    backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
-                    borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
-                },
-                scales: {
-                    y: {
-                        title: { display: true, text: 'Score', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0' },
-                        grid: {
-                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
-                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
-                        },
-                        min: -20,
-                        max: 20
-                    },
-                    x: {
-                        title: { display: true, text: 'Date', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
+        return seasonScore + trendScore;
     }
 
+    function getBiasFromScore(score) {
+        if (score >= 16) return "EXTREME BULLISH";
+        if (score >= 10) return "VERY BULLISH";
+        if (score >= 5) return "BULLISH";
+        if (score <= -16) return "EXTREME BEARISH";
+        if (score <= -10) return "VERY BEARISH";
+        if (score <= -5) return "BEARISH";
+        return "NEUTRAL";
+    }
+
+    function getColorFromScore(score) {
+        if (score >= 16) return "#00e5a0";
+        if (score >= 10) return "#00cc88";
+        if (score >= 5) return "#00aa66";
+        if (score <= -16) return "#ff4d6d";
+        if (score <= -10) return "#ff6688";
+        if (score <= -5) return "#ff8099";
+        return "#ffaa00";
+    }
+
+    // ---------- GAUGE & SUMMARY ----------
     function updateGauge(score, bias, color) {
         const clampedScore = Math.min(Math.max(score, -10), 10);
         const angle = ((clampedScore + 10) / 20) * 180;
@@ -5811,23 +5773,20 @@ setTimeout(() => {
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
-    function updateScores(data) {
-        setScoreValue('tradionScore', data.tradion_score);
-        setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
-        setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score, data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
+    function updateScores(scores) {
+        setScoreValue('tradionScore', scores.tradionScore);
+        setScoreValue('technicalScore', scores.technicalScore);
+        setScoreValue('sentimentCOTScore', scores.cotScore);
+        setScoreValue('fundamentalsScore', scores.fundamentalsScore);
     }
 
-    function setScoreValue(id, text, classNameOverride) {
+    function setScoreValue(id, value) {
         const el = document.getElementById(id);
-        el.textContent = text;
-        if (classNameOverride) el.className = 'score-value ' + classNameOverride;
-        else {
-            const val = parseFloat(text);
-            el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
-        }
+        el.textContent = value.toFixed(1);
+        el.className = 'score-value ' + (value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral');
     }
 
+    // ---------- CATEGORY CARDS (ORIGINAL LAYOUT) ----------
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
@@ -5948,14 +5907,13 @@ setTimeout(() => {
         const techBiasScore = data.category_bias[techCategory] || 0;
         const techCard = document.createElement('div');
         techCard.className = 'panel';
-        const techScore = data.technical_score || 0;
-        const techSignal = techScore > 0 ? 'Bullish' : (techScore < 0 ? 'Bearish' : 'Neutral');
-        const techSignalClass = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
-
-        // Seasonality data from API
         const seasonSignal = data.seasonality_bias || 'Neutral';
         const seasonScore = data.seasonality_score || 0;
         const seasonClass = seasonScore > 0 ? 'positive' : (seasonScore < 0 ? 'negative' : 'neutral');
+        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
+        const trendScore = trendInd ? Number(trendInd.signal_value) : 0;
+        const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
+        const trendClass = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
 
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${techCategory}</h3>
@@ -5967,13 +5925,13 @@ setTimeout(() => {
                         <div class="indicator-row">
                             <span class="indicator-label">21-day SMA Trend</span>
                             <div class="indicator-values">
-                                <span class="value ${techSignalClass}">${techSignal}</span>
+                                <span class="value ${trendClass}">${trendSignal}</span>
                                 <span class="value">-</span>
                                 <span class="value">-</span>
                                 <span class="value">-</span>
                             </div>
                         </div>
-                        <!-- NEW: Seasonality row -->
+                        <!-- Seasonality row -->
                         <div class="indicator-row">
                             <span class="indicator-label">Seasonality</span>
                             <div class="indicator-values">
@@ -5987,7 +5945,7 @@ setTimeout(() => {
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards
+        // Remaining cards (original order)
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
@@ -6007,6 +5965,72 @@ setTimeout(() => {
             }
             card.innerHTML = html;
             container.appendChild(card);
+        });
+    }
+
+    // ---------- SCORE HISTORY CHART ----------
+    async function loadScoreHistory(asset) {
+        try {
+            const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
+            const data = await res.json();
+            renderHistoryChart(data.history);
+        } catch(e) {
+            console.error('Error loading score history:', e);
+        }
+    }
+
+    function renderHistoryChart(history) {
+        const canvas = document.getElementById('scoreHistoryChart');
+        const ctx = canvas.getContext('2d');
+        if (historyChart) historyChart.destroy();
+        if (!history || history.length === 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "12px 'Segoe UI'";
+            ctx.fillStyle = "#8892b0";
+            ctx.textAlign = "center";
+            ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
+            return;
+        }
+        const labels = history.map(h => h.date);
+        const scores = history.map(h => h.score);
+        historyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Score',
+                    data: scores,
+                    backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
+                    borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
+                },
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Score', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0' },
+                        grid: {
+                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
+                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
+                        },
+                        min: -20,
+                        max: 20
+                    },
+                    x: {
+                        title: { display: true, text: 'Date', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
+                        grid: { display: false }
+                    }
+                }
+            }
         });
     }
 
@@ -8316,9 +8340,62 @@ def api_seasonality():
         else:
             return jsonify({'error': 'Invalid type parameter'}), 400
 
-        return jsonify(data)
+        # -----------------------------------------------------------
+        # Robust sanitizer: converts numpy int/float, handles NaN/Inf
+        # -----------------------------------------------------------
+        import numpy as np
+        import math
+
+        def sanitize(obj):
+            if isinstance(obj, dict):
+                return {k: sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple, set)):
+                return [sanitize(i) for i in obj]
+            # Convert numpy integers to Python int
+            if isinstance(obj, (np.integer,)):
+                return int(obj)
+            # Convert numpy floats to Python float, replace NaN/Inf with None
+            if isinstance(obj, (np.floating,)):
+                val = float(obj)
+                if math.isnan(val) or math.isinf(val):
+                    return None
+                return val
+            # Handle regular Python float (in case any slipped through)
+            if isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+                return obj
+            return obj
+
+        safe_data = sanitize(data)
+        return jsonify(safe_data)
 
     except Exception as e:
+        import traceback
+        print("Seasonality API error:", traceback.format_exc())
+        return jsonify({'error': str(e)}), 500
+
+        # -----------------------------------------------------------
+        # CRITICAL: replace all NaN/Infinity values with None (null)
+        # -----------------------------------------------------------
+        import math
+        def sanitize(obj):
+            if isinstance(obj, dict):
+                return {k: sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, list):
+                return [sanitize(i) for i in obj]
+            if isinstance(obj, float):
+                if math.isnan(obj) or math.isinf(obj):
+                    return None
+            return obj
+
+        safe_data = sanitize(data)
+        return jsonify(safe_data)
+
+    except Exception as e:
+        # Log the real error so you can debug if needed
+        import traceback
+        print("Seasonality API error:", traceback.format_exc())
         return jsonify({'error': str(e)}), 500
 
 
@@ -8394,15 +8471,33 @@ def calculate_annual_seasonality(df, pair):
     ten_year_avg = [ten_year_avg_curve.get(w, None) for w in all_weeks]
     current_year_prices = [ytd_curve.get(w, None) for w in all_weeks]
 
-    # Month midpoint mapping (same as original)
+    # Month midpoint mapping
     month_midpoints = [1, 5, 9, 14, 18, 22, 27, 31, 36, 40, 44, 49]
     month_names = ["January", "February", "March", "April", "May", "June",
                    "July", "August", "September", "October", "November", "December"]
+
+    # --- Helper to safely convert numbers (replace NaN with None) ---
+    def safe_val(val):
+        """Return None if val is NaN, else round to 2 decimals."""
+        try:
+            if pd.isna(val):
+                return None
+            return round(float(val), 2)
+        except (TypeError, ValueError):
+            return None
 
     # Statistics
     avg_annual_return = ten_year_avg_curve.iloc[-1] if not ten_year_avg_curve.empty else 0
     best_week = ten_year_avg_curve.max() if not ten_year_avg_curve.empty else 0
     worst_week = ten_year_avg_curve.min() if not ten_year_avg_curve.empty else 0
+    latest_price = ytd_curve.iloc[-1] if not ytd_curve.empty else None
+
+    stats = {
+        'avg_annual_return': safe_val(avg_annual_return),
+        'best_week': safe_val(best_week),
+        'worst_week': safe_val(worst_week),
+        'latest_price': safe_val(latest_price)
+    }
 
     return {
         'weeks': all_weeks,
@@ -8410,12 +8505,7 @@ def calculate_annual_seasonality(df, pair):
         'current_year_prices': current_year_prices,
         'month_midpoints': month_midpoints,
         'month_names': month_names,
-        'stats': {
-            'avg_annual_return': round(avg_annual_return, 2),
-            'best_week': round(best_week, 2),
-            'worst_week': round(worst_week, 2),
-            'latest_price': round(ytd_curve.iloc[-1], 2) if not ytd_curve.empty else None
-        }
+        'stats': stats
     }
 
 # -------------------------------------------------------------------

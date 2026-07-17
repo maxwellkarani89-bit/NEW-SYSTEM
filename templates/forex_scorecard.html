@@ -7,6 +7,7 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        /* ---------- EXACT ORIGINAL STYLES (no changes) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
         .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
@@ -177,7 +178,7 @@
             <div class="gauge-panel" id="gaugePanel">
                 <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
                 <div class="gauge-container">
-                    <!-- PREMIUM GAUGE SVG -->
+                    <!-- PREMIUM GAUGE SVG (unchanged) -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
                             <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
@@ -209,27 +210,11 @@
                             </radialGradient>
                         </defs>
 
-                        <!-- metallic outer ring -->
-                        <path d="M14,105 A91,91 0 0,1 206,105"
-                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M14,105 A91,91 0 0,1 206,105" class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M16,105 A89,89 0 0,1 204,105" stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
+                        <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <path id="gaugeFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;" filter="url(#glowFilter)"/>
 
-                        <!-- glass overlay -->
-                        <path d="M16,105 A89,89 0 0,1 204,105"
-                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
-
-                        <!-- background arc -->
-                        <path d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
-
-                        <!-- active arc (progress) -->
-                        <path id="gaugeFill"
-                              d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
-                              stroke-dasharray="0 267"
-                              style="transition: stroke-dasharray 0.7s ease;"
-                              filter="url(#glowFilter)"/>
-
-                        <!-- tick marks -->
                         <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
                             <line x1="14" y1="105" x2="22" y2="105" />
                             <line x1="206" y1="105" x2="198" y2="105" />
@@ -238,21 +223,17 @@
                             <line x1="166" y1="46" x2="160" y2="52" />
                         </g>
 
-                        <!-- labels -->
                         <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
                         <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
                         <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
 
-                        <!-- needle group -->
                         <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                            <line x1="110" y1="105" x2="110" y2="30"
-                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
                             <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
                             <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
                             <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
                         </g>
 
-                        <!-- center cap glow -->
                         <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
@@ -262,7 +243,7 @@
                 </div>
                 <div class="score-summary">
                     <div class="score-item"><span class="score-label">Tradion Score</span><span id="tradionScore" class="score-value neutral">0</span></div>
-                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">● 0</span></div>
+                    <div class="score-item"><span class="score-label">Technical</span><span id="technicalScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">COT Alignment</span><span id="sentimentCOTScore" class="score-value neutral">0</span></div>
                     <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
                 </div>
@@ -281,6 +262,7 @@
 </div>
 
 <script>
+    // ---------- PAIR LIST ----------
     const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
     allPairs.forEach(pair => {
@@ -290,7 +272,6 @@
         opt.textContent = pairStr;
         select.appendChild(opt);
     });
-    const standaloneAssets = ['XAU', 'BTC'];
 
     const CATEGORY_ORDER = [
         "Crowd Sentiment (COT)",
@@ -302,6 +283,7 @@
 
     let historyChart = null;
 
+    // ---------- MAIN LOAD ----------
     async function loadScorecard() {
         const symbol = select.value;
         if (!symbol) return;
@@ -311,79 +293,75 @@
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
-            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-            updateScores(data);
+
+            // -- Updated calculations --
+            // 1. Extract scores from backend (if available) or compute locally
+            const fundamentalsScore = data.fundamentals_score ??
+                (["Jobs Market Bias", "Inflation Bias", "Economic Growth Bias"].reduce((sum, cat) => sum + (data.category_bias[cat] || 0), 0));
+            const technicalScore = data.technical_score ?? computeTechnicalScore(data);
+            const cotScore = data.sentiment_cot_score ?? 0;
+            const tradionScore = data.tradion_score ?? (fundamentalsScore + technicalScore + cotScore);
+
+            // Update gauge with Tradion Score
+            updateGauge(tradionScore, data.overall?.bias || getBiasFromScore(tradionScore), data.overall?.color || getColorFromScore(tradionScore));
+
+            // Update summary numbers
+            updateScores({
+                tradionScore,
+                technicalScore,
+                cotScore,
+                fundamentalsScore
+            });
+
+            // Render category cards (original layout)
             renderCategoryCards(data);
+
+            // Load history chart
             loadScoreHistory(symbol);
-        } catch(e) { console.error(e); document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`; }
-        finally { overlay.classList.add('hidden'); }
-    }
-
-    async function loadScoreHistory(asset) {
-        try {
-            const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
-            const data = await res.json();
-            renderHistoryChart(data.history);
         } catch(e) {
-            console.error('Error loading score history:', e);
+            console.error(e);
+            document.getElementById('categoryCards').innerHTML = `<div class="error-message">Error: ${e.message}</div>`;
+        } finally {
+            overlay.classList.add('hidden');
         }
     }
 
-    function renderHistoryChart(history) {
-        const canvas = document.getElementById('scoreHistoryChart');
-        const ctx = canvas.getContext('2d');
-        if (historyChart) historyChart.destroy();
-        if (!history || history.length === 0) {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.font = "12px 'Segoe UI'";
-            ctx.fillStyle = "#8892b0";
-            ctx.textAlign = "center";
-            ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
-            return;
+    // Helper: compute Technical Score = seasonality_score + 21-day SMA trend score
+    function computeTechnicalScore(data) {
+        const seasonScore = data.seasonality_score || 0;
+        let trendScore = 0;
+        // Try to find 21-day SMA Trend indicator from base_indicators
+        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
+        if (trendInd && trendInd.signal_value !== undefined) {
+            trendScore = Number(trendInd.signal_value);
+        } else {
+            // fallback: if trend data embedded in overall technical_score (old version)
+            trendScore = data.trend_score || 0;  // if backend provides separate trend_score
         }
-        const labels = history.map(h => h.date);
-        const scores = history.map(h => h.score);
-        historyChart = new Chart(ctx, {
-            type: 'bar',
-            data: {
-                labels: labels,
-                datasets: [{
-                    label: 'Score',
-                    data: scores,
-                    backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
-                    borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
-                    borderWidth: 1,
-                    borderRadius: 4,
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
-                },
-                scales: {
-                    y: {
-                        title: { display: true, text: 'Score', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0' },
-                        grid: {
-                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
-                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
-                        },
-                        min: -20,
-                        max: 20
-                    },
-                    x: {
-                        title: { display: true, text: 'Date', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
+        return seasonScore + trendScore;
     }
 
+    function getBiasFromScore(score) {
+        if (score >= 16) return "EXTREME BULLISH";
+        if (score >= 10) return "VERY BULLISH";
+        if (score >= 5) return "BULLISH";
+        if (score <= -16) return "EXTREME BEARISH";
+        if (score <= -10) return "VERY BEARISH";
+        if (score <= -5) return "BEARISH";
+        return "NEUTRAL";
+    }
+
+    function getColorFromScore(score) {
+        if (score >= 16) return "#00e5a0";
+        if (score >= 10) return "#00cc88";
+        if (score >= 5) return "#00aa66";
+        if (score <= -16) return "#ff4d6d";
+        if (score <= -10) return "#ff6688";
+        if (score <= -5) return "#ff8099";
+        return "#ffaa00";
+    }
+
+    // ---------- GAUGE & SUMMARY ----------
     function updateGauge(score, bias, color) {
         const clampedScore = Math.min(Math.max(score, -10), 10);
         const angle = ((clampedScore + 10) / 20) * 180;
@@ -398,23 +376,20 @@
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
-    function updateScores(data) {
-        setScoreValue('tradionScore', data.tradion_score);
-        setScoreValue('technicalScore', data.technical_score > 0 ? '▲ 1' : (data.technical_score < 0 ? '▼ -1' : '● 0'));
-        setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score, data.fundamentals_score > 0 ? 'positive' : (data.fundamentals_score < 0 ? 'negative' : 'neutral'));
+    function updateScores(scores) {
+        setScoreValue('tradionScore', scores.tradionScore);
+        setScoreValue('technicalScore', scores.technicalScore);
+        setScoreValue('sentimentCOTScore', scores.cotScore);
+        setScoreValue('fundamentalsScore', scores.fundamentalsScore);
     }
 
-    function setScoreValue(id, text, classNameOverride) {
+    function setScoreValue(id, value) {
         const el = document.getElementById(id);
-        el.textContent = text;
-        if (classNameOverride) el.className = 'score-value ' + classNameOverride;
-        else {
-            const val = parseFloat(text);
-            el.className = 'score-value ' + (val > 0 ? 'positive' : val < 0 ? 'negative' : 'neutral');
-        }
+        el.textContent = value.toFixed(1);
+        el.className = 'score-value ' + (value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral');
     }
 
+    // ---------- CATEGORY CARDS (ORIGINAL LAYOUT) ----------
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
@@ -535,14 +510,13 @@
         const techBiasScore = data.category_bias[techCategory] || 0;
         const techCard = document.createElement('div');
         techCard.className = 'panel';
-        const techScore = data.technical_score || 0;
-        const techSignal = techScore > 0 ? 'Bullish' : (techScore < 0 ? 'Bearish' : 'Neutral');
-        const techSignalClass = techScore > 0 ? 'positive' : (techScore < 0 ? 'negative' : 'neutral');
-
-        // Seasonality data from API
         const seasonSignal = data.seasonality_bias || 'Neutral';
         const seasonScore = data.seasonality_score || 0;
         const seasonClass = seasonScore > 0 ? 'positive' : (seasonScore < 0 ? 'negative' : 'neutral');
+        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
+        const trendScore = trendInd ? Number(trendInd.signal_value) : 0;
+        const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
+        const trendClass = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
 
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
                             <h3 style="margin:0;">${techCategory}</h3>
@@ -554,13 +528,13 @@
                         <div class="indicator-row">
                             <span class="indicator-label">21-day SMA Trend</span>
                             <div class="indicator-values">
-                                <span class="value ${techSignalClass}">${techSignal}</span>
+                                <span class="value ${trendClass}">${trendSignal}</span>
                                 <span class="value">-</span>
                                 <span class="value">-</span>
                                 <span class="value">-</span>
                             </div>
                         </div>
-                        <!-- NEW: Seasonality row -->
+                        <!-- Seasonality row -->
                         <div class="indicator-row">
                             <span class="indicator-label">Seasonality</span>
                             <div class="indicator-values">
@@ -574,7 +548,7 @@
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards
+        // Remaining cards (original order)
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
@@ -594,6 +568,72 @@
             }
             card.innerHTML = html;
             container.appendChild(card);
+        });
+    }
+
+    // ---------- SCORE HISTORY CHART ----------
+    async function loadScoreHistory(asset) {
+        try {
+            const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
+            const data = await res.json();
+            renderHistoryChart(data.history);
+        } catch(e) {
+            console.error('Error loading score history:', e);
+        }
+    }
+
+    function renderHistoryChart(history) {
+        const canvas = document.getElementById('scoreHistoryChart');
+        const ctx = canvas.getContext('2d');
+        if (historyChart) historyChart.destroy();
+        if (!history || history.length === 0) {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.font = "12px 'Segoe UI'";
+            ctx.fillStyle = "#8892b0";
+            ctx.textAlign = "center";
+            ctx.fillText("No score history yet. Data will appear after the first scheduled save (every 3 days).", canvas.width/2, canvas.height/2);
+            return;
+        }
+        const labels = history.map(h => h.date);
+        const scores = history.map(h => h.score);
+        historyChart = new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: labels,
+                datasets: [{
+                    label: 'Score',
+                    data: scores,
+                    backgroundColor: scores.map(s => s > 0 ? 'rgba(0, 229, 160, 0.7)' : (s < 0 ? 'rgba(255, 77, 109, 0.7)' : 'rgba(160, 160, 160, 0.5)')),
+                    borderColor: scores.map(s => s > 0 ? '#00e5a0' : (s < 0 ? '#ff4d6d' : '#a0a0a0')),
+                    borderWidth: 1,
+                    borderRadius: 4,
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: true,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
+                },
+                scales: {
+                    y: {
+                        title: { display: true, text: 'Score', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0' },
+                        grid: {
+                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
+                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
+                        },
+                        min: -20,
+                        max: 20
+                    },
+                    x: {
+                        title: { display: true, text: 'Date', color: '#a0b0c0' },
+                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
+                        grid: { display: false }
+                    }
+                }
+            }
         });
     }
 
