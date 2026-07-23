@@ -1,65 +1,169 @@
 <!DOCTYPE html>
-<html><head><title>Sentiment – Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://unpkg.com/lucide@latest"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}
-.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
-.sidebar .logo{font-size:22px;color:#00e5ff;text-align:center;margin-bottom:30px}
-.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
-.sidebar .menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
-.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A}
-.sidebar .menu-icon{font-size:20px;margin-right:12px}
-.sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-.main-content{flex:1;margin-left:280px;padding:20px 30px}
-.header h2{color:#00e5ff;margin-bottom:20px}
-.search-box{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:350px;margin-bottom:20px}
-.sentiment-table{width:100%;border-collapse:collapse;background:#121826;border-radius:12px;overflow:hidden}
-.sentiment-table th,.sentiment-table td{padding:12px 15px;border-bottom:1px solid #2a3040;text-align:left}
-.sentiment-table th{background:rgba(0,229,255,0.1);color:#00e5ff}
-.bar-container{display:flex;align-items:center;gap:10px}
-.bar-wrapper{flex:1;height:24px;background:#1a1f2e;border-radius:12px;overflow:hidden;display:flex}
-.bar-long{background:#00e5a0;height:100%;display:flex;align-items:center;justify-content:center;color:#0B0F1A;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
-.bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
-.percentage-col{width:80px;text-align:right}
-.pair-col{font-weight:bold;width:120px}
-.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-@media (max-width:768px){
-    .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;width:260px;z-index:1050;position:fixed;top:0;left:0;height:100%;background:#121826}
-    .sidebar.open{transform:translateX(0)}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-    .hamburger{display:block}
-    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
-    table,.currency-grid,.gauge-panel,.scorecard-grid{font-size:12px}
-    th,td{padding:8px 4px}
-    .currency-card{padding:12px}
-    .gauge-wrapper{width:90px;height:90px}
-    .gauge-value{font-size:18px}
-    .scorecard-grid{grid-template-columns:1fr;gap:15px}
-    .panel{padding:12px}
-    .cot-data-table th,.cot-data-table td{padding:8px 6px;font-size:12px}
-    .inline-edit{width:80px;padding:4px 6px;font-size:0.75rem}
-}
-</style>
+<html>
+<head>
+    <title>Sentiment – Tradion</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background: #0B0F1A;
+            color: #E0E0E0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+        .sidebar {
+            width: 280px;
+            background: #121826;
+            min-height: 100vh;
+            padding: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            border-right: 1px solid #2a3040;
+            z-index: 100;
+        }
+        .sidebar .logo { font-size: 22px; color: #00e5ff; text-align: center; margin-bottom: 30px; }
+        .sidebar .menu-item {
+            display: flex; align-items: center; padding: 12px 15px; margin: 5px 0;
+            border-radius: 8px; cursor: pointer; color: #a0b0c0; transition: 0.2s;
+        }
+        .sidebar .menu-item:hover { background: rgba(0,229,255,0.08); color: #00e5ff; }
+        .sidebar .menu-item.active {
+            background: linear-gradient(135deg, #00e5ff, #00b8d4); color: #0B0F1A;
+        }
+        .sidebar .menu-icon { font-size: 20px; margin-right: 12px; }
+        .sidebar .menu-icon svg { width: 20px; height: 20px; vertical-align: middle; }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content {
+            flex: 1; margin-left: 280px; padding: 24px 32px;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+        }
+        .header h2 { color: #00e5ff; font-size: 1.8rem; }
+
+        .sort-btn {
+            background: #1a1f2e; border: 1px solid #2a3040; color: #e0e0e0;
+            padding: 8px 16px; border-radius: 8px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
+        }
+        .sort-btn:hover { background: #2a3040; }
+
+        .search-box {
+            padding: 10px 15px; background: #1a1f2e; border: 1px solid #2a3040;
+            border-radius: 8px; color: #fff; width: 100%; max-width: 300px; margin-bottom: 16px;
+        }
+
+        /* ---------- TABLE ---------- */
+        .sentiment-table {
+            width: 100%; border-collapse: collapse; background: #121826;
+            border-radius: 12px; overflow: hidden; border: 1px solid #2a3040;
+            table-layout: auto;
+        }
+        .sentiment-table th {
+            background: rgba(0,229,255,0.05); color: #94a3b8; font-size: 0.75rem;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 12px 16px; border-bottom: 1px solid #2a3040; text-align: left;
+        }
+        .sentiment-table td {
+            padding: 10px 16px; border-bottom: 1px solid rgba(42,48,64,0.5); font-size: 0.85rem;
+        }
+        .sentiment-table tr:last-child td { border-bottom: none; }
+
+        /* Column widths */
+        .col-pair { width: 120px; }
+        .col-signal { width: 130px; }
+        .col-long { width: 70px; text-align: left; }
+        .col-bar { /* takes remaining space */ }
+        .col-short { width: 70px; text-align: right; }
+
+        .pair-cell {
+            font-weight: 600; color: #fff;
+        }
+
+        /* Signal dot + text */
+        .signal-cell {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .signal-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .dot-strong-buy  { background: #00e5a0; }
+        .dot-buy         { background: #4ade80; }
+        .dot-neutral     { background: #ffb800; }
+        .dot-sell        { background: #ff7b8c; }
+        .dot-strong-sell { background: #ff4d6d; }
+        .signal-text {
+            font-size: 0.8rem; font-weight: 500; color: #c0c8d0;
+        }
+
+        /* Bar */
+        .bar-wrapper {
+            display: flex; height: 20px; background: #1a1f2e; border-radius: 10px; overflow: hidden;
+            width: 100%;
+        }
+        .bar-long {
+            background: #00e5a0; height: 100%;
+        }
+        .bar-short {
+            background: #ff4d6d; height: 100%;
+        }
+
+        .pct-long  { color: #00e5a0; font-weight: 600; }
+        .pct-short { color: #ff4d6d; font-weight: 600; }
+
+        /* ---------- HAMBURGER ---------- */
+        .hamburger {
+            display: none; font-size: 28px; cursor: pointer; color: #00e5ff;
+            position: fixed; top: 15px; left: 20px; z-index: 1100;
+            background: #121826; padding: 8px 12px; border-radius: 8px; border: 1px solid #2a3040;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%); transition: 0.3s ease;
+                width: 260px; z-index: 1050; position: fixed; top: 0; left: 0; height: 100%;
+                background: #121826;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0 !important; padding: 60px 16px 20px 16px !important; width: 100%; }
+            .hamburger { display: block; }
+            .sentiment-table th, .sentiment-table td { padding: 8px 10px; font-size: 0.75rem; }
+            .col-pair { width: 90px; }
+            .col-signal { width: 100px; }
+            .col-long, .col-short { width: 55px; }
+        }
+    </style>
 </head>
 <body>
+
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <!-- "Scorecard" renamed to "Asset Scorecard" -->
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <!-- Added missing menus -->
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
     <span>Carry Trade Scanner</span>
 </div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <!-- Admin (conditional) -->
     {% if is_admin %}
     <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
     {% endif %}
@@ -67,60 +171,121 @@
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- MAIN CONTENT -->
 <div class="main-content">
-    <div class="header"><h2>Market Sentiment</h2></div>
+    <div class="header">
+        <h2>Market Sentiment</h2>
+        <button class="sort-btn" id="sortBtn" onclick="toggleSort()">
+            <i data-lucide="arrow-up-down" style="width:16px;height:16px"></i>
+            Sort: <span id="sortLabel">Ascending</span>
+        </button>
+    </div>
     <input type="text" id="searchSentiment" class="search-box" placeholder="Search pair...">
-    <table class="sentiment-table" id="sentimentTable"><thead><tr><th>Pair</th><th>Sentiment Bar</th><th>Long %</th><th>Short %</th></tr></thead><tbody></tbody></table>
+
+    <table class="sentiment-table" id="sentimentTable">
+        <thead>
+            <tr>
+                <th class="col-pair">Pair</th>
+                <th class="col-signal">Signal</th>
+                <th class="col-long">Long</th>
+                <th class="col-bar">Sentiment Bar</th>
+                <th class="col-short">Short</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </div>
+
 <script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-
-document.addEventListener('click', function(event) {
-    const sidebar = document.getElementById('sidebar');
-    const hamburger = document.querySelector('.hamburger');
-    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
+    // Signal thresholds
+    function getSignal(longPct) {
+        if (longPct >= 80) return { label: 'Strong Sell', dot: 'dot-strong-sell' };
+        if (longPct >= 60) return { label: 'Sell', dot: 'dot-sell' };
+        if (longPct <= 20) return { label: 'Strong Buy', dot: 'dot-strong-buy' };
+        if (longPct <= 40) return { label: 'Buy', dot: 'dot-buy' };
+        return { label: 'Neutral', dot: 'dot-neutral' };
     }
-});
 
-async function loadSentiment() {
-    const res = await fetch('/api/sentiment');
-    const data = await res.json();
-    renderSentiment(data);
-}
+    let sentimentData = [];
+    let sortAscending = true;
 
-function renderSentiment(data) {
-    const tbody = document.querySelector('#sentimentTable tbody');
-    tbody.innerHTML = '';
-    data.forEach(s => {
-        const long = s.long_pct, short = s.short_pct;
-        const row = document.createElement('tr');
-        row.innerHTML = `<td class="pair-col">${s.pair}</td>
-                         <td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td>
-                         <td class="percentage-col" style="color:#00e5a0">${long}%</td>
-                         <td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;
-        tbody.appendChild(row);
+    async function loadSentiment() {
+        const res = await fetch('/api/sentiment');
+        const data = await res.json();
+        sentimentData = data;
+        sortAndRender();
+    }
+
+    function toggleSort() {
+        sortAscending = !sortAscending;
+        document.getElementById('sortLabel').textContent = sortAscending ? 'Ascending' : 'Descending';
+        sortAndRender();
+    }
+
+    function sortAndRender() {
+        const sorted = [...sentimentData].sort((a, b) => {
+            return sortAscending ? a.long_pct - b.long_pct : b.long_pct - a.long_pct;
+        });
+        renderSentiment(sorted);
+    }
+
+    function renderSentiment(data) {
+        const tbody = document.querySelector('#sentimentTable tbody');
+        tbody.innerHTML = '';
+        data.forEach(s => {
+            const long = Math.round(s.long_pct);    // rounded to whole number
+            const short = Math.round(s.short_pct);  // rounded to whole number
+            const signal = getSignal(long);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="col-pair"><span class="pair-cell">${s.pair}</span></td>
+                <td class="col-signal">
+                    <div class="signal-cell">
+                        <span class="signal-dot ${signal.dot}"></span>
+                        <span class="signal-text">${signal.label}</span>
+                    </div>
+                </td>
+                <td class="col-long pct-long">${long}%</td>
+                <td class="col-bar">
+                    <div class="bar-wrapper">
+                        <div class="bar-long" style="width:${long}%"></div>
+                        <div class="bar-short" style="width:${short}%"></div>
+                    </div>
+                </td>
+                <td class="col-short pct-short">${short}%</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    document.getElementById('searchSentiment').addEventListener('input', function() {
+        const term = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#sentimentTable tbody tr');
+        rows.forEach(row => {
+            const pair = row.querySelector('.pair-cell').textContent.toLowerCase();
+            row.style.display = pair.includes(term) ? '' : 'none';
+        });
     });
-}
 
-document.getElementById('searchSentiment').addEventListener('input', function() {
-    const term = this.value.toLowerCase();
-    const rows = document.querySelectorAll('#sentimentTable tbody tr');
-    rows.forEach(row => {
-        const pair = row.querySelector('.pair-col').textContent.toLowerCase();
-        row.style.display = pair.includes(term) ? '' : 'none';
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('sidebar');
+        const hamburger = document.querySelector('.hamburger');
+        if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+        }
     });
-});
 
-function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
 
-loadSentiment();
-
-setTimeout(() => {
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}, 100);
+    loadSentiment();
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
 </html>

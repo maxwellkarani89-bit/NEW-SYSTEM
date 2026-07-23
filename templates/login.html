@@ -89,43 +89,17 @@
             transform: scale(1.02);
         }
 
-        /* ---------- MARKET TICKER ---------- */
+        /* ---------- MARKET TICKER – BLENDING CONTAINER ---------- */
         .market-ticker {
-            background: rgba(11, 15, 26, 0.5);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            padding: 0.3rem 0;
+            background: #0B0F1A;          /* SAME as page background, hides white flash */
+            padding: 0;
             border-bottom: 1px solid rgba(0, 229, 255, 0.06);
             overflow: hidden;
-            white-space: nowrap;
+            height: 40px;
         }
-        .ticker-wrap {
-            display: flex;
-            gap: 2.5rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            padding: 0 1rem;
-        }
-        .ticker-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: #94a3b8;
-        }
-        .ticker-item .symbol {
-            color: #E0E0E0;
-            font-weight: 600;
-        }
-        .ticker-item .change {
-            font-weight: 600;
-        }
-        .ticker-item .change.positive {
-            color: #4ade80;
-        }
-        .ticker-item .change.negative {
-            color: #f87171;
+        .finlogix-container {
+            width: 100%;
+            height: 100%;
         }
 
         /* ---------- MAIN LAYOUT (unchanged) ---------- */
@@ -541,12 +515,8 @@
             .nav-links a {
                 font-size: 0.8rem;
             }
-            .market-ticker .ticker-wrap {
-                gap: 1rem;
-                justify-content: flex-start;
-                overflow-x: auto;
-                flex-wrap: nowrap;
-                padding: 0 1rem;
+            .market-ticker {
+                height: auto;
             }
             .footer {
                 flex-direction: column;
@@ -601,18 +571,12 @@
         </div>
     </nav>
 
-    <!-- MARKET TICKER -->
+    <!-- MARKET TICKER – Blended background container -->
     <div class="market-ticker">
-        <div class="ticker-wrap">
-            <span class="ticker-item"><span class="symbol">EUR/USD</span> <span class="change positive">+0.12%</span></span>
-            <span class="ticker-item"><span class="symbol">GBP/USD</span> <span class="change negative">-0.08%</span></span>
-            <span class="ticker-item"><span class="symbol">USD/JPY</span> <span class="change positive">+0.23%</span></span>
-            <span class="ticker-item"><span class="symbol">Gold</span> <span class="change positive">+0.45%</span></span>
-            <span class="ticker-item"><span class="symbol">Bitcoin</span> <span class="change negative">-0.67%</span></span>
-        </div>
+        <div class="finlogix-container"></div>
     </div>
 
-    <!-- MAIN CONTENT – ORIGINAL LAYOUT WITH UPDATED COLOURS -->
+    <!-- MAIN CONTENT – ORIGINAL LAYOUT -->
     <div class="main-container">
 
         <!-- LEFT HERO (with cards) -->
@@ -669,7 +633,6 @@
                 <h2>Welcome Back</h2>
                 <p class="sub">Access your institutional trading workspace.</p>
 
-                <!-- ⚠️ DO NOT CHANGE: form action, method, input names, or IDs -->
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="input-group">
                         <label for="username">Email / Username</label>
@@ -721,6 +684,41 @@
             <a href="#" aria-label="YouTube">▶️</a>
         </div>
     </footer>
+
+    <!-- Finlogix Widget Scripts -->
+    <script type="text/javascript" src="https://widget.finlogix.com/Widget.js"></script>
+    <script type="text/javascript">
+        Widget.init({
+            widgetId: "3e3bc2f2-102b-4517-b51c-c4754252032b",
+            type: "StripBar",
+            language: "en",
+            theme: "dark",                // <<< Official dark theme – removes white background
+            symbolPairs: [
+                { symbolId: "19", symbolName: "EURUSD" },
+                { symbolId: "36", symbolName: "USDJPY" },
+                { symbolId: "20", symbolName: "GBPAUD" },
+                { symbolId: "44", symbolName: "XAUUSD" },
+                { symbolId: "128", symbolName: "USWTI" },
+                { symbolId: "157", symbolName: "SP500" }
+            ],
+            isAdaptive: true
+        });
+
+        // Optional: attempt to hide the Finlogix watermark (may not always work)
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const container = document.querySelector('.finlogix-container');
+                if (container) {
+                    const links = container.querySelectorAll('a');
+                    links.forEach(link => {
+                        if (link.hostname.includes('finlogix')) {
+                            link.style.display = 'none';
+                        }
+                    });
+                }
+            }, 1500);
+        });
+    </script>
 
     <!-- Parallax tilt (unchanged) -->
     <script>

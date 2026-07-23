@@ -2932,6 +2932,16 @@ def api_currency_strength():
         return jsonify({'currencies': heatmap_data})
     except Exception as e:
         return jsonify({'error': str(e)}), 500
+    
+@app.route('/economic-calendar')
+@login_required
+def economic_calendar():
+    return render_template('economic_calendar.html', 
+                           username=session['username'], 
+                           is_admin=session.get('is_admin', False),
+                           current_page='economic_calendar')
+    
+    
 
 # -----------------------------
 # USER SETTINGS ROUTES
@@ -3690,43 +3700,17 @@ def create_templates():
             transform: scale(1.02);
         }
 
-        /* ---------- MARKET TICKER ---------- */
+        /* ---------- MARKET TICKER – BLENDING CONTAINER ---------- */
         .market-ticker {
-            background: rgba(11, 15, 26, 0.5);
-            backdrop-filter: blur(4px);
-            -webkit-backdrop-filter: blur(4px);
-            padding: 0.3rem 0;
+            background: #0B0F1A;          /* SAME as page background, hides white flash */
+            padding: 0;
             border-bottom: 1px solid rgba(0, 229, 255, 0.06);
             overflow: hidden;
-            white-space: nowrap;
+            height: 40px;
         }
-        .ticker-wrap {
-            display: flex;
-            gap: 2.5rem;
-            justify-content: center;
-            flex-wrap: wrap;
-            padding: 0 1rem;
-        }
-        .ticker-item {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.5rem;
-            font-size: 0.7rem;
-            font-weight: 500;
-            color: #94a3b8;
-        }
-        .ticker-item .symbol {
-            color: #E0E0E0;
-            font-weight: 600;
-        }
-        .ticker-item .change {
-            font-weight: 600;
-        }
-        .ticker-item .change.positive {
-            color: #4ade80;
-        }
-        .ticker-item .change.negative {
-            color: #f87171;
+        .finlogix-container {
+            width: 100%;
+            height: 100%;
         }
 
         /* ---------- MAIN LAYOUT (unchanged) ---------- */
@@ -4142,12 +4126,8 @@ def create_templates():
             .nav-links a {
                 font-size: 0.8rem;
             }
-            .market-ticker .ticker-wrap {
-                gap: 1rem;
-                justify-content: flex-start;
-                overflow-x: auto;
-                flex-wrap: nowrap;
-                padding: 0 1rem;
+            .market-ticker {
+                height: auto;
             }
             .footer {
                 flex-direction: column;
@@ -4202,18 +4182,12 @@ def create_templates():
         </div>
     </nav>
 
-    <!-- MARKET TICKER -->
+    <!-- MARKET TICKER – Blended background container -->
     <div class="market-ticker">
-        <div class="ticker-wrap">
-            <span class="ticker-item"><span class="symbol">EUR/USD</span> <span class="change positive">+0.12%</span></span>
-            <span class="ticker-item"><span class="symbol">GBP/USD</span> <span class="change negative">-0.08%</span></span>
-            <span class="ticker-item"><span class="symbol">USD/JPY</span> <span class="change positive">+0.23%</span></span>
-            <span class="ticker-item"><span class="symbol">Gold</span> <span class="change positive">+0.45%</span></span>
-            <span class="ticker-item"><span class="symbol">Bitcoin</span> <span class="change negative">-0.67%</span></span>
-        </div>
+        <div class="finlogix-container"></div>
     </div>
 
-    <!-- MAIN CONTENT – ORIGINAL LAYOUT WITH UPDATED COLOURS -->
+    <!-- MAIN CONTENT – ORIGINAL LAYOUT -->
     <div class="main-container">
 
         <!-- LEFT HERO (with cards) -->
@@ -4270,7 +4244,6 @@ def create_templates():
                 <h2>Welcome Back</h2>
                 <p class="sub">Access your institutional trading workspace.</p>
 
-                <!-- ⚠️ DO NOT CHANGE: form action, method, input names, or IDs -->
                 <form method="POST" action="{{ url_for('login') }}">
                     <div class="input-group">
                         <label for="username">Email / Username</label>
@@ -4322,6 +4295,41 @@ def create_templates():
             <a href="#" aria-label="YouTube">▶️</a>
         </div>
     </footer>
+
+    <!-- Finlogix Widget Scripts -->
+    <script type="text/javascript" src="https://widget.finlogix.com/Widget.js"></script>
+    <script type="text/javascript">
+        Widget.init({
+            widgetId: "3e3bc2f2-102b-4517-b51c-c4754252032b",
+            type: "StripBar",
+            language: "en",
+            theme: "dark",                // <<< Official dark theme – removes white background
+            symbolPairs: [
+                { symbolId: "19", symbolName: "EURUSD" },
+                { symbolId: "36", symbolName: "USDJPY" },
+                { symbolId: "20", symbolName: "GBPAUD" },
+                { symbolId: "44", symbolName: "XAUUSD" },
+                { symbolId: "128", symbolName: "USWTI" },
+                { symbolId: "157", symbolName: "SP500" }
+            ],
+            isAdaptive: true
+        });
+
+        // Optional: attempt to hide the Finlogix watermark (may not always work)
+        window.addEventListener('load', function() {
+            setTimeout(function() {
+                const container = document.querySelector('.finlogix-container');
+                if (container) {
+                    const links = container.querySelectorAll('a');
+                    links.forEach(link => {
+                        if (link.hostname.includes('finlogix')) {
+                            link.style.display = 'none';
+                        }
+                    });
+                }
+            }, 1500);
+        });
+    </script>
 
     <!-- Parallax tilt (unchanged) -->
     <script>
@@ -4407,6 +4415,204 @@ else{field.type='password';toggle.textContent='👁';}
 </body>
 </html>''')
 
+#EC0NOMIC CALENDAR
+with open('templates/economic_calendar.html', 'w') as f:
+    f.write('''<!DOCTYPE html>
+<html>
+<head>
+    <title>Economic Calendar – Tradion</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background: #0B0F1A;
+            color: #E0E0E0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+        .sidebar {
+            width: 280px;
+            background: #121826;
+            min-height: 100vh;
+            padding: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            border-right: 1px solid #2a3040;
+            z-index: 100;
+        }
+        .sidebar .logo { font-size: 22px; color: #00e5ff; text-align: center; margin-bottom: 30px; }
+        .sidebar .menu-item {
+            display: flex; align-items: center; padding: 12px 15px; margin: 5px 0;
+            border-radius: 8px; cursor: pointer; color: #a0b0c0; transition: 0.2s;
+        }
+        .sidebar .menu-item:hover { background: rgba(0,229,255,0.08); color: #00e5ff; }
+        .sidebar .menu-item.active {
+            background: linear-gradient(135deg, #00e5ff, #00b8d4); color: #0B0F1A;
+        }
+        .sidebar .menu-icon { font-size: 20px; margin-right: 12px; }
+        .sidebar .menu-icon svg { width: 20px; height: 20px; vertical-align: middle; }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content {
+            flex: 1; margin-left: 280px; padding: 24px 32px;
+            display: flex; flex-direction: column;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+        }
+        .header h2 { color: #00e5ff; font-size: 1.8rem; }
+
+        /* ---------- WIDGET CONTAINER ---------- */
+        .widget-container {
+            flex: 1;
+            background: #121826;
+            border-radius: 12px;
+            border: 1px solid #2a3040;
+            overflow: hidden;
+            min-height: 600px;
+        }
+        .finlogix-container {
+            width: 100%;
+            height: 100%;
+            min-height: 600px;
+        }
+        
+        /* Force dark background on any iframe content */
+        .finlogix-container iframe {
+            background-color: #121826 !important;
+        }
+
+        /* ---------- HAMBURGER ---------- */
+        .hamburger {
+            display: none; font-size: 28px; cursor: pointer; color: #00e5ff;
+            position: fixed; top: 15px; left: 20px; z-index: 1100;
+            background: #121826; padding: 8px 12px; border-radius: 8px; border: 1px solid #2a3040;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%); transition: 0.3s ease;
+                width: 260px; z-index: 1050; position: fixed; top: 0; left: 0; height: 100%;
+                background: #121826;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0 !important; padding: 60px 16px 20px 16px !important; width: 100%; }
+            .hamburger { display: block; }
+            .widget-container { min-height: 400px; }
+            .finlogix-container { min-height: 400px; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- SIDEBAR -->
+<div class="sidebar" id="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
+    <i data-lucide="dollar-sign" class="menu-icon"></i>
+    <span>Carry Trade Scanner</span>
+</div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}
+    <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
+    {% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item active" onclick="window.location.href='/economic-calendar'"><i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+
+<!-- MAIN CONTENT -->
+<div class="main-content">
+    <div class="header">
+        <h2>Economic Calendar</h2>
+    </div>
+    <div class="widget-container">
+        <div class="finlogix-container"></div>
+    </div>
+</div>
+
+<!-- Finlogix Widget Scripts -->
+<script type="text/javascript" src="https://widget.finlogix.com/Widget.js"></script>
+<script type="text/javascript">
+    Widget.init({
+        widgetId: "3e3bc2f2-102b-4517-b51c-c4754252032b",
+        type: "EconomicCalendar",
+        language: "en",
+        theme: "dark",           // Dark theme for the widget
+        color: "dark",           // Additional dark color parameter
+        isAdaptive: true
+    });
+
+    // Force dark mode on the iframe after it loads
+    window.addEventListener('load', function() {
+        setTimeout(function() {
+            const container = document.querySelector('.finlogix-container');
+            if (container) {
+                // Try to access the iframe and apply dark styles
+                const iframe = container.querySelector('iframe');
+                if (iframe) {
+                    try {
+                        const iframeDoc = iframe.contentDocument || iframe.contentWindow.document;
+                        if (iframeDoc) {
+                            iframeDoc.body.style.backgroundColor = '#121826';
+                            iframeDoc.body.style.color = '#E0E0E0';
+                        }
+                    } catch(e) {
+                        // Cross-origin iframe - can't modify directly
+                        console.log('Cannot modify iframe styles (cross-origin)');
+                    }
+                }
+                
+                // Hide watermark
+                const links = container.querySelectorAll('a');
+                links.forEach(link => {
+                    if (link.hostname.includes('finlogix')) {
+                        link.style.display = 'none';
+                    }
+                });
+            }
+        }, 2000);
+    });
+</script>
+
+<script>
+    function toggleSidebar() {
+        document.getElementById('sidebar').classList.toggle('open');
+    }
+
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('sidebar');
+        const hamburger = document.querySelector('.hamburger');
+        if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
+        }
+    });
+
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
+    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
+
+
+
+
                      # Dashboard (with Lucide icons and row background gradient matching score) - FIXED SEARCH
 with open('templates/dashboard.html', 'w') as f:
     f.write('''<!DOCTYPE html>
@@ -4451,6 +4657,11 @@ td { background-color: inherit; }
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
 </div>
@@ -4959,6 +5170,11 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
@@ -5549,6 +5765,11 @@ setTimeout(() => {
     <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
@@ -6093,6 +6314,11 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
     <span>Carry Trade Scanner</span>
@@ -7099,6 +7325,11 @@ canvas{max-height:400px;width:100%}
     <div class="menu-item active" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
     <span>Carry Trade Scanner</span>
@@ -7322,67 +7553,171 @@ setTimeout(() => {
                 # Sentiment (with Lucide icons)
         with open('templates/sentiment.html', 'w') as f:
             f.write('''<!DOCTYPE html>
-<html><head><title>Sentiment – Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
-<script src="https://unpkg.com/lucide@latest"></script>
-<style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff;display:flex}
-.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
-.sidebar .logo{font-size:22px;color:#00e5ff;text-align:center;margin-bottom:30px}
-.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}
-.sidebar .menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}
-.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A}
-.sidebar .menu-icon{font-size:20px;margin-right:12px}
-.sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-.main-content{flex:1;margin-left:280px;padding:20px 30px}
-.header h2{color:#00e5ff;margin-bottom:20px}
-.search-box{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:350px;margin-bottom:20px}
-.sentiment-table{width:100%;border-collapse:collapse;background:#121826;border-radius:12px;overflow:hidden}
-.sentiment-table th,.sentiment-table td{padding:12px 15px;border-bottom:1px solid #2a3040;text-align:left}
-.sentiment-table th{background:rgba(0,229,255,0.1);color:#00e5ff}
-.bar-container{display:flex;align-items:center;gap:10px}
-.bar-wrapper{flex:1;height:24px;background:#1a1f2e;border-radius:12px;overflow:hidden;display:flex}
-.bar-long{background:#00e5a0;height:100%;display:flex;align-items:center;justify-content:center;color:#0B0F1A;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
-.bar-short{background:#ff4d6d;height:100%;display:flex;align-items:center;justify-content:center;color:#fff;font-weight:bold;font-size:0.8rem;transition:width 0.3s}
-.percentage-col{width:80px;text-align:right}
-.pair-col{font-weight:bold;width:120px}
-.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-@media (max-width:768px){
-    .sidebar{transform:translateX(-100%);transition:transform 0.3s ease;width:260px;z-index:1050;position:fixed;top:0;left:0;height:100%;background:#121826}
-    .sidebar.open{transform:translateX(0)}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-    .hamburger{display:block}
-    .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
-    table,.currency-grid,.gauge-panel,.scorecard-grid{font-size:12px}
-    th,td{padding:8px 4px}
-    .currency-card{padding:12px}
-    .gauge-wrapper{width:90px;height:90px}
-    .gauge-value{font-size:18px}
-    .scorecard-grid{grid-template-columns:1fr;gap:15px}
-    .panel{padding:12px}
-    .cot-data-table th,.cot-data-table td{padding:8px 6px;font-size:12px}
-    .inline-edit{width:80px;padding:4px 6px;font-size:0.75rem}
-}
-</style>
+<html>
+<head>
+    <title>Sentiment – Tradion</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', 'Inter', sans-serif;
+            background: #0B0F1A;
+            color: #E0E0E0;
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ---------- SIDEBAR ---------- */
+        .sidebar {
+            width: 280px;
+            background: #121826;
+            min-height: 100vh;
+            padding: 20px;
+            position: fixed;
+            left: 0;
+            top: 0;
+            border-right: 1px solid #2a3040;
+            z-index: 100;
+        }
+        .sidebar .logo { font-size: 22px; color: #00e5ff; text-align: center; margin-bottom: 30px; }
+        .sidebar .menu-item {
+            display: flex; align-items: center; padding: 12px 15px; margin: 5px 0;
+            border-radius: 8px; cursor: pointer; color: #a0b0c0; transition: 0.2s;
+        }
+        .sidebar .menu-item:hover { background: rgba(0,229,255,0.08); color: #00e5ff; }
+        .sidebar .menu-item.active {
+            background: linear-gradient(135deg, #00e5ff, #00b8d4); color: #0B0F1A;
+        }
+        .sidebar .menu-icon { font-size: 20px; margin-right: 12px; }
+        .sidebar .menu-icon svg { width: 20px; height: 20px; vertical-align: middle; }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content {
+            flex: 1; margin-left: 280px; padding: 24px 32px;
+        }
+        .header {
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
+        }
+        .header h2 { color: #00e5ff; font-size: 1.8rem; }
+
+        .sort-btn {
+            background: #1a1f2e; border: 1px solid #2a3040; color: #e0e0e0;
+            padding: 8px 16px; border-radius: 8px; cursor: pointer;
+            display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
+        }
+        .sort-btn:hover { background: #2a3040; }
+
+        .search-box {
+            padding: 10px 15px; background: #1a1f2e; border: 1px solid #2a3040;
+            border-radius: 8px; color: #fff; width: 100%; max-width: 300px; margin-bottom: 16px;
+        }
+
+        /* ---------- TABLE ---------- */
+        .sentiment-table {
+            width: 100%; border-collapse: collapse; background: #121826;
+            border-radius: 12px; overflow: hidden; border: 1px solid #2a3040;
+            table-layout: auto;
+        }
+        .sentiment-table th {
+            background: rgba(0,229,255,0.05); color: #94a3b8; font-size: 0.75rem;
+            font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
+            padding: 12px 16px; border-bottom: 1px solid #2a3040; text-align: left;
+        }
+        .sentiment-table td {
+            padding: 10px 16px; border-bottom: 1px solid rgba(42,48,64,0.5); font-size: 0.85rem;
+        }
+        .sentiment-table tr:last-child td { border-bottom: none; }
+
+        /* Column widths */
+        .col-pair { width: 120px; }
+        .col-signal { width: 130px; }
+        .col-long { width: 70px; text-align: left; }
+        .col-bar { /* takes remaining space */ }
+        .col-short { width: 70px; text-align: right; }
+
+        .pair-cell {
+            font-weight: 600; color: #fff;
+        }
+
+        /* Signal dot + text */
+        .signal-cell {
+            display: flex; align-items: center; gap: 8px;
+        }
+        .signal-dot {
+            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
+        }
+        .dot-strong-buy  { background: #00e5a0; }
+        .dot-buy         { background: #4ade80; }
+        .dot-neutral     { background: #ffb800; }
+        .dot-sell        { background: #ff7b8c; }
+        .dot-strong-sell { background: #ff4d6d; }
+        .signal-text {
+            font-size: 0.8rem; font-weight: 500; color: #c0c8d0;
+        }
+
+        /* Bar */
+        .bar-wrapper {
+            display: flex; height: 20px; background: #1a1f2e; border-radius: 10px; overflow: hidden;
+            width: 100%;
+        }
+        .bar-long {
+            background: #00e5a0; height: 100%;
+        }
+        .bar-short {
+            background: #ff4d6d; height: 100%;
+        }
+
+        .pct-long  { color: #00e5a0; font-weight: 600; }
+        .pct-short { color: #ff4d6d; font-weight: 600; }
+
+        /* ---------- HAMBURGER ---------- */
+        .hamburger {
+            display: none; font-size: 28px; cursor: pointer; color: #00e5ff;
+            position: fixed; top: 15px; left: 20px; z-index: 1100;
+            background: #121826; padding: 8px 12px; border-radius: 8px; border: 1px solid #2a3040;
+        }
+
+        @media (max-width: 768px) {
+            .sidebar {
+                transform: translateX(-100%); transition: 0.3s ease;
+                width: 260px; z-index: 1050; position: fixed; top: 0; left: 0; height: 100%;
+                background: #121826;
+            }
+            .sidebar.open { transform: translateX(0); }
+            .main-content { margin-left: 0 !important; padding: 60px 16px 20px 16px !important; width: 100%; }
+            .hamburger { display: block; }
+            .sentiment-table th, .sentiment-table td { padding: 8px 10px; font-size: 0.75rem; }
+            .col-pair { width: 90px; }
+            .col-signal { width: 100px; }
+            .col-long, .col-short { width: 55px; }
+        }
+    </style>
 </head>
 <body>
+
 <div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- SIDEBAR -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <!-- "Scorecard" renamed to "Asset Scorecard" -->
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <!-- Added missing menus -->
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
     <span>Carry Trade Scanner</span>
 </div>
     <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <!-- Admin (conditional) -->
     {% if is_admin %}
     <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
     {% endif %}
@@ -7390,690 +7725,120 @@ setTimeout(() => {
     <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- MAIN CONTENT -->
 <div class="main-content">
-    <div class="header"><h2>Market Sentiment</h2></div>
+    <div class="header">
+        <h2>Market Sentiment</h2>
+        <button class="sort-btn" id="sortBtn" onclick="toggleSort()">
+            <i data-lucide="arrow-up-down" style="width:16px;height:16px"></i>
+            Sort: <span id="sortLabel">Ascending</span>
+        </button>
+    </div>
     <input type="text" id="searchSentiment" class="search-box" placeholder="Search pair...">
-    <table class="sentiment-table" id="sentimentTable"><thead><tr><th>Pair</th><th>Sentiment Bar</th><th>Long %</th><th>Short %</th></tr></thead><tbody></tbody></table>
-</div>
-<script>
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
 
-document.addEventListener('click', function(event) {
-    const sidebar = document.getElementById('sidebar');
-    const hamburger = document.querySelector('.hamburger');
-    if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
-        sidebar.classList.remove('open');
-    }
-});
-
-async function loadSentiment() {
-    const res = await fetch('/api/sentiment');
-    const data = await res.json();
-    renderSentiment(data);
-}
-
-function renderSentiment(data) {
-    const tbody = document.querySelector('#sentimentTable tbody');
-    tbody.innerHTML = '';
-    data.forEach(s => {
-        const long = s.long_pct, short = s.short_pct;
-        const row = document.createElement('tr');
-        row.innerHTML = `<td class="pair-col">${s.pair}</td>
-                         <td><div class="bar-wrapper"><div class="bar-long" style="width:${long}%">${long>0?long.toFixed(0)+'%':''}</div><div class="bar-short" style="width:${short}%">${short>0?short.toFixed(0)+'%':''}</div></div></td>
-                         <td class="percentage-col" style="color:#00e5a0">${long}%</td>
-                         <td class="percentage-col" style="color:#ff4d6d">${short}%</td>`;
-        tbody.appendChild(row);
-    });
-}
-
-document.getElementById('searchSentiment').addEventListener('input', function() {
-    const term = this.value.toLowerCase();
-    const rows = document.querySelectorAll('#sentimentTable tbody tr');
-    rows.forEach(row => {
-        const pair = row.querySelector('.pair-col').textContent.toLowerCase();
-        row.style.display = pair.includes(term) ? '' : 'none';
-    });
-});
-
-function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
-
-loadSentiment();
-
-setTimeout(() => {
-    if (typeof lucide !== 'undefined') lucide.createIcons();
-}, 100);
-</script>
-</body>
-</html>''')
-
-         #seasonality html
-      
-with open('templates/seasonality.html', 'w') as f:
-    f.write('''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Seasonality – Tradion</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <script src="https://cdn.plot.ly/plotly-2.26.0.min.js"></script>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s ease, transform 0.3s ease;overflow-x:hidden;white-space:nowrap}
-        .sidebar .logo{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:800;color:#00e5ff;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040}
-        .sidebar .logo-text{transition:opacity 0.2s}
-        .sidebar.collapsed .logo-text{opacity:0;width:0;visibility:hidden}
-        .sidebar-toggle{background:none;border:none;color:#00e5ff;font-size:18px;cursor:pointer;padding:4px 8px;border-radius:6px;transition:0.2s}
-        .sidebar-toggle:hover{background:rgba(0,229,255,0.2)}
-        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
-        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
-        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
-        .sidebar .menu-icon{font-size:20px;margin-right:12px;transition:margin 0.2s}
-        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .sidebar.collapsed .menu-icon{margin-right:0}
-        .sidebar .menu-item span:not(.menu-icon){transition:opacity 0.2s}
-        .sidebar.collapsed .menu-item span:not(.menu-icon){opacity:0;width:0;display:none}
-        .main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}
-        .navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
-        .navbar-title{font-size:18px;color:#00e5ff}
-        button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}
-        button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
-        button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
-        .selector-group{display:flex;gap:15px;flex-wrap:wrap;align-items:center;margin-bottom:20px}
-        .selector-group select{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;min-width:180px;cursor:pointer}
-        .selector-group select:focus{outline:none;border-color:#00e5ff}
-        .chart-container{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040;margin-bottom:20px;height:500px;position:relative}
-        .chart-loading{position:absolute;top:0;left:0;width:100%;height:100%;display:flex;align-items:center;justify-content:center;background:rgba(18,24,38,0.7);z-index:10;border-radius:16px;color:#8892b0;font-size:1.2rem}
-        .chart-loading.hidden{display:none}
-        #plotlyDiv{width:100%;height:100%}
-        .stats-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:15px;margin-top:10px}
-        .stat-card{background:#121826;border-radius:12px;padding:16px;border:1px solid #2a3040;text-align:center}
-        .stat-card .label{font-size:0.8rem;color:#8892b0;text-transform:uppercase;letter-spacing:0.5px}
-        .stat-card .value{font-size:1.6rem;font-weight:bold;margin-top:4px;color:#00e5ff}
-        .stat-card .value.positive{color:#00e5a0}
-        .stat-card .value.negative{color:#ff4d6d}
-        .hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-        .sidebar.collapsed{width:80px !important;min-width:80px !important}
-        .sidebar.collapsed ~ .main-content{margin-left:80px !important}
-        @media (max-width:768px){
-            .sidebar{transform:translateX(-100%);width:260px !important}
-            .sidebar.open{transform:translateX(0)}
-            .sidebar.collapsed{width:260px !important; min-width:260px !important}
-            .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
-            .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
-            .sidebar.collapsed .menu-icon{margin-right:12px}
-            .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-            .sidebar.collapsed ~ .main-content{margin-left:0 !important}
-            .hamburger{display:block}
-            .selector-group{flex-direction:column;align-items:stretch}
-            .selector-group select{width:100%}
-            .stats-grid{grid-template-columns:1fr 1fr}
-            .chart-container{height:350px}
-        }
-    </style>
-</head>
-<body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar" id="sidebar">
-    <div class="logo">
-        <span class="logo-text">⚡ Tradion</span>
-        <button class="sidebar-toggle" onclick="toggleSidebarCollapse()">◀</button>
-    </div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <div class="menu-item active" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-</div>
-<div class="main-content">
-    <div class="navbar">
-        <div class="navbar-title">📅 Seasonality</div>
-        <div><span id="lastUpdateTime" style="font-size:12px;color:#8892b0"></span></div>
-    </div>
-
-    <div class="selector-group">
-        <select id="pairSelect">
-            <option value="">Select pair...</option>
-            {% for base, quote in all_pairs %}
-                <option value="{{ base }}/{{ quote }}">{{ base }}/{{ quote }}</option>
-            {% endfor %}
-        </select>
-        <select id="typeSelect">
-            <option value="monthly">Monthly Seasonality</option>
-            <option value="annual">Annual Seasonality</option>
-        </select>
-        <button onclick="loadSeasonality()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Load</button>
-    </div>
-
-    <div class="chart-container" id="chartContainer">
-        <div class="chart-loading hidden" id="chartLoading">Loading chart...</div>
-        <div id="plotlyDiv"></div>
-    </div>
-
-    <div class="stats-grid" id="statsContainer">
-        <div class="stat-card"><div class="label">Avg Monthly Return</div><div class="value" id="statAvgMonthly">—</div></div>
-        <div class="stat-card"><div class="label">Best Month</div><div class="value positive" id="statBestMonth">—</div></div>
-        <div class="stat-card"><div class="label">Worst Month</div><div class="value negative" id="statWorstMonth">—</div></div>
-        <div class="stat-card"><div class="label">10-Yr Avg Annual</div><div class="value" id="statAvgAnnual">—</div></div>
-    </div>
+    <table class="sentiment-table" id="sentimentTable">
+        <thead>
+            <tr>
+                <th class="col-pair">Pair</th>
+                <th class="col-signal">Signal</th>
+                <th class="col-long">Long</th>
+                <th class="col-bar">Sentiment Bar</th>
+                <th class="col-short">Short</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
 </div>
 
 <script>
-    // Sidebar functions
-    function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
-    function toggleSidebarCollapse() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth > 768) {
-            sidebar.classList.toggle('collapsed');
-            localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        }
+    // Signal thresholds
+    function getSignal(longPct) {
+        if (longPct >= 80) return { label: 'Strong Sell', dot: 'dot-strong-sell' };
+        if (longPct >= 60) return { label: 'Sell', dot: 'dot-sell' };
+        if (longPct <= 20) return { label: 'Strong Buy', dot: 'dot-strong-buy' };
+        if (longPct <= 40) return { label: 'Buy', dot: 'dot-buy' };
+        return { label: 'Neutral', dot: 'dot-neutral' };
     }
-    function restoreSidebarState() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth > 768) {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (isCollapsed) sidebar.classList.add('collapsed');
-        }
+
+    let sentimentData = [];
+    let sortAscending = true;
+
+    async function loadSentiment() {
+        const res = await fetch('/api/sentiment');
+        const data = await res.json();
+        sentimentData = data;
+        sortAndRender();
     }
-    window.addEventListener('resize', function() {
-        const sidebar = document.getElementById('sidebar');
-        if (window.innerWidth <= 768) {
-            sidebar.classList.remove('collapsed');
-        } else {
-            const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-            if (isCollapsed) sidebar.classList.add('collapsed');
-        }
+
+    function toggleSort() {
+        sortAscending = !sortAscending;
+        document.getElementById('sortLabel').textContent = sortAscending ? 'Ascending' : 'Descending';
+        sortAndRender();
+    }
+
+    function sortAndRender() {
+        const sorted = [...sentimentData].sort((a, b) => {
+            return sortAscending ? a.long_pct - b.long_pct : b.long_pct - a.long_pct;
+        });
+        renderSentiment(sorted);
+    }
+
+    function renderSentiment(data) {
+        const tbody = document.querySelector('#sentimentTable tbody');
+        tbody.innerHTML = '';
+        data.forEach(s => {
+            const long = Math.round(s.long_pct);    // rounded to whole number
+            const short = Math.round(s.short_pct);  // rounded to whole number
+            const signal = getSignal(long);
+
+            const tr = document.createElement('tr');
+            tr.innerHTML = `
+                <td class="col-pair"><span class="pair-cell">${s.pair}</span></td>
+                <td class="col-signal">
+                    <div class="signal-cell">
+                        <span class="signal-dot ${signal.dot}"></span>
+                        <span class="signal-text">${signal.label}</span>
+                    </div>
+                </td>
+                <td class="col-long pct-long">${long}%</td>
+                <td class="col-bar">
+                    <div class="bar-wrapper">
+                        <div class="bar-long" style="width:${long}%"></div>
+                        <div class="bar-short" style="width:${short}%"></div>
+                    </div>
+                </td>
+                <td class="col-short pct-short">${short}%</td>
+            `;
+            tbody.appendChild(tr);
+        });
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+
+    document.getElementById('searchSentiment').addEventListener('input', function() {
+        const term = this.value.toLowerCase();
+        const rows = document.querySelectorAll('#sentimentTable tbody tr');
+        rows.forEach(row => {
+            const pair = row.querySelector('.pair-cell').textContent.toLowerCase();
+            row.style.display = pair.includes(term) ? '' : 'none';
+        });
     });
-    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
-
-    // Load seasonality with loading overlay
-    async function loadSeasonality() {
-        const pair = document.getElementById('pairSelect').value;
-        const type = document.getElementById('typeSelect').value;
-        if (!pair) {
-            alert('Please select a forex pair.');
-            return;
-        }
-
-        const loading = document.getElementById('chartLoading');
-        loading.classList.remove('hidden');
-
-        try {
-            const resp = await fetch(`/api/seasonality?pair=${encodeURIComponent(pair)}&type=${type}`);
-            if (!resp.ok) throw new Error('Failed to fetch data');
-            const data = await resp.json();
-            if (data.error) throw new Error(data.error);
-
-            renderChart(data, type);
-            updateStats(data.stats, type);
-            document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
-        } catch (err) {
-            const plotDiv = document.getElementById('plotlyDiv');
-            Plotly.react(plotDiv, [], {
-                paper_bgcolor: 'rgba(0,0,0,0)',
-                plot_bgcolor: 'rgba(0,0,0,0)',
-                annotations: [{
-                    text: `❌ ${err.message}`,
-                    showarrow: false,
-                    font: { color: '#ff4d6d', size: 16 },
-                    x: 0.5, y: 0.5, xref: 'paper', yref: 'paper'
-                }]
-            });
-        } finally {
-            loading.classList.add('hidden');
-        }
-    }
-
-    function renderChart(data, type) {
-        const plotDiv = document.getElementById('plotlyDiv');
-
-        // Shared dark theme layout properties
-        const darkLayout = {
-            paper_bgcolor: 'rgba(0,0,0,0)',
-            plot_bgcolor: 'rgba(18,24,38,0.8)',
-            font: { color: '#e0e0e0' },
-            xaxis: {
-                titlefont: { color: '#e0e0e0' },
-                tickfont: { color: '#a0b0c0' },
-                gridcolor: '#2a3040',
-                zerolinecolor: '#555'
-            },
-            yaxis: {
-                titlefont: { color: '#e0e0e0' },
-                tickfont: { color: '#a0b0c0' },
-                gridcolor: '#2a3040',
-                zerolinecolor: '#555'
-            },
-            legend: {
-                font: { color: '#e0e0e0' },
-                orientation: 'h',
-                y: 1.05,
-                x: 0.5,
-                xanchor: 'center'
-            }
-        };
-
-        if (type === 'monthly') {
-            const trace1 = {
-                x: data.labels,
-                y: data.avg_returns,
-                type: 'bar',
-                name: '10-Year Avg',
-                marker: { color: '#00b8d4', borderRadius: 4 },
-                hovertemplate: '%{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
-            };
-            const trace2 = {
-                x: data.labels,
-                y: data.current_returns,
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'This Year',
-                line: { color: '#00e5a0', dash: 'dot', width: 2 },
-                marker: { color: '#00e5a0', size: 6 },
-                hovertemplate: '%{x}<br>This Year: %{y:.2f}%<extra></extra>'
-            };
-            const layout = {
-                ...darkLayout,
-                title: { text: 'Monthly Average Returns', font: { color: '#e0e0e0' } },
-                xaxis: { ...darkLayout.xaxis, title: 'Month', tickangle: -45 },
-                yaxis: { ...darkLayout.yaxis, title: 'Return (%)', zeroline: true },
-                barmode: 'group',
-                hovermode: 'x unified',
-                margin: { l: 50, r: 30, t: 50, b: 80 }
-            };
-            Plotly.react(plotDiv, [trace1, trace2], layout);
-        } else { // annual
-            const trace1 = {
-                x: data.weeks,
-                y: data.ten_year_avg,
-                type: 'scatter',
-                mode: 'lines',
-                name: '10-Year Avg (%)',
-                line: { color: '#aaaaaa', dash: 'dash', width: 2 },
-                yaxis: 'y2',
-                hovertemplate: 'Week %{x}<br>Avg Return: %{y:.2f}%<extra></extra>'
-            };
-            const trace2 = {
-                x: data.weeks,
-                y: data.current_year_prices,
-                type: 'scatter',
-                mode: 'lines+markers',
-                name: 'Current Year (Price)',
-                line: { color: '#ff4a5a', width: 2.5 },
-                marker: { color: '#ff4a5a', size: 4 },
-                hovertemplate: 'Week %{x}<br>Price: %{y:.2f}<extra></extra>'
-            };
-            const annotations = data.month_midpoints.map((m, i) => ({
-                x: m,
-                y: 0,
-                text: data.month_names[i],
-                showarrow: false,
-                font: { color: '#a0b0c0', size: 10 },
-                yshift: -25
-            }));
-            const layout = {
-                ...darkLayout,
-                title: { text: 'Annual Seasonality', font: { color: '#e0e0e0' } },
-                xaxis: { ...darkLayout.xaxis, title: 'Week', tickvals: data.month_midpoints, ticktext: data.month_names },
-                yaxis: { ...darkLayout.yaxis, title: 'Price', side: 'left' },
-                yaxis2: {
-                    title: 'Avg Return (%)',
-                    titlefont: { color: '#e0e0e0' },
-                    tickfont: { color: '#a0b0c0' },
-                    gridcolor: '#2a3040',
-                    zerolinecolor: '#555',
-                    overlaying: 'y',
-                    side: 'right'
-                },
-                hovermode: 'x unified',
-                margin: { l: 60, r: 60, t: 50, b: 80 },
-                annotations: annotations
-            };
-            Plotly.react(plotDiv, [trace1, trace2], layout);
-        }
-    }
-
-    function updateStats(stats, type) {
-        if (type === 'monthly') {
-            document.getElementById('statAvgMonthly').textContent = stats.avg_monthly_return + '%';
-            document.getElementById('statBestMonth').textContent = stats.best_month + '%';
-            document.getElementById('statWorstMonth').textContent = stats.worst_month + '%';
-            document.getElementById('statAvgAnnual').textContent = stats.avg_annual_return + '%';
-        } else {
-            document.getElementById('statAvgMonthly').textContent = stats.avg_annual_return + '%';
-            document.getElementById('statBestMonth').textContent = stats.best_week + '%';
-            document.getElementById('statWorstMonth').textContent = stats.worst_week + '%';
-            document.getElementById('statAvgAnnual').textContent = stats.latest_price || '—';
-        }
-    }
-
-    // Auto-load when selectors change
-    document.getElementById('pairSelect').addEventListener('change', loadSeasonality);
-    document.getElementById('typeSelect').addEventListener('change', loadSeasonality);
-
-    // Initialise
-    restoreSidebarState();
-    const pairSelect = document.getElementById('pairSelect');
-    if (pairSelect.options.length > 1) {
-        pairSelect.selectedIndex = 1;
-        loadSeasonality();
-    }
-    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
-</script>
-</body>
-</html>''')
-
-
-
-###carry_trade html
-with open('templates/carry_scanner.html','w')as f:
-    f.write('''<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Carry Trade Scanner – Tradion</title>
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
-        .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
-        .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
-        .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
-        .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
-        .sidebar .menu-icon{font-size:20px;margin-right:12px}
-        .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}
-        .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
-        .header h2{color:#00e5ff;font-size:1.8rem}
-        .kpi-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:20px}
-        .kpi-card{background:#121826;border-radius:16px;padding:16px;border:1px solid #2a3040;text-align:center}
-        .kpi-label{font-size:0.75rem;color:#94a3b8;text-transform:uppercase;letter-spacing:0.5px}
-        .kpi-value{font-size:1.8rem;font-weight:700;margin-top:4px;color:#00e5ff}
-        .kpi-value.bullish{color:#00e5a0}
-        .kpi-value.bearish{color:#ff4d6d}
-        .kpi-value.neutral{color:#ffb800}
-        .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040;margin-bottom:20px}
-        table{width:100%;border-collapse:collapse;background:#121826;font-size:0.85rem}
-        th,td{padding:12px 10px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
-        th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;position:sticky;top:0}
-        tr:hover{background:rgba(0,229,255,0.05)}
-        .badge{display:inline-block;padding:4px 12px;border-radius:20px;font-weight:600;font-size:0.75rem}
-        .badge-bullish{background:rgba(0,229,160,0.2);color:#00e5a0}
-        .badge-bearish{background:rgba(255,77,109,0.2);color:#ff4d6d}
-        .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
-        .badge-strong-buy{background:rgba(0,229,160,0.4);color:#00e5a0}
-        .badge-strong-sell{background:rgba(255,77,109,0.4);color:#ff4d6d}
-        .badge-buy{background:rgba(0,229,160,0.25);color:#00e5a0}
-        .badge-sell{background:rgba(255,77,109,0.25);color:#ff4d6d}
-        .value-positive{color:#00e5a0}
-        .value-negative{color:#ff4d6d}
-        .value-neutral{color:#ffb800}
-        .search-box{padding:8px 12px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;width:100%;max-width:300px;margin-bottom:15px}
-        .gauge-container{display:flex;justify-content:center;gap:30px;flex-wrap:wrap;margin-bottom:20px}
-        .gauge-panel{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040;text-align:center;flex:1;min-width:200px}
-        .gauge-panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:10px}
-        .gauge-wrapper{position:relative;width:160px;height:90px;margin:0 auto}
-        .gauge-svg{width:100%;height:100%}
-        .gauge-value{font-size:1.8rem;font-weight:700;color:#00e5ff;margin-top:5px}
-        .gauge-label{font-size:0.8rem;color:#94a3b8}
-        @media(max-width:768px){
-            .main-content{margin-left:0;padding:60px 15px 20px}
-            .kpi-grid{grid-template-columns:1fr 1fr;gap:10px}
-            .gauge-container{flex-direction:column;align-items:center}
-            .sidebar{transform:translateX(-100%)}
-            .sidebar.open{transform:translateX(0)}
-            .hamburger{display:block}
-        }
-        .hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-    </style>
-</head>
-<body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
-<div class="sidebar" id="sidebar">
-    <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item active" onclick="window.location.href='/carry-scanner'"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
-    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-</div>
-<div class="main-content">
-    <div class="header"><h2>Carry Trade Scanner</h2><span id="lastUpdate" style="font-size:0.8rem;color:#94a3b8"></span></div>
-
-    <!-- KPI Cards -->
-    <div class="kpi-grid" id="kpiGrid">
-        <div class="kpi-card"><div class="kpi-label">Bullish Trades</div><div class="kpi-value bullish" id="kpiBullish">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Bearish Trades</div><div class="kpi-value bearish" id="kpiBearish">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Avg Carry Score</div><div class="kpi-value" id="kpiAvgCarry">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">Fear & Greed</div><div class="kpi-value" id="kpiFearGreed">—</div></div>
-        <div class="kpi-card"><div class="kpi-label">US 2Y Trend</div><div class="kpi-value" id="kpiUsTrend">—</div></div>
-    </div>
-
-    <!-- Search & Table -->
-    <input type="text" id="searchCarry" class="search-box" placeholder="🔍 Search pair..." onkeyup="filterTable()">
-    <div class="table-container">
-        <table id="carryTable">
-            <thead><tr>
-                <th>Pair</th>
-                <th>Base Rate</th>
-                <th>JPY Rate</th>
-                <th>Spread</th>
-                <th>Spread Score</th>
-                <th>US2Y Trend</th>
-                <th>Fear & Greed</th>
-                <th>Carry Score</th>
-                <th>Signal</th>
-            </tr></thead>
-            <tbody id="carryTableBody"><tr><td colspan="9" style="text-align:center">Loading...</td></tr></tbody>
-        </table>
-    </div>
-
-    <!-- Gauges -->
-    <div class="gauge-container">
-        <div class="gauge-panel">
-            <h3>Fear & Greed Index</h3>
-            <div class="gauge-wrapper">
-                <svg class="gauge-svg" viewBox="0 0 220 110">
-                    <defs>
-                        <linearGradient id="fgGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                            <stop offset="0%" stop-color="#ff4d6d"/>
-                            <stop offset="25%" stop-color="#ffb800"/>
-                            <stop offset="50%" stop-color="#ffb800"/>
-                            <stop offset="75%" stop-color="#66ffb3"/>
-                            <stop offset="100%" stop-color="#00e5a0"/>
-                        </linearGradient>
-                    </defs>
-                    <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none"/>
-                    <path id="fgFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#fgGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;"/>
-                    <g id="fgNeedle" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                        <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
-                        <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
-                        <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
-                        <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
-                    </g>
-                    <text x="18" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">0</text>
-                    <text x="110" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">50</text>
-                    <text x="202" y="115" font-size="8" fill="#5a6a7a" text-anchor="middle">100</text>
-                </svg>
-            </div>
-            <div class="gauge-value" id="fgValue">—</div>
-            <div class="gauge-label" id="fgLabel">Fear & Greed</div>
-        </div>
-        <div class="gauge-panel">
-            <h3>US 2‑Year Yield</h3>
-            <div style="font-size:2rem;font-weight:700;color:#00e5ff" id="usYield">—</div>
-            <div style="font-size:0.9rem;color:#94a3b8">SMA: <span id="usSma">—</span></div>
-            <div style="margin-top:8px" id="usTrendBadge"></div>
-        </div>
-    </div>
-</div>
-
-<script>
-    const CACHE_KEY = 'tradion_carry_data';
-    const CACHE_TIME_KEY = 'tradion_carry_data_time';
-    const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
 
     function toggleSidebar() {
         document.getElementById('sidebar').classList.toggle('open');
     }
-    function logout() {
-        fetch('/logout').then(() => window.location.href = '/login');
-    }
 
-    async function loadCarryData(forceRefresh = false) {
-        // Check cache (unless force refresh)
-        if (!forceRefresh) {
-            const cachedData = sessionStorage.getItem(CACHE_KEY);
-            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
-            if (cachedData && cachedTime && (Date.now() - parseInt(cachedTime)) < CACHE_TTL) {
-                try {
-                    const data = JSON.parse(cachedData);
-                    updateUI(data);
-                    document.getElementById('lastUpdate').textContent = 'Cached: ' + new Date(parseInt(cachedTime)).toLocaleTimeString();
-                    return;
-                } catch (e) {
-                    console.warn('Cache parse error', e);
-                }
-            }
-        }
-
-        // Fetch fresh
-        try {
-            const res = await fetch('/api/carry-data');
-            if (!res.ok) throw new Error('HTTP ' + res.status);
-            const data = await res.json();
-            if (data.error) throw new Error(data.error);
-
-            updateUI(data);
-
-            const now = Date.now();
-            sessionStorage.setItem(CACHE_KEY, JSON.stringify(data));
-            sessionStorage.setItem(CACHE_TIME_KEY, now.toString());
-            document.getElementById('lastUpdate').textContent = 'Updated: ' + new Date().toLocaleTimeString();
-        } catch (e) {
-            console.error(e);
-            document.getElementById('carryTableBody').innerHTML = `<tr><td colspan="9" style="color:#ff4d6d">Error loading data</td></tr>`;
-        }
-    }
-
-    function updateUI(data) {
-        // KPI
-        document.getElementById('kpiBullish').textContent = data.kpi.bullish;
-        document.getElementById('kpiBearish').textContent = data.kpi.bearish;
-        document.getElementById('kpiAvgCarry').textContent = data.kpi.avg_carry;
-        document.getElementById('kpiFearGreed').textContent = data.kpi.fear_greed;
-        const trend = data.kpi.us_trend;
-        const trendEl = document.getElementById('kpiUsTrend');
-        trendEl.textContent = trend;
-        trendEl.className = 'kpi-value ' + (trend === 'Bullish' ? 'bullish' : (trend === 'Bearish' ? 'bearish' : 'neutral'));
-
-        // Table
-        const tbody = document.getElementById('carryTableBody');
-        tbody.innerHTML = '';
-        data.pairs.forEach(p => {
-            const row = tbody.insertRow();
-            const signalClass = p.signal === 'Strong Carry Buy' ? 'badge-strong-buy' :
-                               p.signal === 'Carry Buy' ? 'badge-buy' :
-                               p.signal === 'Strong Carry Sell' ? 'badge-strong-sell' :
-                               p.signal === 'Carry Sell' ? 'badge-sell' : 'badge-neutral';
-            const spreadClass = p.spread > 0 ? 'value-positive' : (p.spread < 0 ? 'value-negative' : 'value-neutral');
-            const scoreClass = p.carry_score > 0 ? 'value-positive' : (p.carry_score < 0 ? 'value-negative' : 'value-neutral');
-            row.innerHTML = `
-                <td><strong>${p.pair}</strong></td>
-                <td>${p.base_rate.toFixed(2)}%</td>
-                <td>${p.jpy_rate.toFixed(2)}%</td>
-                <td class="${spreadClass}">${p.spread.toFixed(2)}%</td>
-                <td>${p.spread_score}</td>
-                <td><span class="badge ${p.us_trend_bias === 'Bullish' ? 'badge-bullish' : p.us_trend_bias === 'Bearish' ? 'badge-bearish' : 'badge-neutral'}">${p.us_trend_bias}</span></td>
-                <td>${p.fear_greed_score}</td>
-                <td class="${scoreClass}">${p.carry_score}</td>
-                <td><span class="badge ${signalClass}">${p.signal}</span></td>
-            `;
-        });
-
-        // Fear & Greed gauge
-        const fg = data.fear_greed;
-        const circumference = 267;
-        const fraction = Math.min(Math.max(fg, 0), 100) / 100;
-        const dash = fraction * circumference;
-        document.getElementById('fgFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
-        const angle = (fraction * 180) - 90;
-        document.getElementById('fgNeedle').setAttribute('transform', `rotate(${angle}, 110, 105)`);
-        document.getElementById('fgValue').textContent = fg;
-        const fgLabel = document.getElementById('fgLabel');
-        if (fg <= 25) fgLabel.textContent = 'Extreme Fear';
-        else if (fg <= 45) fgLabel.textContent = 'Fear';
-        else if (fg <= 55) fgLabel.textContent = 'Neutral';
-        else if (fg <= 75) fgLabel.textContent = 'Greed';
-        else fgLabel.textContent = 'Extreme Greed';
-
-        // US Yield
-        document.getElementById('usYield').textContent = data.us_yield + '%';
-        document.getElementById('usSma').textContent = data.us_sma + '%';
-        const usBadge = document.getElementById('usTrendBadge');
-        const trendText = data.us_trend_bias;
-        const cls = trendText === 'Bullish' ? 'badge-bullish' : (trendText === 'Bearish' ? 'badge-bearish' : 'badge-neutral');
-        usBadge.innerHTML = `<span class="badge ${cls}">${trendText}</span>`;
-
-        // Last update already handled in loadCarryData
-    }
-
-    function filterTable() {
-        const input = document.getElementById('searchCarry');
-        const filter = input.value.toLowerCase();
-        const rows = document.querySelectorAll('#carryTableBody tr');
-        rows.forEach(row => {
-            const pair = row.cells[0].textContent.toLowerCase();
-            row.style.display = pair.includes(filter) ? '' : 'none';
-        });
-    }
-
-    // Initial load (cached or fresh)
-    loadCarryData();
-
-    // Auto-refresh every 5 minutes (but only if page is active)
-    setInterval(() => {
-        // Force refresh by clearing cache and reloading
-        sessionStorage.removeItem(CACHE_KEY);
-        sessionStorage.removeItem(CACHE_TIME_KEY);
-        loadCarryData(true);
-    }, 300000);
-
-    // When page becomes visible again, check cache freshness
-    document.addEventListener('visibilitychange', function() {
-        if (!document.hidden) {
-            const cachedTime = sessionStorage.getItem(CACHE_TIME_KEY);
-            if (cachedTime && (Date.now() - parseInt(cachedTime)) > CACHE_TTL) {
-                sessionStorage.removeItem(CACHE_KEY);
-                sessionStorage.removeItem(CACHE_TIME_KEY);
-                loadCarryData(true);
-            }
+    document.addEventListener('click', function(event) {
+        const sidebar = document.getElementById('sidebar');
+        const hamburger = document.querySelector('.hamburger');
+        if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
+            sidebar.classList.remove('open');
         }
     });
 
+    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
+
+    loadSentiment();
     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
@@ -8149,6 +7914,11 @@ button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
     <span>Carry Trade Scanner</span>

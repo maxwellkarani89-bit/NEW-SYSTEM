@@ -151,6 +151,11 @@
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
+     onclick="window.location.href='/economic-calendar'">
+    <i data-lucide="calendar-days" class="menu-icon"></i>
+    <span>Economic Calendar</span>
+</div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
