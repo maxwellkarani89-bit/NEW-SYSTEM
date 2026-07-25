@@ -579,28 +579,59 @@ def convert_to_serializable(obj):
 # TREND ANALYSIS (21-day SMA)
 # -----------------------------
 def get_trend_score_21d(pair_symbol):
-    """Return 1 if price > 21-day SMA, -1 if below, 0 if equal or no data."""
+    """
+    Calculate trend score based on percentage distance from 21-day SMA.
+    Returns score from -3 to +3 based on thresholds:
+    >= +2.00% → +3  (Strong Bullish)
+    +1.00% to +1.99% → +2 (Bullish)
+    +0.25% to +0.99% → +1 (Mild Bullish)
+    -0.24% to +0.24% → 0 (Neutral)
+    -0.25% to -0.99% → -1 (Mild Bearish)
+    -1.00% to -1.99% → -2 (Bearish)
+    <= -2.00% → -3 (Strong Bearish)
+    """
     try:
         # Only append '=X' for plain forex symbols (no '=' or '-' in the ticker)
-        if '=' not in pair_symbol and '-' not in pair_symbol:
-            pair_symbol = pair_symbol + '=X'
-        ticker = yf.Ticker(pair_symbol)
+        symbol = pair_symbol
+        if '=' not in symbol and '-' not in symbol:
+            symbol = symbol + '=X'
+        
+        ticker = yf.Ticker(symbol)
         hist = ticker.history(period="2mo", interval="1d")
         if len(hist) < 21:
             return 0
+        
         sma_21 = hist['Close'].rolling(window=21).mean().iloc[-1]
         current_price = hist['Close'].iloc[-1]
-        if current_price > sma_21:
+        
+        # Calculate percentage distance from SMA
+        if sma_21 == 0:
+            return 0
+        
+        distance_pct = ((current_price - sma_21) / sma_21) * 100
+        
+        # Apply threshold-based scoring
+        if distance_pct >= 2.00:
+            return 3
+        elif distance_pct >= 1.00:
+            return 2
+        elif distance_pct >= 0.25:
             return 1
-        elif current_price < sma_21:
+        elif distance_pct >= -0.24:
+            return 0
+        elif distance_pct >= -0.99:
             return -1
-        return 0
-    except:
+        elif distance_pct >= -1.99:
+            return -2
+        else:
+            return -3
+    except Exception as e:
+        print(f"Error calculating trend score for {pair_symbol}: {e}")
         return 0
 
 # (Legacy 100-day trend kept for other uses if needed, but not used in scorecard)
-def get_trend_score(pair_symbol):
-    return get_trend_score_21d(pair_symbol)
+#def get_trend_score(pair_symbol):
+  #  return get_trend_score_21d(pair_symbol)
 
 
 def get_us_2yr_bond_trend_score() -> int:
@@ -748,7 +779,8 @@ def get_seasonality_score_from_yf(pair: str) -> int:
         print(f"Seasonality yfinance error for {pair}: {e}")
         return 0
 
-    
+# Indicators that should contribute ±2 (not normalized to ±1)
+HIGH_IMPACT_INDICATORS = ["Manufacturing PMI", "Services PMI", "Consumer Confidence"]    
 # -----------------------------
 # WEIGHTED MACRO SCORING ENGINE (CORRECTED)
 # -----------------------------
@@ -759,8 +791,8 @@ WEIGHTS = {
     "PPI YoY (%)": 2,
     # Economic Growth (total max = 10)
     "GDP Growth Rate QoQ (%)": 3,
-    "Services PMI": 2,
-    "Manufacturing PMI": 2,
+    "Services PMI": 1,
+    "Manufacturing PMI": 1,
     "Retail Sales MoM (%)": 2,
     "Consumer Confidence": 1,
     # Labor Market (total max = 11)
@@ -782,6 +814,8 @@ WEIGHTS = {
 }
 # Total maximum raw score = 38, minimum = -38
 MAX_RAW_SCORE = 20
+
+
 
 def get_indicator_directional_score(currency: str, indicator_name: str,
                                     forecast: float, actual: float,
@@ -817,9 +851,13 @@ def get_currency_indicator_scores(currency: str) -> dict:
         name = ind.indicator_name
         if "Employment Change" in name:
             continue
-        score = get_indicator_directional_score(currency, name, ind.forecast,
-                                                ind.actual, ind.is_lower_better)
-        scores[name] = score
+        base_score = get_indicator_directional_score(currency, name, ind.forecast,
+                                                     ind.actual, ind.is_lower_better)
+        # Multiply by 2 for high-impact indicators
+        if name in HIGH_IMPACT_INDICATORS:
+            scores[name] = base_score * 2
+        else:
+            scores[name] = base_score
     return scores
 
 def normalize_pair_score(base_score: int, quote_score: int) -> int:
@@ -1098,14 +1136,25 @@ def get_seasonality_directional_score(pair: str) -> int:
         return -1
     return 0
 
-def get_technical_directional_score(pair_symbol: str) -> int:
-    """Return +2 if price > 21d SMA, -2 if below, 0 otherwise."""
-    val = get_trend_score_21d(pair_symbol)   # returns -1,0,1
-    if val == 1:
-        return 2
-    elif val == -1:
-        return -2
-    return 0
+def get_technical_directional_score(pair_symbol):
+    """
+    Return the trend score (from get_trend_score_21d) directly.
+    This is used in scorecards and detailed analysis.
+    """
+    return get_trend_score_21d(pair_symbol)
+
+def get_trend_bias_from_score(score):
+    """Return bias label based on trend score."""
+    if score >= 3: return "STRONG BULLISH"
+    elif score >= 2: return "BULLISH"
+    elif score >= 1: return "MILD BULLISH"
+    elif score >= -0: return "NEUTRAL"
+    elif score >= -1: return "MILD BEARISH"
+    elif score >= -2: return "BEARISH"
+    else: return "STRONG BEARISH"
+
+
+
 
 def calculate_weighted_pair_score(pair: str, base: str, quote: str) -> dict:
     """
@@ -1133,10 +1182,13 @@ def calculate_weighted_pair_score(pair: str, base: str, quote: str) -> dict:
     for ind_name in economic_indicators:
         base_val = base_scores.get(ind_name, 0)
         quote_val = quote_scores.get(ind_name, 0)
-        pair_norm = normalize_pair_score(base_val, quote_val)  # -1,0,1
-        breakdown[ind_name] = pair_norm
-        total += pair_norm
-
+    if ind_name in HIGH_IMPACT_INDICATORS:
+        diff = base_val - quote_val
+        pair_score = max(-2, min(2, diff))   # ❌ never used
+    else:
+        pair_norm = normalize_pair_score(base_val, quote_val)
+    breakdown[ind_name] = pair_norm          # ❌ pair_norm undefined for high‑impact
+    total += pair_norm
     # COT Alignment (±2 or 0)
     cot_score = get_cot_alignment_score(base, quote)
     breakdown["COT_ALIGNMENT"] = cot_score
@@ -1587,7 +1639,11 @@ def get_economic_weighted_bias(base: str, quote: str) -> tuple:
             continue
         base_val = base_scores.get(ind, 0)
         quote_val = quote_scores.get(ind, 0)
-        pair_norm = normalize_pair_score(base_val, quote_val)
+        if ind in HIGH_IMPACT_INDICATORS:
+            diff = base_val - quote_val
+            pair_norm = max(-2, min(2, diff))
+        else:
+             pair_norm = normalize_pair_score(base_val, quote_val)
         total_raw += pair_norm * w
 
         total_raw = max(-MAX_RAW_SCORE, min(MAX_RAW_SCORE, total_raw))
@@ -2133,7 +2189,16 @@ def detailed_analysis():
                 def norm(name):
                     b = base_scores.get(name, 0)
                     q = quote_scores.get(name, 0)
-                    return 1 if b - q > 0 else (-1 if b - q < 0 else 0)
+                    diff = b - q
+                    if name in HIGH_IMPACT_INDICATORS:
+                        raw = diff * 2
+                        if raw > 2:
+                            return 2
+                        elif raw < -2:
+                            return -2
+                        return raw
+                    else:
+                       return 1 if diff > 0 else (-1 if diff < 0 else 0)  
                 gdp = norm("GDP Growth Rate QoQ (%)")
                 m_pmi = norm("Manufacturing PMI")
                 s_pmi = norm("Services PMI")
@@ -4619,7 +4684,28 @@ with open('templates/dashboard.html', 'w') as f:
 <html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.search-input{padding:10px 15px;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;color:#fff;font-size:14px;width:200px;margin-left:10px}.search-input:focus{outline:none;border-color:#00e5ff}.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* Search Wrapper Styles */
+.search-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
+.search-wrapper:focus-within{border-color:#00e5ff;width:200px}
+.search-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
+.search-wrapper:focus-within i{margin-right:8px}
+.search-wrapper input{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease}
+.search-wrapper:focus-within input{width:160px}
+.search-wrapper input::placeholder{color:#4b5a72;opacity:0;transition:opacity 0.3s ease}
+.search-wrapper:focus-within input::placeholder{opacity:1}
+
+/* New Filter Wrapper Styles */
+.filter-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
+.filter-wrapper:hover, .filter-wrapper:focus-within{border-color:#00e5ff;width:170px}
+.filter-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
+.filter-wrapper:hover i, .filter-wrapper:focus-within i{margin-right:8px}
+.filter-wrapper select{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease, opacity 0.3s ease;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
+.filter-wrapper:hover select, .filter-wrapper:focus-within select{width:130px;opacity:1}
+.filter-wrapper select option {background: #1a1f2e; color: #fff;}
+
+.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
 .sidebar.collapsed{width:80px !important;min-width:80px !important}
 .sidebar.collapsed ~ .main-content{margin-left:80px !important}
 .indicator-positive { background-color: rgba(0, 229, 160, 0.15); color: #00e5a0; font-weight: 500; }
@@ -4639,8 +4725,12 @@ td { background-color: inherit; }
     .hamburger{display:block}
     .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
     th,td{padding:8px 4px;font-size:10px}
-    .search-input{width:100%;margin:10px 0 0 0}
-    .toolbar{flex-wrap:wrap}
+    .search-wrapper, .filter-wrapper{width:44px}
+    .search-wrapper:focus-within{width:100%}
+    .search-wrapper:focus-within input{width:100%}
+    .filter-wrapper:hover, .filter-wrapper:focus-within{width:100%}
+    .filter-wrapper:hover select, .filter-wrapper:focus-within select{width:100%}
+    .toolbar{flex-direction:row;flex-wrap:wrap;align-items:center}
 }
 </style>
 </head>
@@ -4657,17 +4747,14 @@ td { background-color: inherit; }
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="window.location.href='/economic-calendar'">
+        <i data-lucide="calendar-days" class="menu-icon"></i>
+        <span>Economic Calendar</span>
+    </div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
-</div>
-    <!-- ======== NEW SEASONALITY MENU ITEM ======== -->
+        <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
+    </div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <!-- ========================================= -->
     <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
     {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
     <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
@@ -4677,10 +4764,26 @@ td { background-color: inherit; }
 <div class="main-content" id="mainContent">
     <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
     <div id="analysisPane" class="content-pane active">
-        <div class="toolbar" style="margin-bottom:20px;display:flex;gap:10px;align-items:center;flex-wrap:wrap">
+        <div class="toolbar">
             <button onclick="loadDetailedAnalysis()">🔥 RUN ANALYSIS</button>
             <button onclick="refreshAnalysis()" class="secondary">🔄 Force Refresh</button>
-            <input type="text" id="searchInput" class="search-input" placeholder="🔍 Search pair..." onkeyup="filterTable()">
+            
+            <div class="search-wrapper" onclick="this.querySelector('input').focus()">
+                <i data-lucide="search" style="width:18px;height:18px;color:#8892b0;"></i>
+                <input type="text" id="searchInput" placeholder="Search pairs..." oninput="filterTable()">
+            </div>
+            
+            <!-- NEW FILTER BUTTON -->
+            <div class="filter-wrapper">
+                <i data-lucide="filter" style="width:18px;height:18px;color:#8892b0;"></i>
+                <select id="filterSelect" onchange="filterTable()">
+                    <option value="all">📊 All Trades</option>
+                    <option value="bullish">🟢 Bullish Only</option>
+                    <option value="bearish">🔴 Bearish Only</option>
+                </select>
+            </div>
+            <!-- END NEW FILTER BUTTON -->
+
         </div>
         <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
         <div class="table-container">
@@ -4702,7 +4805,7 @@ td { background-color: inherit; }
                         <th>NFP</th><th>Avg Hrly</th><th>Unemp Rate</th><th>Unemp Claims</th><th>ADP</th><th>JOLTS</th>
                     </tr>
                 </thead>
-                <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</tbody>
+                <tbody id="detailedTableBody"><tr><td colspan="22">Click "RUN ANALYSIS" to load data</td></tr></tbody>
             </table>
         </div>
     </div>
@@ -4865,26 +4968,39 @@ function renderDetailedTable(data) {
 
 function filterTable() {
     const input = document.getElementById('searchInput');
-    if (!input) return;
-    const filter = input.value.trim().toLowerCase();
-    const table = document.getElementById('detailedTable');
-    const tbody = table.querySelector('tbody');
+    const filterSelect = document.getElementById('filterSelect');
+    const searchTerm = input.value.trim().toLowerCase();
+    const filterValue = filterSelect.value;
+
+    const tbody = document.getElementById('detailedTableBody'); 
     if (!tbody) return;
     const rows = tbody.querySelectorAll('tr');
     let hasVisible = false;
-    
+
     rows.forEach(row => {
         const symbolCell = row.cells[0];
-        if (symbolCell) {
-            const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
-            const matches = filter === '' || symbol.indexOf(filter) > -1;
-            row.style.display = matches ? '' : 'none';
-            if (matches) hasVisible = true;
+        const biasCell = row.cells[1];
+        if (!symbolCell || !biasCell) return;
+
+        const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
+        const bias = (biasCell.textContent || biasCell.innerText).toUpperCase();
+
+        let showBySearch = searchTerm === '' || symbol.indexOf(searchTerm) > -1;
+        let showByFilter = true;
+
+        if (filterValue === 'bullish') {
+            showByFilter = bias.indexOf('BULLISH') !== -1;
+        } else if (filterValue === 'bearish') {
+            showByFilter = bias.indexOf('BEARISH') !== -1;
         }
+
+        const show = showBySearch && showByFilter;
+        row.style.display = show ? '' : 'none';
+        if (show) hasVisible = true;
     });
-    
+
     let noResultMsg = document.getElementById('noResultsMsg');
-    if (!hasVisible && filter !== '') {
+    if (!hasVisible && (searchTerm !== '' || filterValue !== 'all')) {
         if (!noResultMsg) {
             noResultMsg = document.createElement('div');
             noResultMsg.id = 'noResultsMsg';
@@ -4893,7 +5009,10 @@ function filterTable() {
             noResultMsg.style.color = '#ffb800';
             tbody.parentNode.insertBefore(noResultMsg, tbody.nextSibling);
         }
-        noResultMsg.innerText = `🔍 No pairs matching "${filter}"`;
+        let msg = '🔍 No matches';
+        if (searchTerm !== '') msg += ` for "${searchTerm}"`;
+        if (filterValue !== 'all') msg += ` with ${filterValue} bias`;
+        noResultMsg.innerText = msg;
         noResultMsg.style.display = 'block';
     } else if (noResultMsg) {
         noResultMsg.style.display = 'none';
@@ -4954,6 +5073,7 @@ function initStickyHeader() {
     const originalTable = document.getElementById('detailedTable');
     if (!originalTable) return;
     const cloneTable = originalTable.cloneNode(true);
+    cloneTable.removeAttribute('id'); 
     const tbody = cloneTable.querySelector('tbody');
     if (tbody) tbody.remove();
     cloneTable.style.position = 'fixed';
