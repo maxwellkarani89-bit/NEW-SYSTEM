@@ -46,6 +46,17 @@ if database_url:
 else:
     basedir = os.path.abspath(os.path.dirname(__file__))
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "users.db")}'
+    
+# -----------------------------
+# 2. Secondary Database (Turso Bind)
+# -----------------------------
+turso_url = os.environ.get('TURSO_DATABASE_URL')
+turso_token = os.environ.get('TURSO_AUTH_TOKEN')
+if turso_url and turso_token:
+    turso_bind_uri = f"sqlite+{turso_url}?authToken={turso_token}&secure=true"
+    app.config['SQLALCHEMY_BINDS'] = {
+        'turso': turso_bind_uri
+        }
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -136,8 +147,9 @@ class User(db.Model):
         self.favorite_pairs = json.dumps(pairs)
 
 class AnalysisHistory(db.Model):
+    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
+    user_id = db.Column(db.Integer, nullable=False)
     pair = db.Column(db.String(20), nullable=False)
     cot_bias = db.Column(db.String(20))
     cot_momentum = db.Column(db.String(20))
@@ -149,7 +161,6 @@ class AnalysisHistory(db.Model):
     overall_score = db.Column(db.Float)
     overall_bias = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
-    user = db.relationship('User', backref=db.backref('histories', lazy=True))
 
 class SignalPerformance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -174,6 +185,7 @@ class UserNote(db.Model):
     user = db.relationship('User', backref=db.backref('notes', lazy=True))
 
 class EconomicIndicator(db.Model):
+    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False)
     indicator_name = db.Column(db.String(200), nullable=False)
@@ -184,6 +196,7 @@ class EconomicIndicator(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class COTData(db.Model):
+    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False, unique=True)
     net_position = db.Column(db.Float, default=0)          # auto-computed = longs - shorts
@@ -193,6 +206,7 @@ class COTData(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class SentimentData(db.Model):
+    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     pair = db.Column(db.String(20), nullable=False, unique=True)
     long_pct = db.Column(db.Float, default=50.0)
@@ -216,6 +230,7 @@ class SeasonalityDateRange(db.Model):
     bias = db.Column(db.String(20), nullable=False, default='Bullish')  # Bullish/Bearish
 
 class COTHistory(db.Model):
+    __bind_key__ = 'turso'
     __tablename__ = 'cot_history'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False, index=True)
@@ -231,6 +246,7 @@ class COTHistory(db.Model):
     __table_args__ = (db.UniqueConstraint('currency', 'report_date', name='unique_currency_date'),)
     
 class RetailSentimentHistory(db.Model):
+    __bind_key__ = 'turso'
     __tablename__ = 'retail_sentiment_history'
     id = db.Column(db.Integer, primary_key=True)
     pair = db.Column(db.String(20), nullable=False, index=True)
@@ -245,6 +261,7 @@ class RetailSentimentHistory(db.Model):
     
     
 class AssetScoreHistory(db.Model):
+    __bind_key__ = 'turso'
     __tablename__ = 'asset_score_history'
     id = db.Column(db.Integer, primary_key=True)
     asset = db.Column(db.String(10), nullable=False, index=True)  # USD, EUR, GBP, etc.
@@ -254,6 +271,7 @@ class AssetScoreHistory(db.Model):
     __table_args__ = (db.Index('idx_asset_recorded', 'asset', 'recorded_at'),)   
 
 class CentralBankScore(db.Model):
+    __bind_key__ = 'turso'
     __tablename__ = 'central_bank_scores'
     id = db.Column(db.Integer, primary_key=True)
     currency_code = db.Column(db.String(5), nullable=False, unique=True)
