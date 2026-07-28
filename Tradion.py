@@ -52,33 +52,38 @@ else:
 # -----------------------------
 # Secondary Database (Turso Bind)
 # -----------------------------
+import os
+from sqlalchemy.pool import NullPool
+
+# -----------------------------
+# Secondary Database (Turso Bind)
+# -----------------------------
 turso_raw_url = os.environ.get('TURSO_DATABASE_URL', '').strip().strip("'\"")
 turso_token = os.environ.get('TURSO_AUTH_TOKEN', '').strip().strip("'\"")
 
 if turso_raw_url and turso_token:
-    # Normalize URL format to sqlite+libsql://...
-    clean_url = turso_raw_url.rstrip('/')
-    if clean_url.startswith("sqlite+"):
-        clean_url = clean_url[7:]
-    if clean_url.startswith("https://"):
-        clean_url = "libsql://" + clean_url[8:]
-    elif not clean_url.startswith("libsql://"):
-        clean_url = "libsql://" + clean_url
-    
-    turso_engine_url = f"sqlite+{clean_url}?secure=true"
+    # 1. Clean the database URL down to just the hostname (e.g. 'my-db-org.turso.io')
+    clean_host = turso_raw_url
+    for prefix in ["sqlite+libsql://", "libsql://", "https://", "http://"]:
+        if clean_host.startswith(prefix):
+            clean_host = clean_host[len(prefix):]
+    clean_host = clean_host.rstrip('/')
 
-    # Pass auth_token directly via connect_args
+    # 2. Build the exact URL structure required by sqlalchemy-libsql
+    turso_bind_uri = f"sqlite+libsql://{clean_host}/?authToken={turso_token}&secure=true"
+
+    # 3. Diagnostic print for Render logs (masks token for security)
+    masked_token = turso_token[:4] + "..." + turso_token[-4:] if len(turso_token) > 8 else "INVALID"
+    print(f"✅ Connecting to Turso host [{clean_host}] with token [{masked_token}]")
+
     app.config['SQLALCHEMY_BINDS'] = {
         'turso': {
-            'url': turso_engine_url,
-            'poolclass': NullPool,
-            'connect_args': {
-                'auth_token': turso_token
-            }
+            'url': turso_bind_uri,
+            'poolclass': NullPool
         }
     }
 else:
-    print("⚠️ WARNING: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing or empty!")
+    print("❌ ERROR: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN environment variable is missing on Render!")
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
