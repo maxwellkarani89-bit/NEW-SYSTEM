@@ -8,6 +8,7 @@ numpy
 yfinance
 openpyxl
 sqlalchemy-libsql
+sqlalchemy-turso
 psycopg2-binary
 gunicorn
 websocket-client
