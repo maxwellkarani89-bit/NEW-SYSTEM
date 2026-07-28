@@ -8676,44 +8676,44 @@ if __name__ == '__main__':
     create_templates()
     
     # Start background scheduler for retail sentiment (Myfxbook + FastBull)
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-    from datetime import timedelta
-    import atexit
+   # from apscheduler.schedulers.background import BackgroundScheduler
+   # from apscheduler.triggers.cron import CronTrigger
+   # from datetime import timedelta
+   # import atexit
     
-    scheduler = BackgroundScheduler()
+    #scheduler = BackgroundScheduler()
     
     # Myfxbook job (kept as fallback – may fail, but that's fine)
-    scheduler.add_job(
-        func=update_retail_sentiment,
-        trigger="interval",
-        minutes=30,
-        id='retail_sentiment_job'
-    )
+    #scheduler.add_job(
+      # # func=update_retail_sentiment,
+       # trigger="interval",
+       # minutes=30,
+       # id='retail_sentiment_job'
+   # )
     
     # FastBull job (new primary source)
-    scheduler.add_job(
-        func=update_sentiment_from_fastbull,
-        trigger="interval",
-        minutes=60,
-        id='fastbull_sentiment_job'
-    )
+    #scheduler.add_job(
+      #  func=update_sentiment_from_fastbull,
+      #  trigger="interval",
+     #   minutes=60,
+      #  id='fastbull_sentiment_job'
+   # )
     
     # Score history job (every 3 days at midnight UTC)
-    scheduler.add_job(
-        func=save_all_asset_scores,
-        trigger=CronTrigger(day='*/3', hour=0, minute=0),
-        id='score_history_job'
-    )
+    #scheduler.add_job(
+    #    func=save_all_asset_scores,
+     #   trigger=CronTrigger(day='*/3', hour=0, minute=0),
+     #   id='score_history_job'
+   # )
     
-    scheduler.start()
-    atexit.register(lambda: scheduler.shutdown())
+   # scheduler.start()
+    #atexit.register(lambda: scheduler.shutdown())
     
     # ---------- ADD THIS ----------
     # Run FastBull update once immediately on startup (with app context)
-    print("Running initial FastBull sentiment fetch...")
-    with app.app_context():
-        update_sentiment_from_fastbull()
+    #print("Running initial FastBull sentiment fetch...")
+   # with app.app_context():
+        #update_sentiment_from_fastbull()
     # -----------------------------
     
     def open_browser():
