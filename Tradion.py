@@ -17,6 +17,7 @@ from functools import wraps
 import yfinance as yf
 from pathlib import Path
 import sqlite3
+import sqlalchemy_libsql
 import hashlib
 from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
