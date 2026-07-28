@@ -53,10 +53,13 @@ else:
 turso_url = os.environ.get('TURSO_DATABASE_URL')
 turso_token = os.environ.get('TURSO_AUTH_TOKEN')
 if turso_url and turso_token:
-    turso_bind_uri = f"sqlite+{turso_url}?authToken={turso_token}&secure=true"
+    # Remove any existing query parameters from turso_url (if any)
+    # but keep the base URL
+    base_url = turso_url.split('?')[0]  # just in case
+    turso_bind_uri = f"{base_url}?authToken={turso_token}&secure=true"
     app.config['SQLALCHEMY_BINDS'] = {
         'turso': turso_bind_uri
-        }
+    }
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
