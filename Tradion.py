@@ -11,7 +11,6 @@ import pandas as pd
 import numpy as np
 import json
 import traceback
-import sqlalchemy_turso
 import threading
 import webbrowser
 from functools import wraps
