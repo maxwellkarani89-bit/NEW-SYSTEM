@@ -55,18 +55,20 @@ turso_url = os.environ.get('TURSO_DATABASE_URL')
 turso_token = os.environ.get('TURSO_AUTH_TOKEN')
 
 if turso_url and turso_token:
-    # Remove 'libsql://' prefix and keep the host
+    # Remove the libsql:// prefix
     host = turso_url.replace('libsql://', '')
-    turso_bind_uri = f"sqlite+libsql://{host}?secure=true"
+    
     app.config['SQLALCHEMY_BINDS'] = {
-        'turso': turso_bind_uri
-    }
-    # Pass the auth token via connect_args (more reliable)
-    app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
-        'connect_args': {
-            'auth_token': turso_token
+        'turso': {
+            'url': f"sqlite+libsql://{host}?secure=true",
+            'connect_args': {
+                'auth_token': turso_token
+            }
         }
     }
+else:
+    # If no Turso credentials, don't set the bind at all
+    pass
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
