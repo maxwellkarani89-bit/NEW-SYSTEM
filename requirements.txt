@@ -7,7 +7,7 @@ pandas
 numpy
 yfinance
 openpyxl
-sqlalchemy-libsql --no-build-isolation
+sqlalchemy-libsql
 psycopg2-binary
 gunicorn
 websocket-client
