@@ -50,20 +50,35 @@ else:
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "users.db")}'
     
 # -----------------------------
-# 2. Secondary Database (Turso Bind)
+# Secondary Database (Turso Bind)
 # -----------------------------
-turso_url = os.environ.get('TURSO_DATABASE_URL', '').strip().strip("'\"")
+turso_raw_url = os.environ.get('TURSO_DATABASE_URL', '').strip().strip("'\"")
 turso_token = os.environ.get('TURSO_AUTH_TOKEN', '').strip().strip("'\"")
 
-if turso_url and turso_token:
-    clean_turso_url = turso_url.rstrip('/')
-    turso_bind_uri = f"sqlite+{clean_turso_url}/?authToken={turso_token}&secure=true"
+if turso_raw_url and turso_token:
+    # Normalize URL format to sqlite+libsql://...
+    clean_url = turso_raw_url.rstrip('/')
+    if clean_url.startswith("sqlite+"):
+        clean_url = clean_url[7:]
+    if clean_url.startswith("https://"):
+        clean_url = "libsql://" + clean_url[8:]
+    elif not clean_url.startswith("libsql://"):
+        clean_url = "libsql://" + clean_url
+    
+    turso_engine_url = f"sqlite+{clean_url}?secure=true"
+
+    # Pass auth_token directly via connect_args
     app.config['SQLALCHEMY_BINDS'] = {
         'turso': {
-            'url': turso_bind_uri,
-            'poolclass': NullPool
+            'url': turso_engine_url,
+            'poolclass': NullPool,
+            'connect_args': {
+                'auth_token': turso_token
             }
         }
+    }
+else:
+    print("⚠️ WARNING: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN is missing or empty!")
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
