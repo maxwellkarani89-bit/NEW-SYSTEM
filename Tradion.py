@@ -59,10 +59,8 @@ if turso_url and turso_token:
     host = turso_url.replace('libsql://', '')
     app.config['SQLALCHEMY_BINDS'] = {
         'turso': {
-            'url': f"turso://{host}?secure=true",
-            'connect_args': {
-                'auth_token': turso_token
-            }
+            'url': f"sqlite+libsql://{host}?secure=true",
+            'connect_args': {'auth_token': turso_token}
         }
     }
 # --------------------------------------------------------
