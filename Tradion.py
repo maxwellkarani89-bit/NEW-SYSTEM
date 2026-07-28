@@ -19,7 +19,6 @@ from pathlib import Path
 import sqlite3
 import sqlalchemy_libsql
 import hashlib
-from sqlalchemy.pool import NullPool
 from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
 # -------- PASTE THE DATABASE CONFIGURATION HERE --------
@@ -52,38 +51,18 @@ else:
 # -----------------------------
 # Secondary Database (Turso Bind)
 # -----------------------------
-import os
-from sqlalchemy.pool import NullPool
+turso_url = os.environ.get('TURSO_DATABASE_URL')
+turso_token = os.environ.get('TURSO_AUTH_TOKEN')
 
-# -----------------------------
-# Secondary Database (Turso Bind)
-# -----------------------------
-turso_raw_url = os.environ.get('TURSO_DATABASE_URL', '').strip().strip("'\"")
-turso_token = os.environ.get('TURSO_AUTH_TOKEN', '').strip().strip("'\"")
-
-if turso_raw_url and turso_token:
-    # 1. Clean the database URL down to just the hostname (e.g. 'my-db-org.turso.io')
-    clean_host = turso_raw_url
-    for prefix in ["sqlite+libsql://", "libsql://", "https://", "http://"]:
-        if clean_host.startswith(prefix):
-            clean_host = clean_host[len(prefix):]
-    clean_host = clean_host.rstrip('/')
-
-    # 2. Build the exact URL structure required by sqlalchemy-libsql
-    turso_bind_uri = f"sqlite+libsql://{clean_host}/?authToken={turso_token}&secure=true"
-
-    # 3. Diagnostic print for Render logs (masks token for security)
-    masked_token = turso_token[:4] + "..." + turso_token[-4:] if len(turso_token) > 8 else "INVALID"
-    print(f"✅ Connecting to Turso host [{clean_host}] with token [{masked_token}]")
-
+if turso_url and turso_token:
     app.config['SQLALCHEMY_BINDS'] = {
         'turso': {
-            'url': turso_bind_uri,
-            'poolclass': NullPool
+            'url': f"sqlite+libsql://{turso_url}?secure=true",
+            'connect_args': {
+                'auth_token': turso_token
+            }
         }
     }
-else:
-    print("❌ ERROR: TURSO_DATABASE_URL or TURSO_AUTH_TOKEN environment variable is missing on Render!")
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
