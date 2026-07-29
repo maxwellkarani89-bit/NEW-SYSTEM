@@ -17,7 +17,6 @@ from functools import wraps
 import yfinance as yf
 from pathlib import Path
 import sqlite3
-import sqlalchemy_libsql
 import hashlib
 from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
@@ -47,22 +46,6 @@ if database_url:
 else:
     basedir = os.path.abspath(os.path.dirname(__file__))
     app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{os.path.join(basedir, "users.db")}'
-    
-# -----------------------------
-# Secondary Database (Turso Bind)
-# -----------------------------
-turso_url = os.environ.get('TURSO_DATABASE_URL')
-turso_token = os.environ.get('TURSO_AUTH_TOKEN')
-
-if turso_url and turso_token:
-    app.config['SQLALCHEMY_BINDS'] = {
-        'turso': {
-            'url': f"sqlite+libsql://{turso_url}?secure=true",
-            'connect_args': {
-                'auth_token': turso_token
-            }
-        }
-    }
 # --------------------------------------------------------
 app.secret_key = os.environ.get('SECRET_KEY', 'dev-fallback-key-for-local-only')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
@@ -153,9 +136,8 @@ class User(db.Model):
         self.favorite_pairs = json.dumps(pairs)
 
 class AnalysisHistory(db.Model):
-    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
-    user_id = db.Column(db.Integer, nullable=False)
+    user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)
     pair = db.Column(db.String(20), nullable=False)
     cot_bias = db.Column(db.String(20))
     cot_momentum = db.Column(db.String(20))
@@ -167,6 +149,7 @@ class AnalysisHistory(db.Model):
     overall_score = db.Column(db.Float)
     overall_bias = db.Column(db.String(20))
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
+    user = db.relationship('User', backref=db.backref('histories', lazy=True))
 
 class SignalPerformance(db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -191,7 +174,6 @@ class UserNote(db.Model):
     user = db.relationship('User', backref=db.backref('notes', lazy=True))
 
 class EconomicIndicator(db.Model):
-    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False)
     indicator_name = db.Column(db.String(200), nullable=False)
@@ -202,7 +184,6 @@ class EconomicIndicator(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class COTData(db.Model):
-    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False, unique=True)
     net_position = db.Column(db.Float, default=0)          # auto-computed = longs - shorts
@@ -212,7 +193,6 @@ class COTData(db.Model):
     last_updated = db.Column(db.DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
 class SentimentData(db.Model):
-    __bind_key__ = 'turso'
     id = db.Column(db.Integer, primary_key=True)
     pair = db.Column(db.String(20), nullable=False, unique=True)
     long_pct = db.Column(db.Float, default=50.0)
@@ -236,7 +216,6 @@ class SeasonalityDateRange(db.Model):
     bias = db.Column(db.String(20), nullable=False, default='Bullish')  # Bullish/Bearish
 
 class COTHistory(db.Model):
-    __bind_key__ = 'turso'
     __tablename__ = 'cot_history'
     id = db.Column(db.Integer, primary_key=True)
     currency = db.Column(db.String(5), nullable=False, index=True)
@@ -252,7 +231,6 @@ class COTHistory(db.Model):
     __table_args__ = (db.UniqueConstraint('currency', 'report_date', name='unique_currency_date'),)
     
 class RetailSentimentHistory(db.Model):
-    __bind_key__ = 'turso'
     __tablename__ = 'retail_sentiment_history'
     id = db.Column(db.Integer, primary_key=True)
     pair = db.Column(db.String(20), nullable=False, index=True)
@@ -267,7 +245,6 @@ class RetailSentimentHistory(db.Model):
     
     
 class AssetScoreHistory(db.Model):
-    __bind_key__ = 'turso'
     __tablename__ = 'asset_score_history'
     id = db.Column(db.Integer, primary_key=True)
     asset = db.Column(db.String(10), nullable=False, index=True)  # USD, EUR, GBP, etc.
@@ -277,7 +254,6 @@ class AssetScoreHistory(db.Model):
     __table_args__ = (db.Index('idx_asset_recorded', 'asset', 'recorded_at'),)   
 
 class CentralBankScore(db.Model):
-    __bind_key__ = 'turso'
     __tablename__ = 'central_bank_scores'
     id = db.Column(db.Integer, primary_key=True)
     currency_code = db.Column(db.String(5), nullable=False, unique=True)
@@ -8677,44 +8653,44 @@ if __name__ == '__main__':
     create_templates()
     
     # Start background scheduler for retail sentiment (Myfxbook + FastBull)
-   # from apscheduler.schedulers.background import BackgroundScheduler
+  #  from apscheduler.schedulers.background import BackgroundScheduler
    # from apscheduler.triggers.cron import CronTrigger
-   # from datetime import timedelta
-   # import atexit
+  ##  from datetime import timedelta
+ #   import atexit
     
     #scheduler = BackgroundScheduler()
     
     # Myfxbook job (kept as fallback – may fail, but that's fine)
-    #scheduler.add_job(
-      # # func=update_retail_sentiment,
-       # trigger="interval",
-       # minutes=30,
-       # id='retail_sentiment_job'
-   # )
+   # scheduler.add_job(
+     #   func=update_retail_sentiment,
+     #   trigger="interval",
+     #   minutes=30,
+      #  id='retail_sentiment_job'
+    #)
     
     # FastBull job (new primary source)
-    #scheduler.add_job(
-      #  func=update_sentiment_from_fastbull,
+   # scheduler.add_job(
+     #   func=update_sentiment_from_fastbull,
       #  trigger="interval",
      #   minutes=60,
-      #  id='fastbull_sentiment_job'
+     #   id='fastbull_sentiment_job'
    # )
     
     # Score history job (every 3 days at midnight UTC)
-    #scheduler.add_job(
+ #   scheduler.add_job(
     #    func=save_all_asset_scores,
-     #   trigger=CronTrigger(day='*/3', hour=0, minute=0),
-     #   id='score_history_job'
+   #     trigger=CronTrigger(day='*/3', hour=0, minute=0),
+    #    id='score_history_job'
    # )
     
-   # scheduler.start()
-    #atexit.register(lambda: scheduler.shutdown())
+  #  scheduler.start()
+ #   atexit.register(lambda: scheduler.shutdown())
     
     # ---------- ADD THIS ----------
     # Run FastBull update once immediately on startup (with app context)
-    #print("Running initial FastBull sentiment fetch...")
-   # with app.app_context():
-        #update_sentiment_from_fastbull()
+  #  print("Running initial FastBull sentiment fetch...")
+  #  with app.app_context():
+   #     update_sentiment_from_fastbull()
     # -----------------------------
     
     def open_browser():
