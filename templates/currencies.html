@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html><head><title>COT Data - Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
@@ -106,6 +107,8 @@ canvas{max-height:400px;width:100%}
     <div class="navbar"><div class="navbar-title">COT Data · Economic Sentiment & Non‑Commercial Positions</div><div><button onclick="loadCurrencies()" class="secondary"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button></div></div>
     <div id="loading" style="display:none"><div class="loading-skeleton" style="height:200px;border-radius:12px"></div></div>
     <div id="currencyTable"></div>
+    
+    <!-- UPDATED: Stacked Bar Chart Section -->
     <div class="chart-container"><h3><i data-lucide="bar-chart-2" style="width:18px;height:18px;margin-right:6px"></i> Non‑Commercial Longs vs Shorts (% of Total)</h3><canvas id="cotBarChart" width="800" height="400"></canvas></div>
     
     <!-- HISTORICAL COT SECTION -->
@@ -113,9 +116,9 @@ canvas{max-height:400px;width:100%}
         <div class="historical-header">
             <div class="historical-title"><i data-lucide="trending-up" style="width:18px;height:18px;margin-right:6px"></i> Historical COT Net Positions</div>
             <div>
+                <!-- UPDATED: Default to USD -->
                 <select id="historyCurrencySelect" class="dropdown-selector" onchange="loadHistoricalCOT()">
-                    <option value="">Select currency...</option>
-                    <option value="USD">USD</option>
+                    <option value="USD" selected>USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
                     <option value="JPY">JPY</option>
@@ -135,6 +138,7 @@ canvas{max-height:400px;width:100%}
         <div id="historyLoading" style="display:none; text-align:center; padding:20px">Loading historical data...</div>
     </div>
 </div>
+
 <script>
 let currentCurrencies = [];
 let barChart = null;
@@ -167,6 +171,7 @@ window.addEventListener('resize', function() {
         if (isCollapsed) sidebar.classList.add('collapsed');
     }
 });
+
 async function loadCurrencies(){
     document.getElementById('loading').style.display='block';
     document.getElementById('currencyTable').innerHTML='';
@@ -181,8 +186,11 @@ async function loadCurrencies(){
         document.getElementById('currencyTable').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ Error loading currency data</div>';
     }finally{
         document.getElementById('loading').style.display='none';
+        // Automatically load default historical data (USD) after table loads
+        setTimeout(loadHistoricalCOT, 100);
     }
 }
+
 function displayCurrencies(currencies){
     let html='<table><thead><tr><th>Currency</th><th>Economic Sentiment</th><th>COT Net Position</th><th>COT Weekly Change</th><th>Longs (Contracts)</th><th>Shorts (Contracts)</th></tr></thead><tbody>';
     currencies.forEach(c=>{
@@ -200,18 +208,66 @@ function displayCurrencies(currencies){
     html+='</tbody></table>';
     document.getElementById('currencyTable').innerHTML=html;
 }
+
 function renderBarChart(currencies){
     const ctx=document.getElementById('cotBarChart').getContext('2d');
-    const labels=currencies.map(c=>c.currency);
-    const longPcts=currencies.map(c=>c.long_pct);
-    const shortPcts=currencies.map(c=>c.short_pct);
+    
+    // Sort currencies by Long % ascending (lowest to highest)
+    const sorted = [...currencies].sort((a, b) => a.long_pct - b.long_pct);
+    
+    const labels=sorted.map(c=>c.currency);
+    const longPcts=sorted.map(c=>c.long_pct);
+    const shortPcts=sorted.map(c=>c.short_pct);
+    
     if(barChart) barChart.destroy();
+    
+    // UPDATED: Stacked Bar Chart Config
     barChart=new Chart(ctx,{
         type:'bar',
-        data:{labels:labels,datasets:[{label:'Long %',data:longPcts,backgroundColor:'rgba(0,229,160,0.7)',borderColor:'#00e5a0',borderWidth:1},{label:'Short %',data:shortPcts,backgroundColor:'rgba(255,77,109,0.7)',borderColor:'#ff4d6d',borderWidth:1}]},
-        options:{responsive:true,maintainAspectRatio:true,scales:{x:{title:{display:true,text:'Currency',color:'#a0b0c0'},ticks:{color:'#fff'}},y:{title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},ticks:{color:'#fff',beginAtZero:true,max:100}}},plugins:{legend:{labels:{color:'#fff'},position:'top'},tooltip:{callbacks:{label:function(context){return `${context.dataset.label}: ${context.raw.toFixed(1)}%`}}}}}
+        data:{
+            labels:labels,
+            datasets:[
+                {
+                    label:'Long %',
+                    data:longPcts,
+                    backgroundColor:'#00e5a0',
+                    borderColor:'#00e5a0',
+                    borderWidth:1
+                },
+                {
+                    label:'Short %',
+                    data:shortPcts,
+                    backgroundColor:'#ff4d6d',
+                    borderColor:'#ff4d6d',
+                    borderWidth:1
+                }
+            ]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:true,
+            scales:{
+                x:{
+                    stacked:true, // Stacks Long & Short vertically
+                    title:{display:true,text:'Currency',color:'#a0b0c0'},
+                    ticks:{color:'#fff'}
+                },
+                y:{
+                    stacked:true,
+                    title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},
+                    ticks:{color:'#fff',beginAtZero:true,max:100}
+                }
+            },
+            plugins:{
+                legend:{labels:{color:'#fff'},position:'top'},
+                tooltip:{callbacks:{label:function(context){
+                    return `${context.dataset.label}: ${context.raw.toFixed(1)}%`;
+                }}}
+            }
+        }
     });
 }
+
 async function loadHistoricalCOT() {
     const currency = document.getElementById('historyCurrencySelect').value;
     if (!currency) return;
@@ -238,6 +294,7 @@ async function loadHistoricalCOT() {
         loadingDiv.style.display = 'none';
     }
 }
+
 function renderHistoryChart(history) {
     const ctx = document.getElementById('historyChart').getContext('2d');
     if (historyChart) historyChart.destroy();
@@ -283,6 +340,7 @@ function renderHistoryChart(history) {
         }
     });
 }
+
 function displayHistoricalInfo(data) {
     const infoDiv = document.getElementById('historicalInfo');
     if (!data.bias && !data.trend) {
@@ -301,7 +359,9 @@ function displayHistoricalInfo(data) {
     }
     infoDiv.innerHTML = `${biasHtml} ${trendHtml}`;
 }
+
 function logout(){fetch('/logout').then(()=>window.location.href='/login');}
+
 restoreSidebarState();
 loadCurrencies();
 

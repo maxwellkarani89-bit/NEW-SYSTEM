@@ -871,32 +871,46 @@ def normalize_pair_score(base_score: int, quote_score: int) -> int:
 
 def get_cot_alignment_score(base_curr: str, quote_curr: str) -> int:
     """
-    Returns +2 if both net and momentum are bullish for the pair,
-    -2 if both are bearish, otherwise 0.
+    Returns score from -2 to +2 based on:
+    1. Difference in Longs % (Base - Quote). >20% = +1, < -20% = -1, otherwise 0.
+    2. Difference in Weekly Change (Base - Quote). Positive = +1, Negative = -1.
+    Final = Step 1 + Step 2.
     """
     base_cot = COTData.query.filter_by(currency=base_curr.upper()).first()
     quote_cot = COTData.query.filter_by(currency=quote_curr.upper()).first()
 
-    base_net = base_cot.net_position if base_cot else 0
-    base_mom = base_cot.weekly_change if base_cot else 0
-    quote_net = quote_cot.net_position if quote_cot else 0
-    quote_mom = quote_cot.weekly_change if quote_cot else 0
+    if not base_cot or not quote_cot:
+        return 0
 
-    base_net_dir = 1 if base_net > 0 else (-1 if base_net < 0 else 0)
-    base_mom_dir = 1 if base_mom > 0 else (-1 if base_mom < 0 else 0)
-    quote_net_dir = 1 if quote_net > 0 else (-1 if quote_net < 0 else 0)
-    quote_mom_dir = 1 if quote_mom > 0 else (-1 if quote_mom < 0 else 0)
+    # --- 1. Calculate Net Position % Diff ---
+    base_total = base_cot.longs + base_cot.shorts
+    quote_total = quote_cot.longs + quote_cot.shorts
 
-    # Pair net direction: base - quote
-    pair_net = base_net_dir - quote_net_dir
-    pair_mom = base_mom_dir - quote_mom_dir
+    base_long_pct = (base_cot.longs / base_total * 100) if base_total > 0 else 50.0
+    quote_long_pct = (quote_cot.longs / quote_total * 100) if quote_total > 0 else 50.0
 
-    # Both must be positive for +2, both negative for -2
-    if pair_net > 0 and pair_mom > 0:
-        return 2
-    elif pair_net < 0 and pair_mom < 0:
-        return -2
-    return 0
+    pct_diff = base_long_pct - quote_long_pct
+
+    if pct_diff > 20:
+        net_score = 1
+    elif pct_diff < -20:
+        net_score = -1
+    else:
+        net_score = 0
+
+    # --- 2. Calculate Weekly Change Diff ---
+    weekly_diff = base_cot.weekly_change - quote_cot.weekly_change
+
+    if weekly_diff > 0:
+        weekly_score = 1
+    elif weekly_diff < 0:
+        weekly_score = -1
+    else:
+        weekly_score = 0
+
+    # --- 3. Overall Score (Clamped to ±2) ---
+    total_score = net_score + weekly_score
+    return max(-2, min(2, total_score))
 
 # -----------------------------
 # RETAIL SENTIMENT (Myfxbook API)
@@ -1030,9 +1044,13 @@ def fetch_retail_sentiment_from_api():
         return None
 
 def normalize_retail_bias(long_pct: float) -> int:
-    """Contrarian bias: 1 = bullish (crowd short), -1 = bearish (crowd long), 0 = neutral."""
-    if long_pct > 60:
+    """Contrarian bias with magnitude: 2 = strong bullish, 1 = bullish, -1 = bearish, -2 = strong bearish, 0 = neutral."""
+    if long_pct > 80:
+        return -2
+    elif long_pct > 60:
         return -1
+    elif long_pct < 20:
+        return 2
     elif long_pct < 40:
         return 1
     return 0
@@ -1110,21 +1128,20 @@ def get_all_latest_retail_sentiment() -> list:
 
 
 def get_retail_sentiment_score(pair: str) -> int:
-    """
-    Return contrarian sentiment score based on latest Myfxbook data.
-    If no data available, fall back to manual SentimentData table.
-    """
-    # Try to get latest from Myfxbook
     data = get_latest_retail_sentiment(pair)
     if data:
-        return data['retail_bias']   # already -1,0,1 (contrarian)
-    # Fallback to manual entry (original logic)
+        return data['retail_bias']
     sent = SentimentData.query.filter_by(pair=pair).first()
     if not sent:
         return 0
-    if sent.long_pct > 60:
+    long_pct = sent.long_pct
+    if long_pct > 80:
+        return -2
+    elif long_pct > 60:
         return -1
-    elif sent.long_pct < 40:
+    elif long_pct < 20:
+        return 2
+    elif long_pct < 40:
         return 1
     return 0
 
@@ -1157,19 +1174,12 @@ def get_trend_bias_from_score(score):
 
 
 def calculate_weighted_pair_score(pair: str, base: str, quote: str) -> dict:
-    """
-    Returns dict with:
-        total_raw: sum of contributions (range -20..20)
-        category_scores: (unused but kept for compatibility)
-        breakdown: {indicator_name: contribution}
-    """
     base_scores = get_currency_indicator_scores(base)
     quote_scores = get_currency_indicator_scores(quote)
 
     breakdown = {}
     total = 0
 
-    # All economic indicators (from WEIGHTS keys except virtual ones)
     economic_indicators = [
         "CPI YoY (%)", "PCE YoY (%)", "PPI YoY (%)",
         "GDP Growth Rate QoQ (%)", "Services PMI", "Manufacturing PMI",
@@ -1182,40 +1192,38 @@ def calculate_weighted_pair_score(pair: str, base: str, quote: str) -> dict:
     for ind_name in economic_indicators:
         base_val = base_scores.get(ind_name, 0)
         quote_val = quote_scores.get(ind_name, 0)
-    if ind_name in HIGH_IMPACT_INDICATORS:
-        diff = base_val - quote_val
-        pair_score = max(-2, min(2, diff))   # ❌ never used
-    else:
-        pair_norm = normalize_pair_score(base_val, quote_val)
-    breakdown[ind_name] = pair_norm          # ❌ pair_norm undefined for high‑impact
-    total += pair_norm
-    # COT Alignment (±2 or 0)
+        
+        if ind_name in HIGH_IMPACT_INDICATORS:
+            diff = base_val - quote_val
+            pair_score = max(-2, min(2, diff))
+        else:
+            pair_score = normalize_pair_score(base_val, quote_val)
+        
+        breakdown[ind_name] = pair_score
+        total += pair_score
+
     cot_score = get_cot_alignment_score(base, quote)
     breakdown["COT_ALIGNMENT"] = cot_score
     total += cot_score
 
-    # Retail Sentiment (±1)
-    retail_score = get_retail_sentiment_score(pair)  # already -1,0,1
+    retail_score = get_retail_sentiment_score(pair)
     breakdown["RETAIL_SENTIMENT"] = retail_score
     total += retail_score
 
-    # Technical (±2)
     yf_symbol = SYMBOL_MAPPING.get(pair, pair.replace('/', '') + '=X')
     tech_score = get_technical_directional_score(yf_symbol)
     breakdown["TREND_21D_SMA"] = tech_score
     total += tech_score
 
-    # Seasonality (±1)
     seas_score = get_seasonality_score_from_yf(pair)
     breakdown["SEASONALITY"] = seas_score
     total += seas_score
 
-    # Clamp to ±20
     total = max(-MAX_RAW_SCORE, min(MAX_RAW_SCORE, total))
 
     return {
         "total_raw": total,
-        "category_scores": {},   # not used
+        "category_scores": {},
         "breakdown": breakdown
     }
 
@@ -1359,7 +1367,7 @@ def save_all_asset_scores():
 
     # 1b. COT
     cot_records = COTData.query.all()
-    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change, 'longs': c.longs, 'shorts': c.shorts} for c in cot_records}
 
     # 1c. Retail sentiment (contrarian) – latest per pair
     subq = db.session.query(
@@ -1376,13 +1384,18 @@ def save_all_asset_scores():
     # Fallback: SentimentData table
     sent_data = SentimentData.query.all()
     for s in sent_data:
-        if s.pair not in retail_cache:
-            if s.long_pct > 60:
-                retail_cache[s.pair] = -1
-            elif s.long_pct < 40:
-                retail_cache[s.pair] = 1
-            else:
-                retail_cache[s.pair] = 0
+     if s.pair not in retail_cache:
+        long_pct = s.long_pct
+        if long_pct > 80:
+            retail_cache[s.pair] = -2
+        elif long_pct > 60:
+            retail_cache[s.pair] = -1
+        elif long_pct < 20:
+            retail_cache[s.pair] = 2
+        elif long_pct < 40:
+            retail_cache[s.pair] = 1
+        else:
+            retail_cache[s.pair] = 00
 
     # 1d. Seasonality
     monthly_biases = MonthlyBias.query.all()
@@ -1533,18 +1546,22 @@ def save_all_asset_scores():
 
         # COT alignment
         def cot_alignment(base, quote):
-            b_cot = cot_cache.get(base, {'net': 0, 'change': 0})
-            q_cot = cot_cache.get(quote, {'net': 0, 'change': 0})
-            b_net_dir = 1 if b_cot['net'] > 0 else (-1 if b_cot['net'] < 0 else 0)
-            b_mom_dir = 1 if b_cot['change'] > 0 else (-1 if b_cot['change'] < 0 else 0)
-            q_net_dir = 1 if q_cot['net'] > 0 else (-1 if q_cot['net'] < 0 else 0)
-            q_mom_dir = 1 if q_cot['change'] > 0 else (-1 if q_cot['change'] < 0 else 0)
-            b_score = b_net_dir + b_mom_dir
-            q_score = q_net_dir + q_mom_dir
-            raw = b_score - q_score
-            if raw > 2: return 2
-            elif raw < -2: return -2
-            else: return raw
+            b_cot = cot_cache.get(base, {'net': 0, 'change': 0, 'longs': 0, 'shorts': 0})
+            q_cot = cot_cache.get(quote, {'net': 0, 'change': 0, 'longs': 0, 'shorts': 0})
+    
+            # 1. Net % diff
+            b_total = b_cot['longs'] + b_cot['shorts']
+            q_total = q_cot['longs'] + q_cot['shorts']
+            b_long_pct = (b_cot['longs'] / b_total * 100) if b_total > 0 else 50
+            q_long_pct = (q_cot['longs'] / q_total * 100) if q_total > 0 else 50
+            pct_diff = b_long_pct - q_long_pct
+            net_score = 1 if pct_diff > 20 else (-1 if pct_diff < -20 else 0)
+    
+            # 2. Weekly change diff
+            weekly_diff = b_cot['change'] - q_cot['change']
+            weekly_score = 1 if weekly_diff > 0 else (-1 if weekly_diff < 0 else 0)
+    
+            return net_score + weekly_score
 
         cot_score = cot_alignment(base, quote)
         retail_score = retail_cache.get(pair, 0)
@@ -2108,7 +2125,7 @@ def detailed_analysis():
         econ_cache.setdefault(curr, {})[ind.indicator_name] = score
 
     cot_records = COTData.query.all()
-    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change} for c in cot_records}
+    cot_cache = {c.currency.upper(): {'net': c.net_position, 'change': c.weekly_change, 'longs': c.longs, 'shorts': c.shorts} for c in cot_records}
 
     # ---------- LOAD CENTRAL BANK SCORES ----------
     cb_records = CentralBankScore.query.all()
@@ -2116,21 +2133,22 @@ def detailed_analysis():
 
     # ---------- COT ALIGNMENT (sum‑difference, clamped) ----------
     def get_cot_align(base, quote):
-        base_cot = cot_cache.get(base, {'net':0, 'change':0})
-        quote_cot = cot_cache.get(quote, {'net':0, 'change':0})
-        base_net_dir = 1 if base_cot['net'] > 0 else (-1 if base_cot['net'] < 0 else 0)
-        base_mom_dir = 1 if base_cot['change'] > 0 else (-1 if base_cot['change'] < 0 else 0)
-        quote_net_dir = 1 if quote_cot['net'] > 0 else (-1 if quote_cot['net'] < 0 else 0)
-        quote_mom_dir = 1 if quote_cot['change'] > 0 else (-1 if quote_cot['change'] < 0 else 0)
-        base_score = base_net_dir + base_mom_dir
-        quote_score = quote_net_dir + quote_mom_dir
-        raw_diff = base_score - quote_score
-        if raw_diff > 2:
-            return 2
-        elif raw_diff < -2:
-            return -2
-        else:
-            return raw_diff
+        base_cot = cot_cache.get(base, {'net':0, 'change':0, 'longs':0, 'shorts':0})
+        quote_cot = cot_cache.get(quote, {'net':0, 'change':0, 'longs':0, 'shorts':0})
+    
+        # 1. Net % diff
+        b_total = base_cot['longs'] + base_cot['shorts']
+        q_total = quote_cot['longs'] + quote_cot['shorts']
+        b_long_pct = (base_cot['longs'] / b_total * 100) if b_total > 0 else 50
+        q_long_pct = (quote_cot['longs'] / q_total * 100) if q_total > 0 else 50
+        pct_diff = b_long_pct - q_long_pct
+        net_score = 1 if pct_diff > 20 else (-1 if pct_diff < -20 else 0)
+    
+        # 2. Weekly change diff
+        weekly_diff = base_cot['change'] - quote_cot['change']
+        weekly_score = 1 if weekly_diff > 0 else (-1 if weekly_diff < 0 else 0)
+    
+        return net_score + weekly_score
 
     results = []
     for base, quote in ALL_PAIRS:
@@ -2467,10 +2485,15 @@ def api_asset_scorecard(symbol):
 
         sent = SentimentData.query.filter_by(pair=symbol).first()
         if sent:
-            if sent.short_pct > sent.long_pct:
-                sent_score_val = 2
-            elif sent.long_pct > sent.short_pct:
+            long_pct = sent.long_pct
+            if long_pct > 80:
                 sent_score_val = -2
+            elif long_pct > 60:
+                sent_score_val = -1
+            elif long_pct < 20:
+                sent_score_val = 2
+            elif long_pct < 40:
+                sent_score_val = 1
             else:
                 sent_score_val = 0
         else:
@@ -2538,21 +2561,31 @@ def api_asset_scorecard(symbol):
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
 
-    # ----- NORMAL PAIR LOGIC (EUR/USD, GBP/JPY, etc.) – ALREADY FIXED -----
+    # ----- NORMAL PAIR LOGIC (EUR/USD, GBP/JPY, etc.) – UPDATED COT SCORING -----
     if quote:
         yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
         trend_score_21d = get_technical_directional_score(yf_symbol)
 
+        # ==================== UPDATED COT LOGIC START ====================
         base_cot = COTData.query.filter_by(currency=base).first()
         quote_cot = COTData.query.filter_by(currency=quote).first()
-        base_net_dir = 1 if base_cot and base_cot.net_position > 0 else (-1 if base_cot and base_cot.net_position < 0 else 0)
-        base_mom_dir = 1 if base_cot and base_cot.weekly_change > 0 else (-1 if base_cot and base_cot.weekly_change < 0 else 0)
-        base_score = base_net_dir + base_mom_dir
-        quote_net_dir = 1 if quote_cot and quote_cot.net_position > 0 else (-1 if quote_cot and quote_cot.net_position < 0 else 0)
-        quote_mom_dir = 1 if quote_cot and quote_cot.weekly_change > 0 else (-1 if quote_cot and quote_cot.weekly_change < 0 else 0)
-        quote_score = quote_net_dir + quote_mom_dir
-        raw_diff = base_score - quote_score
-        cot_alignment_score = 2 if raw_diff > 2 else (-2 if raw_diff < -2 else raw_diff)
+        
+        cot_alignment_score = 0
+        if base_cot and quote_cot:
+            # 1. Net % difference (Longs % base - Longs % quote)
+            b_total = base_cot.longs + base_cot.shorts
+            q_total = quote_cot.longs + quote_cot.shorts
+            b_long_pct = (base_cot.longs / b_total * 100) if b_total > 0 else 50
+            q_long_pct = (quote_cot.longs / q_total * 100) if q_total > 0 else 50
+            pct_diff = b_long_pct - q_long_pct
+            net_score = 1 if pct_diff > 20 else (-1 if pct_diff < -20 else 0)
+            
+            # 2. Weekly change difference
+            weekly_diff = base_cot.weekly_change - quote_cot.weekly_change
+            weekly_score = 1 if weekly_diff > 0 else (-1 if weekly_diff < 0 else 0)
+            
+            cot_alignment_score = net_score + weekly_score
+        # ==================== UPDATED COT LOGIC END ====================
 
         base_indicators = EconomicIndicator.query.filter_by(currency=base).all()
         quote_indicators = EconomicIndicator.query.filter_by(currency=quote).all()
@@ -2609,10 +2642,6 @@ def api_asset_scorecard(symbol):
                 'surprise': '-'
             })
 
-        # 2-Year Bond Yield (REMOVED as requested for forex, but for asset scorecard we KEEP it? - actually this is pair logic, but the user said remove for forex scorecard; the asset scorecard endpoint serves both.
-        # However, the request for asset scorecard says "not removing 2-Year Bond Yield Trend". We'll keep it here only if it's a single currency, but for pairs we already removed it per earlier request.
-        # So we leave it out from pair logic. (It's already gone.)
-
         # COT Alignment
         cot_label = 'Bullish' if cot_alignment_score > 0 else ('Bearish' if cot_alignment_score < 0 else 'Neutral')
         category_data.setdefault('Crowd Sentiment (COT)', []).append(cot_alignment_score)
@@ -2660,7 +2689,20 @@ def api_asset_scorecard(symbol):
         tradion_score = fundamental_table_score + technical_table_score + cot_table_score
 
         sent = SentimentData.query.filter_by(pair=symbol).first()
-        sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
+        if sent:
+            long_pct = sent.long_pct
+            if long_pct > 80:
+                sent_score_val = -2
+            elif long_pct > 60:
+                sent_score_val = -1
+            elif long_pct < 20:
+                sent_score_val = 2
+            elif long_pct < 40:
+                sent_score_val = 1
+            else:
+                sent_score_val = 0
+        else:
+            sent_score_val = 0
 
         overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(tradion_score)
 
@@ -2738,7 +2780,20 @@ def api_asset_scorecard(symbol):
 
         # Sentiment (contrarian)
         sent = SentimentData.query.filter_by(pair=symbol).first()
-        sent_score_val = 2 if sent and sent.short_pct > sent.long_pct else (-2 if sent and sent.long_pct > sent.short_pct else 0)
+        if sent:
+            long_pct = sent.long_pct
+            if long_pct > 80:
+                sent_score_val = -2
+            elif long_pct > 60:
+                sent_score_val = -1
+            elif long_pct < 20:
+                sent_score_val = 2
+            elif long_pct < 40:
+                sent_score_val = 1
+            else:
+                sent_score_val = 0
+        else:
+            sent_score_val = 0
 
         overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(tradion_score)
 
@@ -3679,6 +3734,7 @@ def create_templates():
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <title>Tradion · Institutional Login</title>
 
     <!-- Google Fonts: Inter -->
@@ -4420,6 +4476,7 @@ def create_templates():
     with open('templates/register.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Register - Tradion</title>
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;min-height:100vh;display:flex;justify-content:center;align-items:center}
 .register-container{background:#121826;border-radius:20px;padding:40px;width:100%;max-width:400px;box-shadow:0 0 40px rgba(0,229,255,0.1);border:1px solid #2a3040}
@@ -4487,6 +4544,7 @@ with open('templates/economic_calendar.html', 'w') as f:
 <head>
     <title>Economic Calendar – Tradion</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -4682,6 +4740,7 @@ with open('templates/economic_calendar.html', 'w') as f:
 with open('templates/dashboard.html', 'w') as f:
     f.write('''<!DOCTYPE html>
 <html><head><title>Tradion · Dashboard</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
@@ -5143,6 +5202,7 @@ setTimeout(() => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Asset Scorecard – Tradion</title>
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -5737,6 +5797,7 @@ setTimeout(() => {
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Forex Scorecard - Tradion</title>
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
@@ -6391,6 +6452,7 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Central Bank Scorecard – Tradion</title>
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
@@ -6528,6 +6590,7 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
 with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
     f.write('''<!DOCTYPE html>
 <html><head><title>Manage Central Bank Scores</title>
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
     *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#e0e0e0}
@@ -6680,6 +6743,7 @@ with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
     with open('templates/admin.html', 'w', encoding='utf-8') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Admin - Tradion</title>
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI',sans-serif;background:#0B0F1A;color:#fff}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;z-index:100}.logo{font-size:22px;color:#00e5ff;margin-bottom:30px}.menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:8px;cursor:pointer;color:#a0b0c0}.menu-item:hover{background:rgba(0,229,255,0.1);color:#00e5ff}.menu-icon{font-size:20px;margin-right:12px}.menu-icon svg{width:20px;height:20px;vertical-align:middle}.main-content{margin-left:280px;padding:20px}.card{background:#121826;border-radius:12px;padding:20px;margin-bottom:20px;border:1px solid #2a3040}button{padding:8px 16px;background:#00e5ff;color:#0B0F1A;border:none;border-radius:6px;cursor:pointer;font-weight:bold}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}button.danger{background:#ff4d6d;color:#fff}button.danger:hover{background:#e6395a}.content-pane{display:none}.content-pane.active{display:block}input,select{padding:6px;background:#1a1f2e;border:1px solid #2a3040;color:#fff;border-radius:4px;width:100%;margin-bottom:10px}.modal{display:none;position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.7);z-index:1000;justify-content:center;align-items:center}.modal-content{background:#121826;padding:25px;border-radius:16px;width:90%;max-width:500px;border:1px solid #2a3040}.month-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:10px;margin:15px 0}
@@ -7357,6 +7421,7 @@ setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1
     with open('templates/currencies.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>COT Data - Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
@@ -7463,6 +7528,8 @@ canvas{max-height:400px;width:100%}
     <div class="navbar"><div class="navbar-title">COT Data · Economic Sentiment & Non‑Commercial Positions</div><div><button onclick="loadCurrencies()" class="secondary"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button></div></div>
     <div id="loading" style="display:none"><div class="loading-skeleton" style="height:200px;border-radius:12px"></div></div>
     <div id="currencyTable"></div>
+    
+    <!-- UPDATED: Stacked Bar Chart Section -->
     <div class="chart-container"><h3><i data-lucide="bar-chart-2" style="width:18px;height:18px;margin-right:6px"></i> Non‑Commercial Longs vs Shorts (% of Total)</h3><canvas id="cotBarChart" width="800" height="400"></canvas></div>
     
     <!-- HISTORICAL COT SECTION -->
@@ -7470,9 +7537,9 @@ canvas{max-height:400px;width:100%}
         <div class="historical-header">
             <div class="historical-title"><i data-lucide="trending-up" style="width:18px;height:18px;margin-right:6px"></i> Historical COT Net Positions</div>
             <div>
+                <!-- UPDATED: Default to USD -->
                 <select id="historyCurrencySelect" class="dropdown-selector" onchange="loadHistoricalCOT()">
-                    <option value="">Select currency...</option>
-                    <option value="USD">USD</option>
+                    <option value="USD" selected>USD</option>
                     <option value="EUR">EUR</option>
                     <option value="GBP">GBP</option>
                     <option value="JPY">JPY</option>
@@ -7492,6 +7559,7 @@ canvas{max-height:400px;width:100%}
         <div id="historyLoading" style="display:none; text-align:center; padding:20px">Loading historical data...</div>
     </div>
 </div>
+
 <script>
 let currentCurrencies = [];
 let barChart = null;
@@ -7524,6 +7592,7 @@ window.addEventListener('resize', function() {
         if (isCollapsed) sidebar.classList.add('collapsed');
     }
 });
+
 async function loadCurrencies(){
     document.getElementById('loading').style.display='block';
     document.getElementById('currencyTable').innerHTML='';
@@ -7538,8 +7607,11 @@ async function loadCurrencies(){
         document.getElementById('currencyTable').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ Error loading currency data</div>';
     }finally{
         document.getElementById('loading').style.display='none';
+        // Automatically load default historical data (USD) after table loads
+        setTimeout(loadHistoricalCOT, 100);
     }
 }
+
 function displayCurrencies(currencies){
     let html='<table><thead><tr><th>Currency</th><th>Economic Sentiment</th><th>COT Net Position</th><th>COT Weekly Change</th><th>Longs (Contracts)</th><th>Shorts (Contracts)</th></tr></thead><tbody>';
     currencies.forEach(c=>{
@@ -7557,18 +7629,66 @@ function displayCurrencies(currencies){
     html+='</tbody></table>';
     document.getElementById('currencyTable').innerHTML=html;
 }
+
 function renderBarChart(currencies){
     const ctx=document.getElementById('cotBarChart').getContext('2d');
-    const labels=currencies.map(c=>c.currency);
-    const longPcts=currencies.map(c=>c.long_pct);
-    const shortPcts=currencies.map(c=>c.short_pct);
+    
+    // Sort currencies by Long % ascending (lowest to highest)
+    const sorted = [...currencies].sort((a, b) => a.long_pct - b.long_pct);
+    
+    const labels=sorted.map(c=>c.currency);
+    const longPcts=sorted.map(c=>c.long_pct);
+    const shortPcts=sorted.map(c=>c.short_pct);
+    
     if(barChart) barChart.destroy();
+    
+    // UPDATED: Stacked Bar Chart Config
     barChart=new Chart(ctx,{
         type:'bar',
-        data:{labels:labels,datasets:[{label:'Long %',data:longPcts,backgroundColor:'rgba(0,229,160,0.7)',borderColor:'#00e5a0',borderWidth:1},{label:'Short %',data:shortPcts,backgroundColor:'rgba(255,77,109,0.7)',borderColor:'#ff4d6d',borderWidth:1}]},
-        options:{responsive:true,maintainAspectRatio:true,scales:{x:{title:{display:true,text:'Currency',color:'#a0b0c0'},ticks:{color:'#fff'}},y:{title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},ticks:{color:'#fff',beginAtZero:true,max:100}}},plugins:{legend:{labels:{color:'#fff'},position:'top'},tooltip:{callbacks:{label:function(context){return `${context.dataset.label}: ${context.raw.toFixed(1)}%`}}}}}
+        data:{
+            labels:labels,
+            datasets:[
+                {
+                    label:'Long %',
+                    data:longPcts,
+                    backgroundColor:'#00e5a0',
+                    borderColor:'#00e5a0',
+                    borderWidth:1
+                },
+                {
+                    label:'Short %',
+                    data:shortPcts,
+                    backgroundColor:'#ff4d6d',
+                    borderColor:'#ff4d6d',
+                    borderWidth:1
+                }
+            ]
+        },
+        options:{
+            responsive:true,
+            maintainAspectRatio:true,
+            scales:{
+                x:{
+                    stacked:true, // Stacks Long & Short vertically
+                    title:{display:true,text:'Currency',color:'#a0b0c0'},
+                    ticks:{color:'#fff'}
+                },
+                y:{
+                    stacked:true,
+                    title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},
+                    ticks:{color:'#fff',beginAtZero:true,max:100}
+                }
+            },
+            plugins:{
+                legend:{labels:{color:'#fff'},position:'top'},
+                tooltip:{callbacks:{label:function(context){
+                    return `${context.dataset.label}: ${context.raw.toFixed(1)}%`;
+                }}}
+            }
+        }
     });
 }
+
 async function loadHistoricalCOT() {
     const currency = document.getElementById('historyCurrencySelect').value;
     if (!currency) return;
@@ -7595,6 +7715,7 @@ async function loadHistoricalCOT() {
         loadingDiv.style.display = 'none';
     }
 }
+
 function renderHistoryChart(history) {
     const ctx = document.getElementById('historyChart').getContext('2d');
     if (historyChart) historyChart.destroy();
@@ -7640,6 +7761,7 @@ function renderHistoryChart(history) {
         }
     });
 }
+
 function displayHistoricalInfo(data) {
     const infoDiv = document.getElementById('historicalInfo');
     if (!data.bias && !data.trend) {
@@ -7658,7 +7780,9 @@ function displayHistoricalInfo(data) {
     }
     infoDiv.innerHTML = `${biasHtml} ${trendHtml}`;
 }
+
 function logout(){fetch('/logout').then(()=>window.location.href='/login');}
+
 restoreSidebarState();
 loadCurrencies();
 
@@ -7677,6 +7801,7 @@ setTimeout(() => {
 <head>
     <title>Sentiment – Tradion</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon" href="/static/favicon.png" type="image/png">
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -7969,6 +8094,7 @@ setTimeout(() => {
     with open('templates/heatmap.html', 'w') as f:
         f.write('''<!DOCTYPE html>
 <html><head><title>Currency Heatmap · Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
 *{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
