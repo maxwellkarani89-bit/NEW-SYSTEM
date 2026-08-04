@@ -3,10 +3,77 @@
 <link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
 
-/* Search Wrapper Styles */
-.search-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
+/* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;transition:transform 0.3s ease, width 0.3s;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}
+.sidebar .logo .sidebar-toggle{background:transparent;border:none;color:#00e5ff;font-size:18px;cursor:pointer;padding:4px 8px;margin-left:8px;display:flex;align-items:center;justify-content:center}
+.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}
+
+/* ---------- COLLAPSED SIDEBAR (Desktop only) ---------- */
+.sidebar.collapsed{width:80px !important;min-width:80px !important}
+.sidebar.collapsed .logo-text{display:none}
+.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}
+.sidebar.collapsed .menu-icon{margin-right:0}
+
+/* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+.mobile-header{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:56px;
+    background:#121826;
+    border-bottom:1px solid #2a3040;
+    z-index:999;
+    align-items:center;
+    padding:0 16px;
+    gap:12px;
+}
+.mobile-header .hamburger-btn{
+    background:none;
+    border:none;
+    color:#E0E0E0;
+    cursor:pointer;
+    padding:4px;
+    display:flex;
+    align-items:center;
+    font-size:24px;
+}
+.mobile-header .mobile-logo{
+    font-size:20px;
+    font-weight:800;
+    color:#00e5ff;
+    flex:1;
+}
+
+/* ---------- OVERLAY (for mobile sidebar) ---------- */
+.sidebar-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:998;
+    transition: opacity 0.3s;
+}
+.sidebar-overlay.active{
+    display:block;
+}
+
+/* ---------- MAIN CONTENT ---------- */
+.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s;width:100%}
+.sidebar.collapsed ~ .main-content{margin-left:80px !important}
+
+.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* Search & Filter styles (unchanged) */
+.search-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height:40px;}
 .search-wrapper:focus-within{border-color:#00e5ff;width:200px}
 .search-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
 .search-wrapper:focus-within i{margin-right:8px}
@@ -14,72 +81,82 @@
 .search-wrapper:focus-within input{width:160px}
 .search-wrapper input::placeholder{color:#4b5a72;opacity:0;transition:opacity 0.3s ease}
 .search-wrapper:focus-within input::placeholder{opacity:1}
-
-/* New Filter Wrapper Styles */
-.filter-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
-.filter-wrapper:hover, .filter-wrapper:focus-within{border-color:#00e5ff;width:170px}
+.filter-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height:40px;}
+.filter-wrapper:hover,.filter-wrapper:focus-within{border-color:#00e5ff;width:170px}
 .filter-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
-.filter-wrapper:hover i, .filter-wrapper:focus-within i{margin-right:8px}
-.filter-wrapper select{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease, opacity 0.3s ease;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
-.filter-wrapper:hover select, .filter-wrapper:focus-within select{width:130px;opacity:1}
-.filter-wrapper select option {background: #1a1f2e; color: #fff;}
+.filter-wrapper:hover i,.filter-wrapper:focus-within i{margin-right:8px}
+.filter-wrapper select{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease,opacity 0.3s ease;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
+.filter-wrapper:hover select,.filter-wrapper:focus-within select{width:130px;opacity:1}
+.filter-wrapper select option{background:#1a1f2e;color:#fff;}
 
-.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-.sidebar.collapsed{width:80px !important;min-width:80px !important}
-.sidebar.collapsed ~ .main-content{margin-left:80px !important}
-.indicator-positive { background-color: rgba(0, 229, 160, 0.15); color: #00e5a0; font-weight: 500; }
-.indicator-negative { background-color: rgba(255, 77, 109, 0.15); color: #ff4d6d; font-weight: 500; }
-td { background-color: inherit; }
-.sticky-header-clone { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: none; background: #121826; border-collapse: collapse; width: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.sticky-header-clone th { background: rgba(0,229,255,0.1); color: #00e5ff; font-weight: 600; padding: 10px 8px; text-align: center; border-bottom: 1px solid #2a3040; white-space: nowrap; }
+.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}
+.indicator-positive{background-color:rgba(0,229,160,0.15);color:#00e5a0;font-weight:500}.indicator-negative{background-color:rgba(255,77,109,0.15);color:#ff4d6d;font-weight:500}td{background-color:inherit}
+.sticky-header-clone{position:fixed;top:0;left:0;right:0;z-index:1000;display:none;background:#121826;border-collapse:collapse;width:auto;box-shadow:0 2px 8px rgba(0,0,0,0.3)}.sticky-header-clone th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
+
+/* ---------- RESPONSIVE (Phone & Tablet) ---------- */
 @media (max-width:768px){
-    .sidebar{transform:translateX(-100%);width:260px !important}
+    .mobile-header{display:flex}
+    .sidebar{
+        transform:translateX(-100%);
+        width:260px !important;
+        top:0;left:0;height:100%;
+        box-shadow:2px 0 12px rgba(0,0,0,0.4);
+    }
     .sidebar.open{transform:translateX(0)}
-    .sidebar.collapsed{width:260px !important; min-width:260px !important}
-    .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
-    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+    .sidebar.collapsed{width:260px !important;min-width:260px !important}
+    .sidebar.collapsed .logo-text{display:inline;visibility:visible}
+    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block}
     .sidebar.collapsed .menu-icon{margin-right:12px}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+    .sidebar.collapsed .sidebar-toggle{display:none}
+    .main-content{margin-left:0 !important;padding:68px 15px 20px 15px !important;width:100%}
     .sidebar.collapsed ~ .main-content{margin-left:0 !important}
-    .hamburger{display:block}
     .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
     th,td{padding:8px 4px;font-size:10px}
-    .search-wrapper, .filter-wrapper{width:44px}
+    .search-wrapper,.filter-wrapper{width:44px}
     .search-wrapper:focus-within{width:100%}
     .search-wrapper:focus-within input{width:100%}
-    .filter-wrapper:hover, .filter-wrapper:focus-within{width:100%}
-    .filter-wrapper:hover select, .filter-wrapper:focus-within select{width:100%}
+    .filter-wrapper:hover,.filter-wrapper:focus-within{width:100%}
+    .filter-wrapper:hover select,.filter-wrapper:focus-within select{width:100%}
     .toolbar{flex-direction:row;flex-wrap:wrap;align-items:center}
 }
 </style>
 </head>
 <body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger-btn" id="mobileHamburger" aria-label="Menu">☰</button>
+    <span class="mobile-logo">⚡ Tradion</span>
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">
         <span class="logo-text">⚡ Tradion</span>
         <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
     </div>
-    <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="window.location.href='/economic-calendar'">
-        <i data-lucide="calendar-days" class="menu-icon"></i>
-        <span>Economic Calendar</span>
+    <div class="menu-item active" onclick="handleMenuAction(() => showPane('analysis'))"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="handleMenuAction(() => window.location.href='/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-        <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
-    </div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/carry-scanner')"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => showPane('history'))"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="handleMenuAction(() => window.location.href='/admin')"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content" id="mainContent">
     <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
     <div id="analysisPane" class="content-pane active">
@@ -92,7 +169,6 @@ td { background-color: inherit; }
                 <input type="text" id="searchInput" placeholder="Search pairs..." oninput="filterTable()">
             </div>
             
-            <!-- NEW FILTER BUTTON -->
             <div class="filter-wrapper">
                 <i data-lucide="filter" style="width:18px;height:18px;color:#8892b0;"></i>
                 <select id="filterSelect" onchange="filterTable()">
@@ -101,8 +177,6 @@ td { background-color: inherit; }
                     <option value="bearish">🔴 Bearish Only</option>
                 </select>
             </div>
-            <!-- END NEW FILTER BUTTON -->
-
         </div>
         <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
         <div class="table-container">
@@ -130,13 +204,79 @@ td { background-color: inherit; }
     </div>
     <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
 </div>
-<script>
-let currentDetailed = [];
 
-// Cache keys
+<script>
+// ---------- MOBILE SIDEBAR & OVERLAY ----------
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+const hamburgerBtn = document.getElementById('mobileHamburger');
+
+function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+hamburgerBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) {
+        closeSidebar();
+    } else {
+        openSidebar();
+    }
+});
+
+overlay.addEventListener('click', closeSidebar);
+
+function handleMenuAction(action) {
+    action();
+    if (window.innerWidth <= 768) {
+        closeSidebar();
+    }
+}
+
+// ---------- SIDEBAR COLLAPSE (Desktop only) ----------
+function toggleSidebarCollapse() {
+    if (window.innerWidth <= 768) return;
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    updateSidebarToggleIcon();
+}
+
+function updateSidebarToggleIcon() {
+    const btn = document.getElementById('sidebarToggleBtn');
+    if (!btn) return;
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+function restoreSidebarState() {
+    if (window.innerWidth > 768) {
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+        else sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    }
+}
+
+window.addEventListener('resize', () => {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    } else {
+        restoreSidebarState();
+    }
+});
+
+// ---------- DATA & ANALYSIS (unchanged) ----------
+let currentDetailed = [];
 const CACHE_KEY = 'tradion_detailed_analysis';
 const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
 function getIndicatorClass(value) {
     if (value > 0) return 'indicator-positive';
@@ -144,49 +284,6 @@ function getIndicatorClass(value) {
     return '';
 }
 
-function updateSidebarToggleIcon() {
-    const sidebar = document.getElementById('sidebar');
-    const btn = document.getElementById('sidebarToggleBtn');
-    if (!btn) return;
-    if (sidebar.classList.contains('collapsed')) {
-        btn.innerHTML = '▶';
-    } else {
-        btn.innerHTML = '◀';
-    }
-}
-
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-function toggleSidebarCollapse() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        updateSidebarToggleIcon();
-    }
-}
-function restoreSidebarState() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-}
-window.addEventListener('resize', function() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    } else {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-});
 function showPane(pane) {
     document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
     document.getElementById(pane+'Pane').classList.add('active');
@@ -208,7 +305,6 @@ async function loadDetailedAnalysis(forceRefresh = false) {
             } catch(e) { console.warn('Cache parse error', e); }
         }
     }
-
     document.getElementById('loading').style.display = 'block';
     try {
         const res = await fetch('/api/detailed_analysis');
@@ -223,7 +319,7 @@ async function loadDetailedAnalysis(forceRefresh = false) {
         document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
     } catch(e) {
         console.error('Analysis error:', e);
-        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
+        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.</td></tr>`;
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -258,7 +354,6 @@ function renderDetailedTable(data) {
             const cls = getIndicatorClass(value);
             if (cls) cell.classList.add(cls);
         };
-
         addCell(item.trend);
         addCell(item.seasonality);
         addCell(item.cot);
@@ -290,34 +385,27 @@ function filterTable() {
     const filterSelect = document.getElementById('filterSelect');
     const searchTerm = input.value.trim().toLowerCase();
     const filterValue = filterSelect.value;
-
-    const tbody = document.getElementById('detailedTableBody'); 
+    const tbody = document.getElementById('detailedTableBody');
     if (!tbody) return;
     const rows = tbody.querySelectorAll('tr');
     let hasVisible = false;
-
     rows.forEach(row => {
         const symbolCell = row.cells[0];
         const biasCell = row.cells[1];
         if (!symbolCell || !biasCell) return;
-
         const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
         const bias = (biasCell.textContent || biasCell.innerText).toUpperCase();
-
         let showBySearch = searchTerm === '' || symbol.indexOf(searchTerm) > -1;
         let showByFilter = true;
-
         if (filterValue === 'bullish') {
             showByFilter = bias.indexOf('BULLISH') !== -1;
         } else if (filterValue === 'bearish') {
             showByFilter = bias.indexOf('BEARISH') !== -1;
         }
-
         const show = showBySearch && showByFilter;
         row.style.display = show ? '' : 'none';
         if (show) hasVisible = true;
     });
-
     let noResultMsg = document.getElementById('noResultsMsg');
     if (!hasVisible && (searchTerm !== '' || filterValue !== 'all')) {
         if (!noResultMsg) {
@@ -345,14 +433,9 @@ async function refreshAnalysis() {
             headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
-        if (result.success) {
-            console.log('✅ Sentiment data updated via FastBull');
-        } else {
-            console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error');
-        }
-    } catch (e) {
-        console.error('❌ Error updating sentiment:', e);
-    }
+        if (result.success) { console.log('✅ Sentiment data updated via FastBull'); }
+        else { console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error'); }
+    } catch (e) { console.error('❌ Error updating sentiment:', e); }
 
     try {
         const response = await fetch('/debug/save_all_now', {
@@ -360,14 +443,9 @@ async function refreshAnalysis() {
             headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
-        if (result.success) {
-            console.log('✅ Asset scores saved (3-day interval respected)');
-        } else {
-            console.warn('⚠️ Score save failed:', result.message || 'Unknown error');
-        }
-    } catch (e) {
-        console.error('❌ Error saving scores:', e);
-    }
+        if (result.success) { console.log('✅ Asset scores saved (3-day interval respected)'); }
+        else { console.warn('⚠️ Score save failed:', result.message || 'Unknown error'); }
+    } catch (e) { console.error('❌ Error saving scores:', e); }
 
     sessionStorage.removeItem(CACHE_KEY);
     sessionStorage.removeItem(CACHE_TIME_KEY);
@@ -443,6 +521,7 @@ function syncColumnWidths(sourceTable, targetTable) {
     }
 }
 
+// ---------- INITIALIZATION ----------
 restoreSidebarState();
 loadDetailedAnalysis();
 

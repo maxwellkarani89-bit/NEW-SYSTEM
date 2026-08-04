@@ -4743,10 +4743,77 @@ with open('templates/dashboard.html', 'w') as f:
 <link rel="icon" href="/static/favicon.png" type="image/png">
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s}.sidebar.collapsed{width:80px}.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}.sidebar.collapsed .logo{font-size:20px}.sidebar.collapsed .logo span{display:none}.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}.sidebar.collapsed .menu-icon{margin-right:0}.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
 
-/* Search Wrapper Styles */
-.search-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
+/* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;transition:transform 0.3s ease, width 0.3s;overflow-y:auto;-webkit-overflow-scrolling:touch}
+.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040;display:flex;align-items:center;justify-content:center}
+.sidebar .logo .sidebar-toggle{background:transparent;border:none;color:#00e5ff;font-size:18px;cursor:pointer;padding:4px 8px;margin-left:8px;display:flex;align-items:center;justify-content:center}
+.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
+.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+.sidebar .menu-icon{width:20px;height:20px;margin-right:12px;stroke-width:2}
+
+/* ---------- COLLAPSED SIDEBAR (Desktop only) ---------- */
+.sidebar.collapsed{width:80px !important;min-width:80px !important}
+.sidebar.collapsed .logo-text{display:none}
+.sidebar.collapsed .menu-item span:not(.menu-icon){display:none}
+.sidebar.collapsed .menu-icon{margin-right:0}
+
+/* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+.mobile-header{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:56px;
+    background:#121826;
+    border-bottom:1px solid #2a3040;
+    z-index:999;
+    align-items:center;
+    padding:0 16px;
+    gap:12px;
+}
+.mobile-header .hamburger-btn{
+    background:none;
+    border:none;
+    color:#E0E0E0;
+    cursor:pointer;
+    padding:4px;
+    display:flex;
+    align-items:center;
+    font-size:24px;
+}
+.mobile-header .mobile-logo{
+    font-size:20px;
+    font-weight:800;
+    color:#00e5ff;
+    flex:1;
+}
+
+/* ---------- OVERLAY (for mobile sidebar) ---------- */
+.sidebar-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:998;
+    transition: opacity 0.3s;
+}
+.sidebar-overlay.active{
+    display:block;
+}
+
+/* ---------- MAIN CONTENT ---------- */
+.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s;width:100%}
+.sidebar.collapsed ~ .main-content{margin-left:80px !important}
+
+.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+.navbar-title{font-size:18px;color:#00e5ff}button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}.toolbar{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+
+/* Search & Filter styles (unchanged) */
+.search-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height:40px;}
 .search-wrapper:focus-within{border-color:#00e5ff;width:200px}
 .search-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
 .search-wrapper:focus-within i{margin-right:8px}
@@ -4754,72 +4821,82 @@ with open('templates/dashboard.html', 'w') as f:
 .search-wrapper:focus-within input{width:160px}
 .search-wrapper input::placeholder{color:#4b5a72;opacity:0;transition:opacity 0.3s ease}
 .search-wrapper:focus-within input::placeholder{opacity:1}
-
-/* New Filter Wrapper Styles */
-.filter-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height: 40px;}
-.filter-wrapper:hover, .filter-wrapper:focus-within{border-color:#00e5ff;width:170px}
+.filter-wrapper{display:flex;align-items:center;background:#1a1f2e;border:1px solid #2a3040;border-radius:8px;padding:0 12px;transition:border-color 0.2s, width 0.3s ease;width:44px;overflow:hidden;cursor:pointer;height:40px;}
+.filter-wrapper:hover,.filter-wrapper:focus-within{border-color:#00e5ff;width:170px}
 .filter-wrapper i{color:#8892b0;font-size:16px;margin-right:0;flex-shrink:0;transition:margin-right 0.3s ease}
-.filter-wrapper:hover i, .filter-wrapper:focus-within i{margin-right:8px}
-.filter-wrapper select{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease, opacity 0.3s ease;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
-.filter-wrapper:hover select, .filter-wrapper:focus-within select{width:130px;opacity:1}
-.filter-wrapper select option {background: #1a1f2e; color: #fff;}
+.filter-wrapper:hover i,.filter-wrapper:focus-within i{margin-right:8px}
+.filter-wrapper select{background:transparent;border:none;color:#fff;font-size:14px;padding:10px 0;width:0;outline:none;transition:width 0.3s ease,opacity 0.3s ease;opacity:0;cursor:pointer;appearance:none;-webkit-appearance:none;-moz-appearance:none;}
+.filter-wrapper:hover select,.filter-wrapper:focus-within select{width:130px;opacity:1}
+.filter-wrapper select option{background:#1a1f2e;color:#fff;}
 
-.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-.sidebar.collapsed{width:80px !important;min-width:80px !important}
-.sidebar.collapsed ~ .main-content{margin-left:80px !important}
-.indicator-positive { background-color: rgba(0, 229, 160, 0.15); color: #00e5a0; font-weight: 500; }
-.indicator-negative { background-color: rgba(255, 77, 109, 0.15); color: #ff4d6d; font-weight: 500; }
-td { background-color: inherit; }
-.sticky-header-clone { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: none; background: #121826; border-collapse: collapse; width: auto; box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
-.sticky-header-clone th { background: rgba(0,229,255,0.1); color: #00e5ff; font-weight: 600; padding: 10px 8px; text-align: center; border-bottom: 1px solid #2a3040; white-space: nowrap; }
+.table-container{overflow-x:auto;margin-top:20px;border-radius:12px;border:1px solid #2a3040;position:relative}table{width:100%;border-collapse:collapse;background:#121826;font-size:12px}th,td{padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600}tr:hover{background:rgba(0,229,255,0.05)}.score-positive{color:#00e5a0;font-weight:bold}.score-negative{color:#ff4d6d;font-weight:bold}.score-neutral{color:#ffb800}.content-pane{display:none}.content-pane.active{display:block}
+.indicator-positive{background-color:rgba(0,229,160,0.15);color:#00e5a0;font-weight:500}.indicator-negative{background-color:rgba(255,77,109,0.15);color:#ff4d6d;font-weight:500}td{background-color:inherit}
+.sticky-header-clone{position:fixed;top:0;left:0;right:0;z-index:1000;display:none;background:#121826;border-collapse:collapse;width:auto;box-shadow:0 2px 8px rgba(0,0,0,0.3)}.sticky-header-clone th{background:rgba(0,229,255,0.1);color:#00e5ff;font-weight:600;padding:10px 8px;text-align:center;border-bottom:1px solid #2a3040;white-space:nowrap}
+
+/* ---------- RESPONSIVE (Phone & Tablet) ---------- */
 @media (max-width:768px){
-    .sidebar{transform:translateX(-100%);width:260px !important}
+    .mobile-header{display:flex}
+    .sidebar{
+        transform:translateX(-100%);
+        width:260px !important;
+        top:0;left:0;height:100%;
+        box-shadow:2px 0 12px rgba(0,0,0,0.4);
+    }
     .sidebar.open{transform:translateX(0)}
-    .sidebar.collapsed{width:260px !important; min-width:260px !important}
-    .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
-    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
+    .sidebar.collapsed{width:260px !important;min-width:260px !important}
+    .sidebar.collapsed .logo-text{display:inline;visibility:visible}
+    .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block}
     .sidebar.collapsed .menu-icon{margin-right:12px}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
+    .sidebar.collapsed .sidebar-toggle{display:none}
+    .main-content{margin-left:0 !important;padding:68px 15px 20px 15px !important;width:100%}
     .sidebar.collapsed ~ .main-content{margin-left:0 !important}
-    .hamburger{display:block}
     .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
     th,td{padding:8px 4px;font-size:10px}
-    .search-wrapper, .filter-wrapper{width:44px}
+    .search-wrapper,.filter-wrapper{width:44px}
     .search-wrapper:focus-within{width:100%}
     .search-wrapper:focus-within input{width:100%}
-    .filter-wrapper:hover, .filter-wrapper:focus-within{width:100%}
-    .filter-wrapper:hover select, .filter-wrapper:focus-within select{width:100%}
+    .filter-wrapper:hover,.filter-wrapper:focus-within{width:100%}
+    .filter-wrapper:hover select,.filter-wrapper:focus-within select{width:100%}
     .toolbar{flex-direction:row;flex-wrap:wrap;align-items:center}
 }
 </style>
 </head>
 <body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger-btn" id="mobileHamburger" aria-label="Menu">☰</button>
+    <span class="mobile-logo">⚡ Tradion</span>
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">
         <span class="logo-text">⚡ Tradion</span>
         <button class="sidebar-toggle" id="sidebarToggleBtn" onclick="toggleSidebarCollapse()">◀</button>
     </div>
-    <div class="menu-item active" onclick="showPane('analysis')"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="window.location.href='/economic-calendar'">
-        <i data-lucide="calendar-days" class="menu-icon"></i>
-        <span>Economic Calendar</span>
+    <div class="menu-item active" onclick="handleMenuAction(() => showPane('analysis'))"><i data-lucide="chart-line" class="menu-icon"></i><span>Analysis</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="handleMenuAction(() => window.location.href='/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-        <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
-    </div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="showPane('history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/carry-scanner')"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => showPane('history'))"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="handleMenuAction(() => window.location.href='/admin')"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content" id="mainContent">
     <div class="navbar"><div class="navbar-title">Welcome, {{ username }}! {% if is_admin %}<span style="background:#ffb800;padding:4px 12px;border-radius:20px;font-size:12px;color:#000">👑 ADMIN</span>{% endif %}</div><div><span id="lastUpdateTime"></span></div></div>
     <div id="analysisPane" class="content-pane active">
@@ -4832,7 +4909,6 @@ td { background-color: inherit; }
                 <input type="text" id="searchInput" placeholder="Search pairs..." oninput="filterTable()">
             </div>
             
-            <!-- NEW FILTER BUTTON -->
             <div class="filter-wrapper">
                 <i data-lucide="filter" style="width:18px;height:18px;color:#8892b0;"></i>
                 <select id="filterSelect" onchange="filterTable()">
@@ -4841,8 +4917,6 @@ td { background-color: inherit; }
                     <option value="bearish">🔴 Bearish Only</option>
                 </select>
             </div>
-            <!-- END NEW FILTER BUTTON -->
-
         </div>
         <div id="loading" style="display:none"><div class="loading-skeleton">Loading...</div></div>
         <div class="table-container">
@@ -4870,13 +4944,79 @@ td { background-color: inherit; }
     </div>
     <div id="historyPane" class="content-pane"><div id="historyContent" style="margin-top:20px"></div></div>
 </div>
-<script>
-let currentDetailed = [];
 
-// Cache keys
+<script>
+// ---------- MOBILE SIDEBAR & OVERLAY ----------
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+const hamburgerBtn = document.getElementById('mobileHamburger');
+
+function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+hamburgerBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) {
+        closeSidebar();
+    } else {
+        openSidebar();
+    }
+});
+
+overlay.addEventListener('click', closeSidebar);
+
+function handleMenuAction(action) {
+    action();
+    if (window.innerWidth <= 768) {
+        closeSidebar();
+    }
+}
+
+// ---------- SIDEBAR COLLAPSE (Desktop only) ----------
+function toggleSidebarCollapse() {
+    if (window.innerWidth <= 768) return;
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    updateSidebarToggleIcon();
+}
+
+function updateSidebarToggleIcon() {
+    const btn = document.getElementById('sidebarToggleBtn');
+    if (!btn) return;
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+function restoreSidebarState() {
+    if (window.innerWidth > 768) {
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+        else sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    }
+}
+
+window.addEventListener('resize', () => {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    } else {
+        restoreSidebarState();
+    }
+});
+
+// ---------- DATA & ANALYSIS (unchanged) ----------
+let currentDetailed = [];
 const CACHE_KEY = 'tradion_detailed_analysis';
 const CACHE_TIME_KEY = 'tradion_detailed_analysis_time';
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+const CACHE_TTL = 5 * 60 * 1000;
 
 function getIndicatorClass(value) {
     if (value > 0) return 'indicator-positive';
@@ -4884,49 +5024,6 @@ function getIndicatorClass(value) {
     return '';
 }
 
-function updateSidebarToggleIcon() {
-    const sidebar = document.getElementById('sidebar');
-    const btn = document.getElementById('sidebarToggleBtn');
-    if (!btn) return;
-    if (sidebar.classList.contains('collapsed')) {
-        btn.innerHTML = '▶';
-    } else {
-        btn.innerHTML = '◀';
-    }
-}
-
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-function toggleSidebarCollapse() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-        updateSidebarToggleIcon();
-    }
-}
-function restoreSidebarState() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-}
-window.addEventListener('resize', function() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    } else {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-        else sidebar.classList.remove('collapsed');
-        updateSidebarToggleIcon();
-    }
-});
 function showPane(pane) {
     document.querySelectorAll('.content-pane').forEach(p=>p.classList.remove('active'));
     document.getElementById(pane+'Pane').classList.add('active');
@@ -4948,7 +5045,6 @@ async function loadDetailedAnalysis(forceRefresh = false) {
             } catch(e) { console.warn('Cache parse error', e); }
         }
     }
-
     document.getElementById('loading').style.display = 'block';
     try {
         const res = await fetch('/api/detailed_analysis');
@@ -4963,7 +5059,7 @@ async function loadDetailedAnalysis(forceRefresh = false) {
         document.getElementById('lastUpdateTime').innerHTML = 'Updated: ' + new Date().toLocaleTimeString();
     } catch(e) {
         console.error('Analysis error:', e);
-        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.  </td></tr>`;
+        document.getElementById('detailedTableBody').innerHTML = `<tr><td colspan="22" style="color:#ff4d6d">❌ Failed to load analysis. Please try again.</td></tr>`;
     } finally {
         document.getElementById('loading').style.display = 'none';
     }
@@ -4998,7 +5094,6 @@ function renderDetailedTable(data) {
             const cls = getIndicatorClass(value);
             if (cls) cell.classList.add(cls);
         };
-
         addCell(item.trend);
         addCell(item.seasonality);
         addCell(item.cot);
@@ -5030,34 +5125,27 @@ function filterTable() {
     const filterSelect = document.getElementById('filterSelect');
     const searchTerm = input.value.trim().toLowerCase();
     const filterValue = filterSelect.value;
-
-    const tbody = document.getElementById('detailedTableBody'); 
+    const tbody = document.getElementById('detailedTableBody');
     if (!tbody) return;
     const rows = tbody.querySelectorAll('tr');
     let hasVisible = false;
-
     rows.forEach(row => {
         const symbolCell = row.cells[0];
         const biasCell = row.cells[1];
         if (!symbolCell || !biasCell) return;
-
         const symbol = (symbolCell.textContent || symbolCell.innerText).toLowerCase();
         const bias = (biasCell.textContent || biasCell.innerText).toUpperCase();
-
         let showBySearch = searchTerm === '' || symbol.indexOf(searchTerm) > -1;
         let showByFilter = true;
-
         if (filterValue === 'bullish') {
             showByFilter = bias.indexOf('BULLISH') !== -1;
         } else if (filterValue === 'bearish') {
             showByFilter = bias.indexOf('BEARISH') !== -1;
         }
-
         const show = showBySearch && showByFilter;
         row.style.display = show ? '' : 'none';
         if (show) hasVisible = true;
     });
-
     let noResultMsg = document.getElementById('noResultsMsg');
     if (!hasVisible && (searchTerm !== '' || filterValue !== 'all')) {
         if (!noResultMsg) {
@@ -5085,14 +5173,9 @@ async function refreshAnalysis() {
             headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
-        if (result.success) {
-            console.log('✅ Sentiment data updated via FastBull');
-        } else {
-            console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error');
-        }
-    } catch (e) {
-        console.error('❌ Error updating sentiment:', e);
-    }
+        if (result.success) { console.log('✅ Sentiment data updated via FastBull'); }
+        else { console.warn('⚠️ Sentiment update failed:', result.message || 'Unknown error'); }
+    } catch (e) { console.error('❌ Error updating sentiment:', e); }
 
     try {
         const response = await fetch('/debug/save_all_now', {
@@ -5100,14 +5183,9 @@ async function refreshAnalysis() {
             headers: { 'Content-Type': 'application/json' }
         });
         const result = await response.json();
-        if (result.success) {
-            console.log('✅ Asset scores saved (3-day interval respected)');
-        } else {
-            console.warn('⚠️ Score save failed:', result.message || 'Unknown error');
-        }
-    } catch (e) {
-        console.error('❌ Error saving scores:', e);
-    }
+        if (result.success) { console.log('✅ Asset scores saved (3-day interval respected)'); }
+        else { console.warn('⚠️ Score save failed:', result.message || 'Unknown error'); }
+    } catch (e) { console.error('❌ Error saving scores:', e); }
 
     sessionStorage.removeItem(CACHE_KEY);
     sessionStorage.removeItem(CACHE_TIME_KEY);
@@ -5183,6 +5261,7 @@ function syncColumnWidths(sourceTable, targetTable) {
     }
 }
 
+// ---------- INITIALIZATION ----------
 restoreSidebarState();
 loadDetailedAnalysis();
 
@@ -5206,16 +5285,89 @@ setTimeout(() => {
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
+        /* ---------- BASE STYLES (unchanged) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
+        a{text-decoration:none;color:inherit}
+
+        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+        .sidebar{
+            width:280px;
+            background:#121826;
+            min-height:100vh;
+            padding:20px;
+            position:fixed;
+            left:0;
+            top:0;
+            border-right:1px solid #2a3040;
+            z-index:1000;
+            transition: transform 0.3s ease;
+            overflow-y:auto;
+            -webkit-overflow-scrolling:touch;
+        }
+        .sidebar.closed-mobile{
+            transform: translateX(-100%);
+        }
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
         .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+
+        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+        .mobile-header{
+            display:none;
+            position:fixed;
+            top:0;
+            left:0;
+            right:0;
+            height:56px;
+            background:#121826;
+            border-bottom:1px solid #2a3040;
+            z-index:999;
+            align-items:center;
+            padding:0 16px;
+            gap:12px;
+        }
+        .mobile-header .hamburger{
+            background:none;
+            border:none;
+            color:#E0E0E0;
+            cursor:pointer;
+            padding:4px;
+            display:flex;
+            align-items:center;
+        }
+        .mobile-header .mobile-logo{
+            font-size:20px;
+            font-weight:800;
+            color:#00e5ff;
+            flex:1;
+        }
+
+        /* ---------- OVERLAY (for mobile sidebar) ---------- */
+        .sidebar-overlay{
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.5);
+            z-index:998;
+            transition: opacity 0.3s;
+        }
+        .sidebar-overlay.active{
+            display:block;
+        }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content{
+            flex:1;
+            margin-left:280px;
+            padding:12px 20px;
+            transition: margin-left 0.3s;
+            width:100%;
+            min-height:100vh;
+        }
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
@@ -5230,26 +5382,14 @@ setTimeout(() => {
             border:1px solid #2a3040;
             position:relative;
         }
-        .gauge-container{
-            position:relative;
-            width:160px;
-            height:90px;
-            margin-bottom:8px;
-        }
+        .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
         .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
         .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
         .gauge-needle-group{transition:transform 0.5s ease-out}
         .needle-body{stroke:#fff;stroke-width:2;fill:none}
         .needle-tip{fill:#fff;stroke:#fff;stroke-width:1}
-        .gauge-center{
-            position:relative;
-            bottom:auto;
-            left:auto;
-            transform:none;
-            text-align:center;
-            margin-top:4px;
-        }
+        .gauge-center{text-align:center;margin-top:4px}
         .gauge-label{font-size:1.1rem;font-weight:bold;color:#00e5ff}
         .gauge-bias{font-size:0.85rem;color:#00e5a0}
         .loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.8);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}
@@ -5271,19 +5411,8 @@ setTimeout(() => {
             padding:10px;
             border:1px solid #2a3040;
         }
-        .panel h3{
-            color:#00e5ff;
-            font-size:0.9rem;
-            margin-bottom:6px;
-            border-bottom:1px solid #2a3040;
-            padding-bottom:4px;
-        }
-        .indicator-row{
-            display:flex;
-            justify-content:space-between;
-            padding:3px 0;
-            border-bottom:1px solid rgba(42,48,64,0.3);
-        }
+        .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
+        .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
         .indicator-label{font-size:0.75rem}
         .indicator-values{display:flex;gap:8px;align-items:center}
@@ -5294,78 +5423,90 @@ setTimeout(() => {
         .surprise{font-size:0.7rem;padding:1px 4px;border-radius:4px}
         .surprise.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
         .surprise.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
-        .panel table {
-            width: 100%;
-            border-collapse: collapse;
+        .panel table{width:100%;border-collapse:collapse}
+        .panel th,.panel td{padding:4px 3px;text-align:left;font-size:0.7rem}
+        .panel th:nth-child(1),.panel td:nth-child(1){width:40%}
+        .panel th:nth-child(2),.panel td:nth-child(2){width:15%}
+        .panel th:nth-child(3),.panel td:nth-child(3){width:15%}
+        .panel th:nth-child(4),.panel td:nth-child(4){width:15%}
+        .panel th:nth-child(5),.panel td:nth-child(5){width:15%}
+        .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
+        .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
+        .history-chart-container{
+            background:#121826;
+            border-radius:12px;
+            padding:10px;
+            margin-top:10px;
+            border:1px solid #2a3040;
         }
-        .panel th, .panel td {
-            padding: 4px 3px;
-            text-align: left;
-            font-size: 0.7rem;
-        }
-        .panel th:nth-child(1), .panel td:nth-child(1) { width: 40%; }
-        .panel th:nth-child(2), .panel td:nth-child(2) { width: 15%; }
-        .panel th:nth-child(3), .panel td:nth-child(3) { width: 15%; }
-        .panel th:nth-child(4), .panel td:nth-child(4) { width: 15%; }
-        .panel th:nth-child(5), .panel td:nth-child(5) { width: 15%; }
-        .panel.crowd-table th:nth-child(1), .panel.crowd-table td:nth-child(1) { width: 50%; }
-        .panel.crowd-table th:nth-child(2), .panel.crowd-table td:nth-child(2) { width: 50%; }
-        .history-chart-container {
-            background: #121826;
-            border-radius: 12px;
-            padding: 10px;
-            margin-top: 10px;
-            border: 1px solid #2a3040;
-        }
-        .history-chart-container h3 {
-            color: #00e5ff;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #2a3040;
-            padding-bottom: 4px;
-        }
-        .chart-wrapper {
-            position: relative;
-            height: 240px;
-            width: 100%;
-        }
+        .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
+        .chart-wrapper{position:relative;height:240px;width:100%}
+
+        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
         @media (max-width:768px){
-            .main-content{margin-left:0;padding:60px 15px 20px;}
+            .mobile-header{display:flex}
+            .sidebar{
+                transform: translateX(-100%);
+                top:0;left:0;height:100%;width:280px;
+                z-index:1000;
+                box-shadow:2px 0 12px rgba(0,0,0,0.4);
+            }
+            .sidebar.open{transform: translateX(0)}
+            .main-content{
+                margin-left:0 !important;
+                padding-top:68px;
+                padding-left:15px;
+                padding-right:15px;
+                padding-bottom:20px;
+            }
             .scorecard-grid{grid-template-columns:1fr;gap:15px}
             .gauge-container{width:140px;height:80px}
             .panel{padding:8px}
             .indicator-values{gap:6px}
             .value{width:40px}
-            .chart-wrapper{height:200px;}
-            .two-cols{grid-template-columns:1fr;}
+            .chart-wrapper{height:200px}
+            .two-cols{grid-template-columns:1fr}
+            .header h2{font-size:1.5rem}
+            .symbol-selector select{min-width:150px;font-size:0.8rem}
         }
     </style>
 </head>
 <body>
-<div class="sidebar">
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <i data-lucide="menu" style="width:24px;height:24px;"></i>
+    </button>
+    <span class="mobile-logo">⚡ Tradion</span>
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
+<div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item active" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="navigate('/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item active" onclick="navigate('/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
+    </div>
+    <div class="menu-item" onclick="navigate('/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="navigate('/carry-scanner')">
+        <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
+    </div>
+    <div class="menu-item" onclick="navigate('/history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <div class="menu-item" onclick="navigate('/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="navigate('/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Asset Scorecard</h2>
@@ -5383,20 +5524,19 @@ setTimeout(() => {
                     <div class="spinner"></div>
                 </div>
                 <div class="gauge-container">
-                    <!-- PREMIUM GAUGE SVG -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
                             <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%"   stop-color="#5a7a8a"/>
-                                <stop offset="25%"  stop-color="#8ab0c0"/>
-                                <stop offset="50%"  stop-color="#c0d8e0"/>
-                                <stop offset="75%"  stop-color="#6a8a9a"/>
+                                <stop offset="0%" stop-color="#5a7a8a"/>
+                                <stop offset="25%" stop-color="#8ab0c0"/>
+                                <stop offset="50%" stop-color="#c0d8e0"/>
+                                <stop offset="75%" stop-color="#6a8a9a"/>
                                 <stop offset="100%" stop-color="#3a5a6a"/>
                             </linearGradient>
                             <linearGradient id="gaugeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%"   stop-color="#ff4d6d"/>
-                                <stop offset="40%"  stop-color="#ffb800"/>
-                                <stop offset="60%"  stop-color="#ffb800"/>
+                                <stop offset="0%" stop-color="#ff4d6d"/>
+                                <stop offset="40%" stop-color="#ffb800"/>
+                                <stop offset="60%" stop-color="#ffb800"/>
                                 <stop offset="100%" stop-color="#00e5a0"/>
                             </linearGradient>
                             <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
@@ -5410,55 +5550,30 @@ setTimeout(() => {
                                 <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
                             </filter>
                             <radialGradient id="glassGlow" cx="50%" cy="30%" r="60%">
-                                <stop offset="0%"   stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.05)"/>
                                 <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
                             </radialGradient>
                         </defs>
-
-                        <!-- metallic outer ring -->
-                        <path d="M14,105 A91,91 0 0,1 206,105"
-                              class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
-
-                        <!-- glass overlay -->
-                        <path d="M16,105 A89,89 0 0,1 204,105"
-                              stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
-
-                        <!-- background arc -->
-                        <path d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
-
-                        <!-- active arc (progress) -->
-                        <path id="gaugeFill"
-                              d="M20,105 A85,85 0 0,1 200,105"
-                              stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round"
-                              stroke-dasharray="0 267"
-                              style="transition: stroke-dasharray 0.7s ease;"
-                              filter="url(#glowFilter)"/>
-
-                        <!-- tick marks -->
+                        <path d="M14,105 A91,91 0 0,1 206,105" class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
+                        <path d="M16,105 A89,89 0 0,1 204,105" stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
+                        <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
+                        <path id="gaugeFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;" filter="url(#glowFilter)"/>
                         <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
-                            <line x1="14" y1="105" x2="22" y2="105" />
-                            <line x1="206" y1="105" x2="198" y2="105" />
-                            <line x1="110" y1="20" x2="110" y2="28" />
-                            <line x1="54" y1="46" x2="60" y2="52" />
-                            <line x1="166" y1="46" x2="160" y2="52" />
+                            <line x1="14" y1="105" x2="22" y2="105"/>
+                            <line x1="206" y1="105" x2="198" y2="105"/>
+                            <line x1="110" y1="20" x2="110" y2="28"/>
+                            <line x1="54" y1="46" x2="60" y2="52"/>
+                            <line x1="166" y1="46" x2="160" y2="52"/>
                         </g>
-
-                        <!-- labels -->
                         <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
                         <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
                         <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
-
-                        <!-- needle group -->
                         <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
-                            <line x1="110" y1="105" x2="110" y2="30"
-                                  stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
+                            <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
                             <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
                             <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
                             <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
                         </g>
-
-                        <!-- center cap glow -->
                         <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
@@ -5473,8 +5588,6 @@ setTimeout(() => {
                     <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
                 </div>
             </div>
-
-            <!-- Score History Chart -->
             <div class="history-chart-container">
                 <h3>Tradion Score Overtime</h3>
                 <div class="chart-wrapper">
@@ -5487,6 +5600,41 @@ setTimeout(() => {
 </div>
 
 <script>
+    // ---------- MOBILE SIDEBAR TOGGLE ----------
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    hamburgerBtn.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    overlay.addEventListener('click', closeSidebar);
+
+    function navigate(url) {
+        window.location.href = url;
+        if (window.innerWidth <= 768) {
+            closeSidebar();
+        }
+    }
+
+    // ---------- DATA & LOGIC (unchanged) ----------
     const currencies = {{ currencies|tojson }};
     const select = document.getElementById('symbolSelect');
     currencies.forEach(cur => {
@@ -5509,8 +5657,8 @@ setTimeout(() => {
     async function loadScorecard() {
         const symbol = select.value;
         if (!symbol) return;
-        const overlay = document.getElementById('loadingOverlay');
-        overlay.classList.remove('hidden');
+        const overlayEl = document.getElementById('loadingOverlay');
+        overlayEl.classList.remove('hidden');
         try {
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             const data = await res.json();
@@ -5522,7 +5670,7 @@ setTimeout(() => {
         } catch(e) {
             console.error(e);
         } finally {
-            overlay.classList.add('hidden');
+            overlayEl.classList.add('hidden');
         }
     }
 
@@ -5608,9 +5756,7 @@ setTimeout(() => {
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
-    // ========== FIXED updateScores ==========
     function updateScores(data) {
-        // use the exact field names returned by the API
         setScoreValue('tradionScore', data.tradion_score);
         setScoreValue('technicalScore', data.technical_score);
         setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
@@ -5620,7 +5766,6 @@ setTimeout(() => {
     function setScoreValue(id, value) {
         const el = document.getElementById(id);
         if (!el) return;
-        // if value is not a number, try to parse
         let num = Number(value);
         if (isNaN(num)) {
             el.textContent = value || '-';
@@ -5634,26 +5779,13 @@ setTimeout(() => {
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Indicator</th>
-                                    <th>Signal</th>
-                                    <th>Actual</th>
-                                    <th>Forecast</th>
-                                    <th>Surprise</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
+                            <thead><tr><th>Indicator</th><th>Signal</th><th>Actual</th><th>Forecast</th><th>Surprise</th></tr></thead><tbody>`;
         indicators.forEach(ind => {
             if (ind.name === '2-Year Bond Yield Trend') {
                 const score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
                 let signal = score > 0 ? 'Bullish' : (score < 0 ? 'Bearish' : 'Neutral');
                 let signalClass = score > 0 ? 'positive' : (score < 0 ? 'negative' : 'neutral');
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${signalClass}">${signal}</td>
-                            <td class="value">-</td><td class="value">-</td><td class="value">-</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
             }
             else if (ind.name === 'COT Alignment') {
                 let score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
@@ -5661,11 +5793,7 @@ setTimeout(() => {
                 let label = 'Neutral', labelClass = 'neutral';
                 if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
                 else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${labelClass}">${label}</td>
-                            <td class="value">-</td><td class="value">-</td><td class="value">-</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${labelClass}">${label}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
             }
             else {
                 const surprise = ind.actual - ind.forecast;
@@ -5673,13 +5801,7 @@ setTimeout(() => {
                 const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
                 let signal = better ? 'Bullish' : (surprise === 0 ? 'Neutral' : 'Bearish');
                 let signalClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${signalClass}">${signal}</td>
-                            <td class="value">${ind.actual}</td>
-                            <td class="value">${ind.forecast}</td>
-                            <td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">${ind.actual}</td><td class="value">${ind.forecast}</td><td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td></tr>`;
             }
         });
         html += `</tbody></table></div>`;
@@ -5697,9 +5819,7 @@ setTimeout(() => {
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody>
-                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
-                        </tbody>
+                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
                     </table>
                 </div>`;
     }
@@ -5710,23 +5830,16 @@ setTimeout(() => {
 
         const firstTwo = CATEGORY_ORDER.slice(0,2);
         const rest = CATEGORY_ORDER.slice(2);
-
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
         // Crowd Sentiment (COT) card
         const crowdCategory = firstTwo[0];
-        const crowdIndicators = data.base_indicators.filter(ind => ind.category === crowdCategory);
         const crowdBiasScore = data.category_bias[crowdCategory] || 0;
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
-        let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${crowdCategory}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span>
-                        </div>`;
+        let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
+                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span></div>`;
         crowdHtml += buildCrowdTable(data);
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
@@ -5737,13 +5850,8 @@ setTimeout(() => {
         const techBiasScore = data.category_bias[techCategory] || 0;
         const techCard = document.createElement('div');
         techCard.className = 'panel';
-        let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${techCategory}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span>
-                        </div>`;
+        let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>`;
         if (techIndicators.length === 0) {
             techHtml += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
         } else {
@@ -5759,13 +5867,8 @@ setTimeout(() => {
             const biasScore = data.category_bias[category] || 0;
             const card = document.createElement('div');
             card.className = 'panel';
-            let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${category}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span>
-                        </div>`;
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${category}</h3></div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span></div>`;
             if (indicators.length === 0) {
                 html += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
             } else {
@@ -5801,20 +5904,94 @@ setTimeout(() => {
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        /* ---------- EXACT ORIGINAL STYLES (no changes) ---------- */
+        /* ---------- BASE STYLES (unchanged) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
+        a{text-decoration:none;color:inherit}
+
+        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+        .sidebar{
+            width:280px;
+            background:#121826;
+            min-height:100vh;
+            padding:20px;
+            position:fixed;
+            left:0;
+            top:0;
+            border-right:1px solid #2a3040;
+            z-index:1000;
+            transition: transform 0.3s ease;
+            overflow-y:auto;
+            -webkit-overflow-scrolling:touch;
+        }
+        .sidebar.closed-mobile{
+            transform: translateX(-100%);
+        }
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
         .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+
+        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+        .mobile-header{
+            display:none;
+            position:fixed;
+            top:0;
+            left:0;
+            right:0;
+            height:56px;
+            background:#121826;
+            border-bottom:1px solid #2a3040;
+            z-index:999;
+            align-items:center;
+            padding:0 16px;
+            gap:12px;
+        }
+        .mobile-header .hamburger{
+            background:none;
+            border:none;
+            color:#E0E0E0;
+            cursor:pointer;
+            padding:4px;
+            display:flex;
+            align-items:center;
+        }
+        .mobile-header .mobile-logo{
+            font-size:20px;
+            font-weight:800;
+            color:#00e5ff;
+            flex:1;
+        }
+
+        /* ---------- OVERLAY (for mobile sidebar) ---------- */
+        .sidebar-overlay{
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.5);
+            z-index:998;
+            transition: opacity 0.3s;
+        }
+        .sidebar-overlay.active{
+            display:block;
+        }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content{
+            flex:1;
+            margin-left:280px;
+            padding:12px 20px;
+            transition: margin-left 0.3s;
+            width:100%;
+            min-height:100vh;
+        }
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
+
+        /* ---------- SCORECARD GRID ---------- */
         .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
             background:#121826;
@@ -5826,32 +6003,22 @@ setTimeout(() => {
             border:1px solid #2a3040;
             position:relative;
         }
-        .gauge-container{
-            position:relative;
-            width:160px;
-            height:90px;
-            margin-bottom:8px;
-        }
+        .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
         .gauge-bg{stroke:#2a3040;stroke-width:12;fill:none}
         .gauge-fill{stroke-width:12;fill:none;stroke-linecap:round;transition:stroke-dasharray 0.5s}
         .gauge-needle-group{transition:transform 0.5s ease-out}
         .needle-body{stroke:#fff;stroke-width:2;fill:none}
         .needle-tip{fill:#fff;stroke:#fff;stroke-width:1}
-        .gauge-center{
-            position:relative;
-            bottom:auto;
-            left:auto;
-            transform:none;
-            text-align:center;
-            margin-top:4px;
-        }
+        .gauge-center{text-align:center;margin-top:4px}
         .gauge-label{font-size:1.1rem;font-weight:bold;color:#00e5ff}
         .gauge-bias{font-size:0.85rem;color:#00e5a0}
         .loading-overlay{position:absolute;top:0;left:0;right:0;bottom:0;background:rgba(18,24,38,0.8);display:flex;align-items:center;justify-content:center;border-radius:16px;z-index:10}
         .loading-overlay.hidden{display:none}
         .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
+
+        /* ---------- SCORE SUMMARY ---------- */
         .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
         .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
         .score-label{font-weight:500;font-size:0.85rem}
@@ -5859,6 +6026,8 @@ setTimeout(() => {
         .score-value.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
         .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
+
+        /* ---------- RIGHT COLUMN ---------- */
         .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
         .panel{
@@ -5867,19 +6036,8 @@ setTimeout(() => {
             padding:10px;
             border:1px solid #2a3040;
         }
-        .panel h3{
-            color:#00e5ff;
-            font-size:0.9rem;
-            margin-bottom:6px;
-            border-bottom:1px solid #2a3040;
-            padding-bottom:4px;
-        }
-        .indicator-row{
-            display:flex;
-            justify-content:space-between;
-            padding:3px 0;
-            border-bottom:1px solid rgba(42,48,64,0.3);
-        }
+        .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
+        .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
         .indicator-label{font-size:0.75rem}
         .indicator-values{display:flex;gap:8px;align-items:center}
@@ -5890,78 +6048,111 @@ setTimeout(() => {
         .surprise{font-size:0.7rem;padding:1px 4px;border-radius:4px}
         .surprise.positive{background:rgba(0,229,160,0.15);color:#00e5a0}
         .surprise.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
-        .panel table {
-            width: 100%;
-            border-collapse: collapse;
+        .panel table{width:100%;border-collapse:collapse}
+        .panel th,.panel td{padding:4px 3px;text-align:left;font-size:0.7rem}
+        .panel th:nth-child(1),.panel td:nth-child(1){width:40%}
+        .panel th:nth-child(2),.panel td:nth-child(2){width:15%}
+        .panel th:nth-child(3),.panel td:nth-child(3){width:15%}
+        .panel th:nth-child(4),.panel td:nth-child(4){width:15%}
+        .panel th:nth-child(5),.panel td:nth-child(5){width:15%}
+        .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
+        .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
+
+        /* ---------- HISTORY CHART ---------- */
+        .history-chart-container{
+            background:#121826;
+            border-radius:12px;
+            padding:10px;
+            margin-top:10px;
+            border:1px solid #2a3040;
         }
-        .panel th, .panel td {
-            padding: 4px 3px;
-            text-align: left;
-            font-size: 0.7rem;
-        }
-        .panel th:nth-child(1), .panel td:nth-child(1) { width: 40%; }
-        .panel th:nth-child(2), .panel td:nth-child(2) { width: 15%; }
-        .panel th:nth-child(3), .panel td:nth-child(3) { width: 15%; }
-        .panel th:nth-child(4), .panel td:nth-child(4) { width: 15%; }
-        .panel th:nth-child(5), .panel td:nth-child(5) { width: 15%; }
-        .panel.crowd-table th:nth-child(1), .panel.crowd-table td:nth-child(1) { width: 50%; }
-        .panel.crowd-table th:nth-child(2), .panel.crowd-table td:nth-child(2) { width: 50%; }
-        .history-chart-container {
-            background: #121826;
-            border-radius: 12px;
-            padding: 10px;
-            margin-top: 10px;
-            border: 1px solid #2a3040;
-        }
-        .history-chart-container h3 {
-            color: #00e5ff;
-            font-size: 0.9rem;
-            margin-bottom: 8px;
-            border-bottom: 1px solid #2a3040;
-            padding-bottom: 4px;
-        }
-        .chart-wrapper {
-            position: relative;
-            height: 240px;
-            width: 100%;
-        }
+        .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
+        .chart-wrapper{position:relative;height:240px;width:100%}
+
+        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
         @media (max-width:768px){
-            .main-content{margin-left:0;padding:60px 15px 20px;}
-            .scorecard-grid{grid-template-columns:1fr;gap:15px}
-            .gauge-container{width:140px;height:80px}
+            /* Show mobile header */
+            .mobile-header{
+                display:flex;
+            }
+
+            /* Hide desktop sidebar by default, will be toggled */
+            .sidebar{
+                transform: translateX(-100%);
+                top:0;
+                left:0;
+                height:100%;
+                width:280px;
+                z-index:1000;
+                box-shadow: 2px 0 12px rgba(0,0,0,0.4);
+            }
+            .sidebar.open{
+                transform: translateX(0);
+            }
+
+            .main-content{
+                margin-left:0 !important;
+                padding-top:68px;  /* mobile header height + spacing */
+                padding-left:15px;
+                padding-right:15px;
+                padding-bottom:20px;
+            }
+
+            .scorecard-grid{
+                grid-template-columns:1fr;
+                gap:15px;
+            }
+            .gauge-container{
+                width:140px;
+                height:80px;
+            }
             .panel{padding:8px}
             .indicator-values{gap:6px}
             .value{width:40px}
-            .chart-wrapper{height:200px;}
-            .two-cols{grid-template-columns:1fr;}
+            .chart-wrapper{height:200px}
+            .two-cols{grid-template-columns:1fr}
+            .header h2{font-size:1.5rem}
+            .symbol-selector select{min-width:150px;font-size:0.8rem}
         }
     </style>
 </head>
 <body>
-<div class="sidebar">
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
+        <i data-lucide="menu" style="width:24px;height:24px;"></i>
+    </button>
+    <span class="mobile-logo">⚡ Tradion</span>
+    <!-- optional spacer or extra icons -->
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
+<div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item active" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="navigate('/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="navigate('/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item active" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
+    </div>
+    <div class="menu-item" onclick="navigate('/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="navigate('/carry-scanner')">
+        <i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span>
+    </div>
+    <div class="menu-item" onclick="navigate('/history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <div class="menu-item" onclick="navigate('/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="navigate('/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Forex Scorecard</h2>
@@ -5977,20 +6168,19 @@ setTimeout(() => {
             <div class="gauge-panel" id="gaugePanel">
                 <div class="loading-overlay" id="loadingOverlay"><div class="spinner"></div></div>
                 <div class="gauge-container">
-                    <!-- PREMIUM GAUGE SVG (unchanged) -->
                     <svg class="gauge-svg" viewBox="0 0 220 110">
                         <defs>
                             <linearGradient id="metalGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-                                <stop offset="0%"   stop-color="#5a7a8a"/>
-                                <stop offset="25%"  stop-color="#8ab0c0"/>
-                                <stop offset="50%"  stop-color="#c0d8e0"/>
-                                <stop offset="75%"  stop-color="#6a8a9a"/>
+                                <stop offset="0%" stop-color="#5a7a8a"/>
+                                <stop offset="25%" stop-color="#8ab0c0"/>
+                                <stop offset="50%" stop-color="#c0d8e0"/>
+                                <stop offset="75%" stop-color="#6a8a9a"/>
                                 <stop offset="100%" stop-color="#3a5a6a"/>
                             </linearGradient>
                             <linearGradient id="gaugeArcGrad" x1="0%" y1="0%" x2="100%" y2="0%">
-                                <stop offset="0%"   stop-color="#ff4d6d"/>
-                                <stop offset="40%"  stop-color="#ffb800"/>
-                                <stop offset="60%"  stop-color="#ffb800"/>
+                                <stop offset="0%" stop-color="#ff4d6d"/>
+                                <stop offset="40%" stop-color="#ffb800"/>
+                                <stop offset="60%" stop-color="#ffb800"/>
                                 <stop offset="100%" stop-color="#00e5a0"/>
                             </linearGradient>
                             <filter id="glowFilter" x="-20%" y="-20%" width="140%" height="140%">
@@ -6004,35 +6194,30 @@ setTimeout(() => {
                                 <feDropShadow dx="1" dy="2" stdDeviation="2" flood-color="#000" flood-opacity="0.6"/>
                             </filter>
                             <radialGradient id="glassGlow" cx="50%" cy="30%" r="60%">
-                                <stop offset="0%"   stop-color="rgba(255,255,255,0.05)"/>
+                                <stop offset="0%" stop-color="rgba(255,255,255,0.05)"/>
                                 <stop offset="100%" stop-color="rgba(255,255,255,0)"/>
                             </radialGradient>
                         </defs>
-
                         <path d="M14,105 A91,91 0 0,1 206,105" class="metal-ring" stroke="url(#metalGrad)" stroke-width="5" fill="none" stroke-linecap="round"/>
                         <path d="M16,105 A89,89 0 0,1 204,105" stroke="url(#glassGlow)" stroke-width="90" fill="none" opacity="0.4"/>
                         <path d="M20,105 A85,85 0 0,1 200,105" stroke="#1a2232" stroke-width="12" fill="none" stroke-linecap="round"/>
                         <path id="gaugeFill" d="M20,105 A85,85 0 0,1 200,105" stroke="url(#gaugeArcGrad)" stroke-width="12" fill="none" stroke-linecap="round" stroke-dasharray="0 267" style="transition: stroke-dasharray 0.7s ease;" filter="url(#glowFilter)"/>
-
                         <g stroke="#2a3a4a" stroke-width="2" stroke-linecap="round">
-                            <line x1="14" y1="105" x2="22" y2="105" />
-                            <line x1="206" y1="105" x2="198" y2="105" />
-                            <line x1="110" y1="20" x2="110" y2="28" />
-                            <line x1="54" y1="46" x2="60" y2="52" />
-                            <line x1="166" y1="46" x2="160" y2="52" />
+                            <line x1="14" y1="105" x2="22" y2="105"/>
+                            <line x1="206" y1="105" x2="198" y2="105"/>
+                            <line x1="110" y1="20" x2="110" y2="28"/>
+                            <line x1="54" y1="46" x2="60" y2="52"/>
+                            <line x1="166" y1="46" x2="160" y2="52"/>
                         </g>
-
                         <text x="18" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">SELL</text>
                         <text x="110" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">NEUTRAL</text>
                         <text x="202" y="115" font-size="8" fill="#5a6a7a" font-weight="700" text-anchor="middle">BUY</text>
-
                         <g id="gaugeNeedleGroup" filter="url(#needleShadow)" style="transition: transform 0.7s cubic-bezier(0.34, 1.56, 0.64, 1);">
                             <line x1="110" y1="105" x2="110" y2="30" stroke="#e0e8f0" stroke-width="2.5" stroke-linecap="round"/>
                             <circle cx="110" cy="105" r="6" fill="#e0e8f0" stroke="#8ab0c0" stroke-width="1.2"/>
                             <circle cx="110" cy="105" r="2.5" fill="#0B0F1A"/>
                             <polygon points="110,24 106,32 114,32" fill="#e0e8f0"/>
                         </g>
-
                         <circle cx="110" cy="105" r="9" fill="rgba(0,229,255,0.05)" stroke="none"/>
                     </svg>
                 </div>
@@ -6047,8 +6232,6 @@ setTimeout(() => {
                     <div class="score-item"><span class="score-label">Fundamentals</span><span id="fundamentalsScore" class="score-value neutral">0</span></div>
                 </div>
             </div>
-
-            <!-- Score History Chart -->
             <div class="history-chart-container">
                 <h3>Tradion Score Overtime</h3>
                 <div class="chart-wrapper">
@@ -6061,6 +6244,42 @@ setTimeout(() => {
 </div>
 
 <script>
+    // ---------- MOBILE SIDEBAR TOGGLE ----------
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburgerBtn = document.getElementById('hamburgerBtn');
+
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    hamburgerBtn.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    overlay.addEventListener('click', closeSidebar);
+
+    // Close sidebar when a menu item is clicked (navigate via function)
+    function navigate(url) {
+        window.location.href = url;
+        // On mobile, close sidebar after navigating
+        if (window.innerWidth <= 768) {
+            closeSidebar();
+        }
+    }
+
     // ---------- PAIR LIST ----------
     const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
@@ -6093,29 +6312,20 @@ setTimeout(() => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            // -- Updated calculations --
-            // 1. Extract scores from backend (if available) or compute locally
             const fundamentalsScore = data.fundamentals_score ??
                 (["Jobs Market Bias", "Inflation Bias", "Economic Growth Bias"].reduce((sum, cat) => sum + (data.category_bias[cat] || 0), 0));
             const technicalScore = data.technical_score ?? computeTechnicalScore(data);
             const cotScore = data.sentiment_cot_score ?? 0;
             const tradionScore = data.tradion_score ?? (fundamentalsScore + technicalScore + cotScore);
 
-            // Update gauge with Tradion Score
             updateGauge(tradionScore, data.overall?.bias || getBiasFromScore(tradionScore), data.overall?.color || getColorFromScore(tradionScore));
-
-            // Update summary numbers
             updateScores({
                 tradionScore,
                 technicalScore,
                 cotScore,
                 fundamentalsScore
             });
-
-            // Render category cards (original layout)
             renderCategoryCards(data);
-
-            // Load history chart
             loadScoreHistory(symbol);
         } catch(e) {
             console.error(e);
@@ -6125,17 +6335,14 @@ setTimeout(() => {
         }
     }
 
-    // Helper: compute Technical Score = seasonality_score + 21-day SMA trend score
     function computeTechnicalScore(data) {
         const seasonScore = data.seasonality_score || 0;
         let trendScore = 0;
-        // Try to find 21-day SMA Trend indicator from base_indicators
         const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
         if (trendInd && trendInd.signal_value !== undefined) {
             trendScore = Number(trendInd.signal_value);
         } else {
-            // fallback: if trend data embedded in overall technical_score (old version)
-            trendScore = data.trend_score || 0;  // if backend provides separate trend_score
+            trendScore = data.trend_score || 0;
         }
         return seasonScore + trendScore;
     }
@@ -6160,7 +6367,6 @@ setTimeout(() => {
         return "#ffaa00";
     }
 
-    // ---------- GAUGE & SUMMARY ----------
     function updateGauge(score, bias, color) {
         const clampedScore = Math.min(Math.max(score, -10), 10);
         const angle = ((clampedScore + 10) / 20) * 180;
@@ -6188,44 +6394,22 @@ setTimeout(() => {
         el.className = 'score-value ' + (value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral');
     }
 
-    // ---------- CATEGORY CARDS (ORIGINAL LAYOUT) ----------
     function buildFullTable(indicators, data) {
         let html = `<div style="overflow-x:auto;">
                         <table class="data-table">
-                            <thead>
-                                <tr>
-                                    <th>Indicator</th>
-                                    <th>Signal</th>
-                                    <th>Actual</th>
-                                    <th>Forecast</th>
-                                    <th>Surprise</th>
-                                </tr>
-                            </thead>
-                            <tbody>`;
+                            <thead><tr><th>Indicator</th><th>Signal</th><th>Actual</th><th>Forecast</th><th>Surprise</th></tr></thead><tbody>`;
         indicators.forEach(ind => {
             if (ind.forecast === '-' || ind.actual === '-') {
                 let signalDisplay = ind.signal || 'Neutral';
                 let signalClass = (signalDisplay === 'Bullish') ? 'positive' : (signalDisplay === 'Bearish' ? 'negative' : 'neutral');
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${signalClass}">${signalDisplay}</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signalDisplay}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
                 return;
             }
             if (ind.name === '2-Year Bond Yield Trend') {
                 const score = (ind.score !== undefined && ind.score !== null) ? Number(ind.score) : 0;
                 let signal = score > 0 ? 'Bullish' : (score < 0 ? 'Bearish' : 'Neutral');
                 let signalClass = score > 0 ? 'positive' : (score < 0 ? 'negative' : 'neutral');
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${signalClass}">${signal}</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
                 return;
             }
             if (ind.name === 'COT Alignment') {
@@ -6234,13 +6418,7 @@ setTimeout(() => {
                 let label = 'Neutral', labelClass = 'neutral';
                 if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
                 else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
-                html += `<tr>
-                            <td>${ind.name}</td>
-                            <td class="value ${labelClass}">${label}</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                            <td class="value">-</td>
-                        </tr>`;
+                html += `<tr><td>${ind.name}</td><td class="value ${labelClass}">${label}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
                 return;
             }
             const surprise = ind.actual - ind.forecast;
@@ -6248,13 +6426,7 @@ setTimeout(() => {
             const colorClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
             let signal = better ? 'Bullish' : (surprise === 0 ? 'Neutral' : 'Bearish');
             let signalClass = better ? 'positive' : (surprise === 0 ? 'neutral' : 'negative');
-            html += `<tr>
-                        <td>${ind.name}</td>
-                        <td class="value ${signalClass}">${signal}</td>
-                        <td class="value">${ind.actual}</td>
-                        <td class="value">${ind.forecast}</td>
-                        <td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td>
-                    </tr>`;
+            html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">${ind.actual}</td><td class="value">${ind.forecast}</td><td class="surprise ${colorClass}">${surprise > 0 ? '+' : ''}${surprise.toFixed(1)}</td></tr>`;
         });
         html += `</tbody></table></div>`;
         return html;
@@ -6271,9 +6443,7 @@ setTimeout(() => {
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody>
-                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
-                        </tbody>
+                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
                     </table>
                 </div>`;
     }
@@ -6281,10 +6451,8 @@ setTimeout(() => {
     function renderCategoryCards(data) {
         const container = document.getElementById('categoryCards');
         container.innerHTML = '';
-
         const firstTwo = CATEGORY_ORDER.slice(0,2);
         const rest = CATEGORY_ORDER.slice(2);
-
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
@@ -6293,18 +6461,13 @@ setTimeout(() => {
         const crowdBiasScore = data.category_bias[crowdCategory] || 0;
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
-        let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${crowdCategory}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span>
-                        </div>`;
+        let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
+                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${crowdBiasScore > 0 ? 'positive' : crowdBiasScore < 0 ? 'negative' : 'neutral'}">${crowdBiasScore > 0 ? '+' : ''}${crowdBiasScore}</span></div>`;
         crowdHtml += buildCrowdTable(data);
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card – with Seasonality added
+        // Technical Bias card
         const techCategory = firstTwo[1];
         const techBiasScore = data.category_bias[techCategory] || 0;
         const techCard = document.createElement('div');
@@ -6317,49 +6480,22 @@ setTimeout(() => {
         const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
         const trendClass = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
 
-        let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${techCategory}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span>
-                        </div>
-                        <div class="indicator-row">
-                            <span class="indicator-label">21-day SMA Trend</span>
-                            <div class="indicator-values">
-                                <span class="value ${trendClass}">${trendSignal}</span>
-                                <span class="value">-</span>
-                                <span class="value">-</span>
-                                <span class="value">-</span>
-                            </div>
-                        </div>
-                        <!-- Seasonality row -->
-                        <div class="indicator-row">
-                            <span class="indicator-label">Seasonality</span>
-                            <div class="indicator-values">
-                                <span class="value ${seasonClass}">${seasonSignal}</span>
-                                <span class="value">${seasonScore > 0 ? '+' : ''}${seasonScore}</span>
-                                <span class="value">-</span>
-                                <span class="value">-</span>
-                            </div>
-                        </div>`;
+        let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>
+                        <div class="indicator-row"><span class="indicator-label">21-day SMA Trend</span><div class="indicator-values"><span class="value ${trendClass}">${trendSignal}</span><span class="value">-</span><span class="value">-</span><span class="value">-</span></div></div>
+                        <div class="indicator-row"><span class="indicator-label">Seasonality</span><div class="indicator-values"><span class="value ${seasonClass}">${seasonSignal}</span><span class="value">${seasonScore > 0 ? '+' : ''}${seasonScore}</span><span class="value">-</span><span class="value">-</span></div></div>`;
         techCard.innerHTML = techHtml;
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards (original order)
+        // Remaining cards
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
             const card = document.createElement('div');
             card.className = 'panel';
-            let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-                            <h3 style="margin:0;">${category}</h3>
-                        </div>
-                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px">
-                            <span>Bias Score</span>
-                            <span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span>
-                        </div>`;
+            let html = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${category}</h3></div>
+                        <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${biasScore > 0 ? 'positive' : biasScore < 0 ? 'negative' : 'neutral'}">${biasScore > 0 ? '+' : ''}${biasScore}</span></div>`;
             if (indicators.length === 0) {
                 html += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
             } else {
@@ -6370,7 +6506,6 @@ setTimeout(() => {
         });
     }
 
-    // ---------- SCORE HISTORY CHART ----------
     async function loadScoreHistory(asset) {
         try {
             const res = await fetch('/api/score_history/' + encodeURIComponent(asset));
@@ -6411,33 +6546,21 @@ setTimeout(() => {
             options: {
                 responsive: true,
                 maintainAspectRatio: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } }
-                },
+                plugins: { legend: { display: false }, tooltip: { callbacks: { label: (ctx) => `Score: ${ctx.raw.toFixed(1)}` } } },
                 scales: {
-                    y: {
-                        title: { display: true, text: 'Score', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0' },
-                        grid: {
-                            color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
-                            lineWidth: (context) => context.tick.value === 0 ? 1 : 0
-                        },
-                        min: -20,
-                        max: 20
-                    },
-                    x: {
-                        title: { display: true, text: 'Date', color: '#a0b0c0' },
-                        ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true },
-                        grid: { display: false }
-                    }
+                    y: { title: { display: true, text: 'Score', color: '#a0b0c0' }, ticks: { color: '#e0e0e0' }, grid: { color: (ctx) => ctx.tick.value === 0 ? '#2a3040' : 'transparent', lineWidth: (ctx) => ctx.tick.value === 0 ? 1 : 0 }, min: -20, max: 20 },
+                    x: { title: { display: true, text: 'Date', color: '#a0b0c0' }, ticks: { color: '#e0e0e0', maxRotation: 45, autoSkip: true }, grid: { display: false } }
                 }
             }
         });
     }
 
     function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
+
+    // Load first pair if available
     if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
+
+    // Initialize Lucide icons (now also covers mobile header)
     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
@@ -6456,15 +6579,85 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <script src="https://unpkg.com/lucide@latest"></script>
     <style>
         *{margin:0;padding:0;box-sizing:border-box}
-        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-        .sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100}
+        body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
+        a{text-decoration:none;color:inherit}
+
+        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+        .sidebar{
+            width:280px;
+            background:#121826;
+            min-height:100vh;
+            padding:20px;
+            position:fixed;
+            left:0;
+            top:0;
+            border-right:1px solid #2a3040;
+            z-index:1000;
+            transition:transform 0.3s ease;
+            overflow-y:auto;
+            -webkit-overflow-scrolling:touch;
+        }
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
         .sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
-        .main-content{flex:1;margin-left:280px;padding:12px 20px}
+
+        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+        .mobile-header{
+            display:none;
+            position:fixed;
+            top:0;
+            left:0;
+            right:0;
+            height:56px;
+            background:#121826;
+            border-bottom:1px solid #2a3040;
+            z-index:999;
+            align-items:center;
+            padding:0 16px;
+            gap:12px;
+        }
+        .mobile-header .hamburger-btn{
+            background:none;
+            border:none;
+            color:#E0E0E0;
+            cursor:pointer;
+            padding:4px;
+            display:flex;
+            align-items:center;
+            font-size:24px;
+        }
+        .mobile-header .mobile-logo{
+            font-size:20px;
+            font-weight:800;
+            color:#00e5ff;
+            flex:1;
+        }
+
+        /* ---------- OVERLAY (for mobile sidebar) ---------- */
+        .sidebar-overlay{
+            display:none;
+            position:fixed;
+            inset:0;
+            background:rgba(0,0,0,0.5);
+            z-index:998;
+            transition: opacity 0.3s;
+        }
+        .sidebar-overlay.active{
+            display:block;
+        }
+
+        /* ---------- MAIN CONTENT ---------- */
+        .main-content{
+            flex:1;
+            margin-left:280px;
+            padding:12px 20px;
+            transition:margin-left 0.3s;
+            width:100%;
+            min-height:100vh;
+        }
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .table-container{overflow-x:auto;border-radius:12px;border:1px solid #2a3040}
@@ -6476,45 +6669,66 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
         .badge-positive{background:rgba(0,229,160,0.2);color:#00e5a0}
         .badge-negative{background:rgba(255,77,109,0.2);color:#ff4d6d}
         .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
-        /* === NEW: colour classes for scores === */
         .positive { color: #00e5a0; font-weight: 500; }
         .negative { color: #ff4d6d; font-weight: 500; }
         .neutral { color: #ffb800; }
-        /* ==================================== */
         .tooltip{position:relative;cursor:help;border-bottom:1px dotted #8892b0}
         .tooltip:hover::after{content:attr(data-tip);position:absolute;background:#1a1f2e;color:#e0e0e0;padding:6px 12px;border-radius:6px;font-size:0.7rem;white-space:nowrap;z-index:10;left:50%;transform:translateX(-50%);bottom:100%;margin-bottom:4px;border:1px solid #2a3040}
-        @media(max-width:768px){.sidebar{transform:translateX(-100%)}.sidebar.open{transform:translateX(0)}.main-content{margin-left:0;padding:60px 15px 20px;width:100%}}
+
+        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
+        @media (max-width:768px){
+            .mobile-header{display:flex}
+            .sidebar{
+                transform:translateX(-100%);
+                top:0;left:0;height:100%;width:280px;
+                box-shadow:2px 0 12px rgba(0,0,0,0.4);
+            }
+            .sidebar.open{transform:translateX(0)}
+            .main-content{
+                margin-left:0 !important;
+                padding-top:68px;
+                padding-left:15px;
+                padding-right:15px;
+                padding-bottom:20px;
+            }
+            th,td{padding:6px 8px;font-size:0.7rem}
+            .header h2{font-size:1.5rem}
+        }
     </style>
 </head>
 <body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger-btn" id="mobileHamburger" aria-label="Menu">☰</button>
+    <span class="mobile-logo">⚡ Tradion</span>
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item active" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <!-- ===== ADDED SEASONALITY ===== -->
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <!-- ===== ADDED HISTORY ===== -->
-    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    <!-- =========================== -->
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="navigateTo('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="navigateTo('/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="navigateTo('/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="navigateTo('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item active" onclick="navigateTo('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="navigateTo('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigateTo('/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
+    </div>
+    <div class="menu-item" onclick="navigateTo('/carry-scanner')"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="navigateTo('/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="navigateTo('/history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    <div class="menu-item" onclick="navigateTo('/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="navigateTo('/admin')"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="navigateTo('/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header"><h2>Central Bank Scorecard</h2></div>
     <div class="table-container">
@@ -6541,8 +6755,42 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
         </table>
     </div>
 </div>
+
 <script>
-    function toggleSidebar(){document.getElementById('sidebar').classList.toggle('open');}
+    // ---------- MOBILE SIDEBAR & OVERLAY ----------
+    const sidebar = document.getElementById('sidebar');
+    const overlay = document.getElementById('sidebarOverlay');
+    const hamburgerBtn = document.getElementById('mobileHamburger');
+
+    function openSidebar() {
+        sidebar.classList.add('open');
+        overlay.classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+
+    function closeSidebar() {
+        sidebar.classList.remove('open');
+        overlay.classList.remove('active');
+        document.body.style.overflow = '';
+    }
+
+    hamburgerBtn.addEventListener('click', () => {
+        if (sidebar.classList.contains('open')) {
+            closeSidebar();
+        } else {
+            openSidebar();
+        }
+    });
+
+    overlay.addEventListener('click', closeSidebar);
+
+    function navigateTo(url) {
+        window.location.href = url;
+        if (window.innerWidth <= 768) {
+            closeSidebar();
+        }
+    }
+
     function logout(){fetch('/logout').then(()=>window.location.href='/login');}
 
     async function loadScores(){
@@ -7425,8 +7673,10 @@ setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1
 <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
 <script src="https://unpkg.com/lucide@latest"></script>
 <style>
-*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
-.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:100;transition:width 0.3s ease, transform 0.3s ease;overflow-x:hidden;white-space:nowrap}
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
+
+/* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;transition:transform 0.3s ease, width 0.3s;overflow-y:auto;-webkit-overflow-scrolling:touch;white-space:nowrap}
 .sidebar .logo{display:flex;justify-content:space-between;align-items:center;font-size:22px;font-weight:800;color:#00e5ff;margin-bottom:25px;padding-bottom:15px;border-bottom:1px solid #2a3040}
 .sidebar .logo-text{transition:opacity 0.2s}
 .sidebar.collapsed .logo-text{opacity:0;width:0;visibility:hidden}
@@ -7439,13 +7689,57 @@ setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 1
 .sidebar.collapsed .menu-icon{margin-right:0}
 .sidebar .menu-item span:not(.menu-icon){transition:opacity 0.2s}
 .sidebar.collapsed .menu-item span:not(.menu-icon){opacity:0;width:0;display:none}
-/* Ensure Lucide SVG icons match the original icon size */
-.sidebar .menu-icon svg {
-    width: 20px;
-    height: 20px;
-    vertical-align: middle;
+.sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+.sidebar.collapsed{width:80px !important;min-width:80px !important}
+.sidebar.collapsed ~ .main-content{margin-left:80px !important}
+
+/* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+.mobile-header{
+    display:none;
+    position:fixed;
+    top:0;
+    left:0;
+    right:0;
+    height:56px;
+    background:#121826;
+    border-bottom:1px solid #2a3040;
+    z-index:999;
+    align-items:center;
+    padding:0 16px;
+    gap:12px;
 }
-.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s}
+.mobile-header .hamburger-btn{
+    background:none;
+    border:none;
+    color:#E0E0E0;
+    cursor:pointer;
+    padding:4px;
+    display:flex;
+    align-items:center;
+    font-size:24px;
+}
+.mobile-header .mobile-logo{
+    font-size:20px;
+    font-weight:800;
+    color:#00e5ff;
+    flex:1;
+}
+
+/* ---------- OVERLAY (for mobile sidebar) ---------- */
+.sidebar-overlay{
+    display:none;
+    position:fixed;
+    inset:0;
+    background:rgba(0,0,0,0.5);
+    z-index:998;
+    transition: opacity 0.3s;
+}
+.sidebar-overlay.active{
+    display:block;
+}
+
+/* ---------- MAIN CONTENT ---------- */
+.main-content{flex:1;margin-left:280px;padding:20px 30px;transition:margin-left 0.3s;width:100%}
 .navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
 .navbar-title{font-size:18px;color:#00e5ff}
 button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:all 0.2s}
@@ -7473,25 +7767,23 @@ canvas{max-height:400px;width:100%}
 .badge-neutral{background:rgba(255,184,0,0.2);color:#ffb800}
 .historical-header{display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:20px}
 .historical-title{color:#00e5ff;font-size:1.2rem}
-.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
-/* Force sidebar collapse width */
-.sidebar.collapsed {
-    width: 80px !important;
-    min-width: 80px !important;
-}
-.sidebar.collapsed ~ .main-content {
-    margin-left: 80px !important;
-}
+
+/* ---------- RESPONSIVE (Phone & Tablet) ---------- */
 @media (max-width:768px){
-    .sidebar{transform:translateX(-100%);width:260px !important}
+    .mobile-header{display:flex}
+    .sidebar{
+        transform:translateX(-100%);
+        width:260px !important;
+        top:0;left:0;height:100%;
+        box-shadow:2px 0 12px rgba(0,0,0,0.4);
+    }
     .sidebar.open{transform:translateX(0)}
-    .sidebar.collapsed{width:260px !important; min-width:260px !important}
+    .sidebar.collapsed{width:260px !important;min-width:260px !important}
     .sidebar.collapsed .logo-text{opacity:1;visibility:visible}
     .sidebar.collapsed .menu-item span:not(.menu-icon){display:inline-block;opacity:1}
     .sidebar.collapsed .menu-icon{margin-right:12px}
-    .main-content{margin-left:0 !important;padding:60px 15px 20px 15px !important;width:100%}
-    .sidebar.collapsed ~ .main-content { margin-left: 0 !important; }
-    .hamburger{display:block}
+    .main-content{margin-left:0 !important;padding:68px 15px 20px 15px !important;width:100%}
+    .sidebar.collapsed ~ .main-content{margin-left:0 !important}
     .navbar{flex-direction:column;align-items:flex-start;gap:10px;padding:10px 15px}
     th,td{padding:8px 4px;font-size:12px}
     .historical-header{flex-direction:column;align-items:flex-start;gap:10px}
@@ -7500,44 +7792,52 @@ canvas{max-height:400px;width:100%}
 </style>
 </head>
 <body>
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
+
+<!-- ========== MOBILE HEADER ========== -->
+<header class="mobile-header">
+    <button class="hamburger-btn" id="mobileHamburger" aria-label="Menu">☰</button>
+    <span class="mobile-logo">⚡ Tradion</span>
+</header>
+
+<!-- ========== SIDEBAR OVERLAY ========== -->
+<div class="sidebar-overlay" id="sidebarOverlay"></div>
+
+<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">
         <span class="logo-text">⚡ Tradion</span>
         <button class="sidebar-toggle" onclick="toggleSidebarCollapse()">◀</button>
     </div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item active" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="navigateTo('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item active" onclick="navigateTo('/currencies')"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="navigateTo('/scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="navigateTo('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="navigateTo('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="navigateTo('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigateTo('/economic-calendar')">
+        <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
+    </div>
+    <div class="menu-item" onclick="navigateTo('/carry-scanner')"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="navigateTo('/seasonality')"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="navigateTo('/history')"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="navigateTo('/admin')"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="navigateTo('/heatmap')"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="navigateTo('/profile')"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
+
+<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content" id="mainContent">
     <div class="navbar"><div class="navbar-title">COT Data · Economic Sentiment & Non‑Commercial Positions</div><div><button onclick="loadCurrencies()" class="secondary"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh</button></div></div>
     <div id="loading" style="display:none"><div class="loading-skeleton" style="height:200px;border-radius:12px"></div></div>
     <div id="currencyTable"></div>
     
-    <!-- UPDATED: Stacked Bar Chart Section -->
     <div class="chart-container"><h3><i data-lucide="bar-chart-2" style="width:18px;height:18px;margin-right:6px"></i> Non‑Commercial Longs vs Shorts (% of Total)</h3><canvas id="cotBarChart" width="800" height="400"></canvas></div>
     
-    <!-- HISTORICAL COT SECTION -->
     <div class="historical-section">
         <div class="historical-header">
             <div class="historical-title"><i data-lucide="trending-up" style="width:18px;height:18px;margin-right:6px"></i> Historical COT Net Positions</div>
             <div>
-                <!-- UPDATED: Default to USD -->
                 <select id="historyCurrencySelect" class="dropdown-selector" onchange="loadHistoricalCOT()">
                     <option value="USD" selected>USD</option>
                     <option value="EUR">EUR</option>
@@ -7561,37 +7861,76 @@ canvas{max-height:400px;width:100%}
 </div>
 
 <script>
+// ---------- MOBILE SIDEBAR & OVERLAY ----------
+const sidebar = document.getElementById('sidebar');
+const overlay = document.getElementById('sidebarOverlay');
+const hamburgerBtn = document.getElementById('mobileHamburger');
+
+function openSidebar() {
+    sidebar.classList.add('open');
+    overlay.classList.add('active');
+    document.body.style.overflow = 'hidden';
+}
+
+function closeSidebar() {
+    sidebar.classList.remove('open');
+    overlay.classList.remove('active');
+    document.body.style.overflow = '';
+}
+
+hamburgerBtn.addEventListener('click', () => {
+    if (sidebar.classList.contains('open')) {
+        closeSidebar();
+    } else {
+        openSidebar();
+    }
+});
+
+overlay.addEventListener('click', closeSidebar);
+
+function navigateTo(url) {
+    window.location.href = url;
+    if (window.innerWidth <= 768) {
+        closeSidebar();
+    }
+}
+
+// ---------- SIDEBAR COLLAPSE (Desktop only) ----------
+function toggleSidebarCollapse() {
+    if (window.innerWidth <= 768) return;
+    sidebar.classList.toggle('collapsed');
+    localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
+    updateSidebarToggleIcon();
+}
+
+function updateSidebarToggleIcon() {
+    const btn = document.querySelector('.sidebar-toggle');
+    if (!btn) return;
+    btn.innerHTML = sidebar.classList.contains('collapsed') ? '▶' : '◀';
+}
+
+function restoreSidebarState() {
+    if (window.innerWidth > 768) {
+        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
+        if (isCollapsed) sidebar.classList.add('collapsed');
+        updateSidebarToggleIcon();
+    }
+}
+
+window.addEventListener('resize', () => {
+    if (window.innerWidth <= 768) {
+        sidebar.classList.remove('collapsed');
+        updateSidebarToggleIcon();
+    } else {
+        restoreSidebarState();
+    }
+});
+
+// ---------- COT DATA LOGIC ----------
 let currentCurrencies = [];
 let barChart = null;
 let historyChart = null;
 let currentHistoryData = { dates: [], netPositions: [], weeklyChanges: [] };
-
-function toggleSidebar() {
-    document.getElementById('sidebar').classList.toggle('open');
-}
-function toggleSidebarCollapse() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        sidebar.classList.toggle('collapsed');
-        localStorage.setItem('sidebarCollapsed', sidebar.classList.contains('collapsed'));
-    }
-}
-function restoreSidebarState() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth > 768) {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-    }
-}
-window.addEventListener('resize', function() {
-    const sidebar = document.getElementById('sidebar');
-    if (window.innerWidth <= 768) {
-        sidebar.classList.remove('collapsed');
-    } else {
-        const isCollapsed = localStorage.getItem('sidebarCollapsed') === 'true';
-        if (isCollapsed) sidebar.classList.add('collapsed');
-    }
-});
 
 async function loadCurrencies(){
     document.getElementById('loading').style.display='block';
@@ -7607,7 +7946,6 @@ async function loadCurrencies(){
         document.getElementById('currencyTable').innerHTML='<div style="color:#ff4d6d;padding:20px">❌ Error loading currency data</div>';
     }finally{
         document.getElementById('loading').style.display='none';
-        // Automatically load default historical data (USD) after table loads
         setTimeout(loadHistoricalCOT, 100);
     }
 }
@@ -7632,58 +7970,30 @@ function displayCurrencies(currencies){
 
 function renderBarChart(currencies){
     const ctx=document.getElementById('cotBarChart').getContext('2d');
-    
-    // Sort currencies by Long % ascending (lowest to highest)
     const sorted = [...currencies].sort((a, b) => a.long_pct - b.long_pct);
-    
     const labels=sorted.map(c=>c.currency);
     const longPcts=sorted.map(c=>c.long_pct);
     const shortPcts=sorted.map(c=>c.short_pct);
-    
     if(barChart) barChart.destroy();
-    
-    // UPDATED: Stacked Bar Chart Config
     barChart=new Chart(ctx,{
         type:'bar',
         data:{
             labels:labels,
             datasets:[
-                {
-                    label:'Long %',
-                    data:longPcts,
-                    backgroundColor:'#00e5a0',
-                    borderColor:'#00e5a0',
-                    borderWidth:1
-                },
-                {
-                    label:'Short %',
-                    data:shortPcts,
-                    backgroundColor:'#ff4d6d',
-                    borderColor:'#ff4d6d',
-                    borderWidth:1
-                }
+                {label:'Long %',data:longPcts,backgroundColor:'#00e5a0',borderColor:'#00e5a0',borderWidth:1},
+                {label:'Short %',data:shortPcts,backgroundColor:'#ff4d6d',borderColor:'#ff4d6d',borderWidth:1}
             ]
         },
         options:{
             responsive:true,
             maintainAspectRatio:true,
             scales:{
-                x:{
-                    stacked:true, // Stacks Long & Short vertically
-                    title:{display:true,text:'Currency',color:'#a0b0c0'},
-                    ticks:{color:'#fff'}
-                },
-                y:{
-                    stacked:true,
-                    title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},
-                    ticks:{color:'#fff',beginAtZero:true,max:100}
-                }
+                x:{stacked:true,title:{display:true,text:'Currency',color:'#a0b0c0'},ticks:{color:'#fff'}},
+                y:{stacked:true,title:{display:true,text:'Percentage (%)',color:'#a0b0c0'},ticks:{color:'#fff',beginAtZero:true,max:100}}
             },
             plugins:{
                 legend:{labels:{color:'#fff'},position:'top'},
-                tooltip:{callbacks:{label:function(context){
-                    return `${context.dataset.label}: ${context.raw.toFixed(1)}%`;
-                }}}
+                tooltip:{callbacks:{label:function(context){return `${context.dataset.label}: ${context.raw.toFixed(1)}%`;}}}
             }
         }
     });
@@ -7745,18 +8055,12 @@ function renderHistoryChart(history) {
             responsive: true,
             maintainAspectRatio: true,
             scales: {
-                x: {
-                    ticks: { color: '#a0b0c0', maxRotation: 45, autoSkip: true },
-                    title: { display: true, text: 'Report Date', color: '#a0b0c0' }
-                },
-                y: {
-                    ticks: { color: '#a0b0c0' },
-                    title: { display: true, text: 'Net Positions (Contracts)', color: '#a0b0c0' }
-                }
+                x: {ticks:{color:'#a0b0c0',maxRotation:45,autoSkip:true},title:{display:true,text:'Report Date',color:'#a0b0c0'}},
+                y: {ticks:{color:'#a0b0c0'},title:{display:true,text:'Net Positions (Contracts)',color:'#a0b0c0'}}
             },
             plugins: {
-                legend: { labels: { color: '#fff' } },
-                tooltip: { callbacks: { label: (ctx) => `${ctx.dataset.label}: ${ctx.raw.toLocaleString()}` } }
+                legend:{labels:{color:'#fff'}},
+                tooltip:{callbacks:{label:(ctx)=>`${ctx.dataset.label}: ${ctx.raw.toLocaleString()}`}}
             }
         }
     });
@@ -7764,10 +8068,7 @@ function renderHistoryChart(history) {
 
 function displayHistoricalInfo(data) {
     const infoDiv = document.getElementById('historicalInfo');
-    if (!data.bias && !data.trend) {
-        infoDiv.innerHTML = '';
-        return;
-    }
+    if (!data.bias && !data.trend) { infoDiv.innerHTML = ''; return; }
     let biasHtml = '';
     if (data.bias) {
         const biasClass = data.bias === 'Bullish' ? 'badge-bullish' : (data.bias === 'Bearish' ? 'badge-bearish' : 'badge-neutral');
@@ -7783,308 +8084,13 @@ function displayHistoricalInfo(data) {
 
 function logout(){fetch('/logout').then(()=>window.location.href='/login');}
 
+// ---------- INITIALIZATION ----------
 restoreSidebarState();
 loadCurrencies();
 
-// Initialize Lucide icons
 setTimeout(() => {
     if (typeof lucide !== 'undefined') lucide.createIcons();
 }, 100);
-</script>
-</body>
-</html>''')
-
-                # Sentiment (with Lucide icons)
-        with open('templates/sentiment.html', 'w') as f:
-            f.write('''<!DOCTYPE html>
-<html>
-<head>
-    <title>Sentiment – Tradion</title>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <link rel="icon" href="/static/favicon.png" type="image/png">
-    <script src="https://unpkg.com/lucide@latest"></script>
-    <style>
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', 'Inter', sans-serif;
-            background: #0B0F1A;
-            color: #E0E0E0;
-            display: flex;
-            min-height: 100vh;
-        }
-
-        /* ---------- SIDEBAR ---------- */
-        .sidebar {
-            width: 280px;
-            background: #121826;
-            min-height: 100vh;
-            padding: 20px;
-            position: fixed;
-            left: 0;
-            top: 0;
-            border-right: 1px solid #2a3040;
-            z-index: 100;
-        }
-        .sidebar .logo { font-size: 22px; color: #00e5ff; text-align: center; margin-bottom: 30px; }
-        .sidebar .menu-item {
-            display: flex; align-items: center; padding: 12px 15px; margin: 5px 0;
-            border-radius: 8px; cursor: pointer; color: #a0b0c0; transition: 0.2s;
-        }
-        .sidebar .menu-item:hover { background: rgba(0,229,255,0.08); color: #00e5ff; }
-        .sidebar .menu-item.active {
-            background: linear-gradient(135deg, #00e5ff, #00b8d4); color: #0B0F1A;
-        }
-        .sidebar .menu-icon { font-size: 20px; margin-right: 12px; }
-        .sidebar .menu-icon svg { width: 20px; height: 20px; vertical-align: middle; }
-
-        /* ---------- MAIN CONTENT ---------- */
-        .main-content {
-            flex: 1; margin-left: 280px; padding: 24px 32px;
-        }
-        .header {
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;
-        }
-        .header h2 { color: #00e5ff; font-size: 1.8rem; }
-
-        .sort-btn {
-            background: #1a1f2e; border: 1px solid #2a3040; color: #e0e0e0;
-            padding: 8px 16px; border-radius: 8px; cursor: pointer;
-            display: flex; align-items: center; gap: 8px; font-size: 0.9rem;
-        }
-        .sort-btn:hover { background: #2a3040; }
-
-        .search-box {
-            padding: 10px 15px; background: #1a1f2e; border: 1px solid #2a3040;
-            border-radius: 8px; color: #fff; width: 100%; max-width: 300px; margin-bottom: 16px;
-        }
-
-        /* ---------- TABLE ---------- */
-        .sentiment-table {
-            width: 100%; border-collapse: collapse; background: #121826;
-            border-radius: 12px; overflow: hidden; border: 1px solid #2a3040;
-            table-layout: auto;
-        }
-        .sentiment-table th {
-            background: rgba(0,229,255,0.05); color: #94a3b8; font-size: 0.75rem;
-            font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;
-            padding: 12px 16px; border-bottom: 1px solid #2a3040; text-align: left;
-        }
-        .sentiment-table td {
-            padding: 10px 16px; border-bottom: 1px solid rgba(42,48,64,0.5); font-size: 0.85rem;
-        }
-        .sentiment-table tr:last-child td { border-bottom: none; }
-
-        /* Column widths */
-        .col-pair { width: 120px; }
-        .col-signal { width: 130px; }
-        .col-long { width: 70px; text-align: left; }
-        .col-bar { /* takes remaining space */ }
-        .col-short { width: 70px; text-align: right; }
-
-        .pair-cell {
-            font-weight: 600; color: #fff;
-        }
-
-        /* Signal dot + text */
-        .signal-cell {
-            display: flex; align-items: center; gap: 8px;
-        }
-        .signal-dot {
-            width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0;
-        }
-        .dot-strong-buy  { background: #00e5a0; }
-        .dot-buy         { background: #4ade80; }
-        .dot-neutral     { background: #ffb800; }
-        .dot-sell        { background: #ff7b8c; }
-        .dot-strong-sell { background: #ff4d6d; }
-        .signal-text {
-            font-size: 0.8rem; font-weight: 500; color: #c0c8d0;
-        }
-
-        /* Bar */
-        .bar-wrapper {
-            display: flex; height: 20px; background: #1a1f2e; border-radius: 10px; overflow: hidden;
-            width: 100%;
-        }
-        .bar-long {
-            background: #00e5a0; height: 100%;
-        }
-        .bar-short {
-            background: #ff4d6d; height: 100%;
-        }
-
-        .pct-long  { color: #00e5a0; font-weight: 600; }
-        .pct-short { color: #ff4d6d; font-weight: 600; }
-
-        /* ---------- HAMBURGER ---------- */
-        .hamburger {
-            display: none; font-size: 28px; cursor: pointer; color: #00e5ff;
-            position: fixed; top: 15px; left: 20px; z-index: 1100;
-            background: #121826; padding: 8px 12px; border-radius: 8px; border: 1px solid #2a3040;
-        }
-
-        @media (max-width: 768px) {
-            .sidebar {
-                transform: translateX(-100%); transition: 0.3s ease;
-                width: 260px; z-index: 1050; position: fixed; top: 0; left: 0; height: 100%;
-                background: #121826;
-            }
-            .sidebar.open { transform: translateX(0); }
-            .main-content { margin-left: 0 !important; padding: 60px 16px 20px 16px !important; width: 100%; }
-            .hamburger { display: block; }
-            .sentiment-table th, .sentiment-table td { padding: 8px 10px; font-size: 0.75rem; }
-            .col-pair { width: 90px; }
-            .col-signal { width: 100px; }
-            .col-long, .col-short { width: 55px; }
-        }
-    </style>
-</head>
-<body>
-
-<div class="hamburger" onclick="toggleSidebar()">☰</div>
-
-<!-- SIDEBAR -->
-<div class="sidebar" id="sidebar">
-    <div class="logo">⚡ Tradion</div>
-    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
-    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
-    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
-    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
-    <div class="menu-item active" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
-    <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
-     onclick="window.location.href='/economic-calendar'">
-    <i data-lucide="calendar-days" class="menu-icon"></i>
-    <span>Economic Calendar</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
-    <div class="menu-item" onclick="window.location.href='/carry-scanner'">
-    <i data-lucide="dollar-sign" class="menu-icon"></i>
-    <span>Carry Trade Scanner</span>
-</div>
-    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
-    {% if is_admin %}
-    <div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>
-    {% endif %}
-    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
-    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
-    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
-</div>
-
-<!-- MAIN CONTENT -->
-<div class="main-content">
-    <div class="header">
-        <h2>Market Sentiment</h2>
-        <button class="sort-btn" id="sortBtn" onclick="toggleSort()">
-            <i data-lucide="arrow-up-down" style="width:16px;height:16px"></i>
-            Sort: <span id="sortLabel">Ascending</span>
-        </button>
-    </div>
-    <input type="text" id="searchSentiment" class="search-box" placeholder="Search pair...">
-
-    <table class="sentiment-table" id="sentimentTable">
-        <thead>
-            <tr>
-                <th class="col-pair">Pair</th>
-                <th class="col-signal">Signal</th>
-                <th class="col-long">Long</th>
-                <th class="col-bar">Sentiment Bar</th>
-                <th class="col-short">Short</th>
-            </tr>
-        </thead>
-        <tbody></tbody>
-    </table>
-</div>
-
-<script>
-    // Signal thresholds
-    function getSignal(longPct) {
-        if (longPct >= 80) return { label: 'Strong Sell', dot: 'dot-strong-sell' };
-        if (longPct >= 60) return { label: 'Sell', dot: 'dot-sell' };
-        if (longPct <= 20) return { label: 'Strong Buy', dot: 'dot-strong-buy' };
-        if (longPct <= 40) return { label: 'Buy', dot: 'dot-buy' };
-        return { label: 'Neutral', dot: 'dot-neutral' };
-    }
-
-    let sentimentData = [];
-    let sortAscending = true;
-
-    async function loadSentiment() {
-        const res = await fetch('/api/sentiment');
-        const data = await res.json();
-        sentimentData = data;
-        sortAndRender();
-    }
-
-    function toggleSort() {
-        sortAscending = !sortAscending;
-        document.getElementById('sortLabel').textContent = sortAscending ? 'Ascending' : 'Descending';
-        sortAndRender();
-    }
-
-    function sortAndRender() {
-        const sorted = [...sentimentData].sort((a, b) => {
-            return sortAscending ? a.long_pct - b.long_pct : b.long_pct - a.long_pct;
-        });
-        renderSentiment(sorted);
-    }
-
-    function renderSentiment(data) {
-        const tbody = document.querySelector('#sentimentTable tbody');
-        tbody.innerHTML = '';
-        data.forEach(s => {
-            const long = Math.round(s.long_pct);    // rounded to whole number
-            const short = Math.round(s.short_pct);  // rounded to whole number
-            const signal = getSignal(long);
-
-            const tr = document.createElement('tr');
-            tr.innerHTML = `
-                <td class="col-pair"><span class="pair-cell">${s.pair}</span></td>
-                <td class="col-signal">
-                    <div class="signal-cell">
-                        <span class="signal-dot ${signal.dot}"></span>
-                        <span class="signal-text">${signal.label}</span>
-                    </div>
-                </td>
-                <td class="col-long pct-long">${long}%</td>
-                <td class="col-bar">
-                    <div class="bar-wrapper">
-                        <div class="bar-long" style="width:${long}%"></div>
-                        <div class="bar-short" style="width:${short}%"></div>
-                    </div>
-                </td>
-                <td class="col-short pct-short">${short}%</td>
-            `;
-            tbody.appendChild(tr);
-        });
-        if (typeof lucide !== 'undefined') lucide.createIcons();
-    }
-
-    document.getElementById('searchSentiment').addEventListener('input', function() {
-        const term = this.value.toLowerCase();
-        const rows = document.querySelectorAll('#sentimentTable tbody tr');
-        rows.forEach(row => {
-            const pair = row.querySelector('.pair-cell').textContent.toLowerCase();
-            row.style.display = pair.includes(term) ? '' : 'none';
-        });
-    });
-
-    function toggleSidebar() {
-        document.getElementById('sidebar').classList.toggle('open');
-    }
-
-    document.addEventListener('click', function(event) {
-        const sidebar = document.getElementById('sidebar');
-        const hamburger = document.querySelector('.hamburger');
-        if (sidebar && hamburger && !sidebar.contains(event.target) && !hamburger.contains(event.target) && sidebar.classList.contains('open')) {
-            sidebar.classList.remove('open');
-        }
-    });
-
-    function logout() { fetch('/logout').then(() => window.location.href = '/login'); }
-
-    loadSentiment();
-    setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
 </html>''')
