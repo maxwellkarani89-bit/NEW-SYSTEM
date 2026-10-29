@@ -3674,10 +3674,19 @@ def api_put_call_ratio():
     """Latest PCR snapshot per asset + last 30 daily history for charts."""
     out = []
     for asset, cfg in PCR_TICKER_MAP.items():
-        latest = PutCallRatio.query.filter_by(asset=asset)\
-            .order_by(PutCallRatio.recorded_at.desc()).first()
-        history = PutCallRatio.query.filter_by(asset=asset)\
-            .order_by(PutCallRatio.recorded_at.asc()).limit(30).all()
+        try:
+            latest = PutCallRatio.query.filter_by(asset=asset)\
+                .order_by(PutCallRatio.recorded_at.desc()).first()
+            history = PutCallRatio.query.filter_by(asset=asset)\
+                .order_by(PutCallRatio.recorded_at.asc()).limit(30).all()
+        except Exception as e:
+            try:
+                db.session.rollback()
+            except Exception:
+                pass
+            print(f"⚠️ PCR history for {asset} failed: {e}")
+            latest = None
+            history = []
         out.append({
             "asset": asset,
             "ticker": cfg["ticker"],
@@ -3695,7 +3704,6 @@ def api_put_call_ratio():
             } for h in history],
         })
     return jsonify(out)
-
 
 @app.route('/api/put-call-ratio/refresh', methods=['POST'])
 @login_required
@@ -8772,6 +8780,11 @@ class PutCallRatio(db.Model):
     recorded_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
 
     __table_args__ = (db.Index('idx_pcr_asset_date', 'asset', 'recorded_at'),)
+    # Create any tables defined AFTER the initial db.create_all() block at the top of the file.
+# This is required because `class PutCallRatio` is defined below the startup db.create_all(),
+# so on first deploy (and on Render where __main__ doesn't run) the table would never be created.
+with app.app_context():
+    db.create_all()
 
 
 @app.route('/carry-scanner')
@@ -9068,9 +9081,21 @@ def get_put_call_sentiment_score(asset: str):
     asset = asset.upper()
     if asset not in PCR_TICKER_MAP:
         return None
-    latest = PutCallRatio.query.filter_by(asset=asset)\
-        .order_by(PutCallRatio.recorded_at.desc()).first()
-    return latest.score if latest else None
+    try:
+        latest = PutCallRatio.query.filter_by(asset=asset)\
+            .order_by(PutCallRatio.recorded_at.desc()).first()
+        return latest.score if latest else None
+    except Exception as e:
+        # Postgres aborts the WHOLE session transaction on any error. Without this
+        # rollback, one failed query (e.g. missing table) cascades to every
+        # subsequent query in the same request — BTC and OIL end up showing
+        # InFailedSqlTransaction when only XAU is really broken.
+        try:
+            db.session.rollback()
+        except Exception:
+            pass
+        print(f"⚠️ PCR lookup for {asset} failed: {e}")
+        return None
 
 
 
