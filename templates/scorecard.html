@@ -13,24 +13,13 @@
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
         a{text-decoration:none;color:inherit}
 
-        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+        /* ---------- SIDEBAR ---------- */
         .sidebar{
-            width:280px;
-            background:#121826;
-            min-height:100vh;
-            padding:20px;
-            position:fixed;
-            left:0;
-            top:0;
-            border-right:1px solid #2a3040;
-            z-index:1000;
-            transition: transform 0.3s ease;
-            overflow-y:auto;
-            -webkit-overflow-scrolling:touch;
+            width:280px;background:#121826;min-height:100vh;padding:20px;
+            position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;
+            transition: transform 0.3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;
         }
-        .sidebar.closed-mobile{
-            transform: translateX(-100%);
-        }
+        .sidebar.closed-mobile{transform: translateX(-100%);}
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
@@ -38,72 +27,29 @@
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
 
-        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+        /* ---------- MOBILE HEADER ---------- */
         .mobile-header{
-            display:none;
-            position:fixed;
-            top:0;
-            left:0;
-            right:0;
-            height:56px;
-            background:#121826;
-            border-bottom:1px solid #2a3040;
-            z-index:999;
-            align-items:center;
-            padding:0 16px;
-            gap:12px;
+            display:none;position:fixed;top:0;left:0;right:0;height:56px;
+            background:#121826;border-bottom:1px solid #2a3040;z-index:999;
+            align-items:center;padding:0 16px;gap:12px;
         }
-        .mobile-header .hamburger{
-            background:none;
-            border:none;
-            color:#E0E0E0;
-            cursor:pointer;
-            padding:4px;
-            display:flex;
-            align-items:center;
-        }
-        .mobile-header .mobile-logo{
-            font-size:20px;
-            font-weight:800;
-            color:#00e5ff;
-            flex:1;
-        }
+        .mobile-header .hamburger{background:none;border:none;color:#E0E0E0;cursor:pointer;padding:4px;display:flex;align-items:center;}
+        .mobile-header .mobile-logo{font-size:20px;font-weight:800;color:#00e5ff;flex:1;}
 
-        /* ---------- OVERLAY (for mobile sidebar) ---------- */
-        .sidebar-overlay{
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.5);
-            z-index:998;
-            transition: opacity 0.3s;
-        }
-        .sidebar-overlay.active{
-            display:block;
-        }
+        /* ---------- OVERLAY ---------- */
+        .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:998;transition: opacity 0.3s;}
+        .sidebar-overlay.active{display:block;}
 
         /* ---------- MAIN CONTENT ---------- */
-        .main-content{
-            flex:1;
-            margin-left:280px;
-            padding:12px 20px;
-            transition: margin-left 0.3s;
-            width:100%;
-            min-height:100vh;
-        }
+        .main-content{flex:1;margin-left:280px;padding:12px 20px;transition: margin-left 0.3s;width:100%;min-height:100vh;}
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
         .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
-            background:#121826;
-            border-radius:16px;
-            padding:12px 12px 16px 12px;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            border:1px solid #2a3040;
-            position:relative;
+            background:#121826;border-radius:16px;padding:12px 12px 16px 12px;
+            display:flex;flex-direction:column;align-items:center;
+            border:1px solid #2a3040;position:relative;
         }
         .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
@@ -128,12 +74,7 @@
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
         .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-        .panel{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            border:1px solid #2a3040;
-        }
+        .panel{background:#121826;border-radius:12px;padding:10px;border:1px solid #2a3040;}
         .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
@@ -155,33 +96,16 @@
         .panel th:nth-child(5),.panel td:nth-child(5){width:15%}
         .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
         .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
-        .history-chart-container{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            margin-top:10px;
-            border:1px solid #2a3040;
-        }
+        .history-chart-container{background:#121826;border-radius:12px;padding:10px;margin-top:10px;border:1px solid #2a3040;}
         .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .chart-wrapper{position:relative;height:240px;width:100%}
 
-        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
+        /* ---------- RESPONSIVE ---------- */
         @media (max-width:768px){
             .mobile-header{display:flex}
-            .sidebar{
-                transform: translateX(-100%);
-                top:0;left:0;height:100%;width:280px;
-                z-index:1000;
-                box-shadow:2px 0 12px rgba(0,0,0,0.4);
-            }
+            .sidebar{transform: translateX(-100%);top:0;left:0;height:100%;width:280px;z-index:1000;box-shadow:2px 0 12px rgba(0,0,0,0.4);}
             .sidebar.open{transform: translateX(0)}
-            .main-content{
-                margin-left:0 !important;
-                padding-top:68px;
-                padding-left:15px;
-                padding-right:15px;
-                padding-bottom:20px;
-            }
+            .main-content{margin-left:0 !important;padding-top:68px;padding-left:15px;padding-right:15px;padding-bottom:20px;}
             .scorecard-grid{grid-template-columns:1fr;gap:15px}
             .gauge-container{width:140px;height:80px}
             .panel{padding:8px}
@@ -196,7 +120,6 @@
 </head>
 <body>
 
-<!-- ========== MOBILE HEADER ========== -->
 <header class="mobile-header">
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
         <i data-lucide="menu" style="width:24px;height:24px;"></i>
@@ -204,10 +127,8 @@
     <span class="mobile-logo">⚡ Tradion</span>
 </header>
 
-<!-- ========== SIDEBAR OVERLAY ========== -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
@@ -216,6 +137,7 @@
     <div class="menu-item" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -229,7 +151,6 @@
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
-<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Asset Scorecard</h2>
@@ -323,7 +244,6 @@
 </div>
 
 <script>
-    // ---------- MOBILE SIDEBAR TOGGLE ----------
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
     const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -341,23 +261,18 @@
     }
 
     hamburgerBtn.addEventListener('click', () => {
-        if (sidebar.classList.contains('open')) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
     });
 
     overlay.addEventListener('click', closeSidebar);
 
     function navigate(url) {
         window.location.href = url;
-        if (window.innerWidth <= 768) {
-            closeSidebar();
-        }
+        if (window.innerWidth <= 768) closeSidebar();
     }
 
-    // ---------- DATA & LOGIC (unchanged) ----------
+    // ---------- DATA ----------
     const currencies = {{ currencies|tojson }};
     const select = document.getElementById('symbolSelect');
     currencies.forEach(cur => {
@@ -375,6 +290,8 @@
         "Jobs Market Bias"
     ];
 
+    const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
+
     let historyChart = null;
 
     async function loadScorecard() {
@@ -386,8 +303,26 @@
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             const data = await res.json();
             console.log('API response received.', data);
-            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-            updateScores(data);
+
+            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
+
+            // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
+            const fundamentalsScore = Number(data.fundamentals_score ?? 0);
+            const technicalScore    = Number(data.technical_score    ?? 0);
+
+            let cotScore = Number(data.sentiment_cot_score ?? 0);
+            if (isStandalone) {
+                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
+            }
+
+            // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
+            const tradionScore = technicalScore + cotScore + fundamentalsScore;
+
+            const bias  = getBiasFromScore(tradionScore);
+            const color = getColorFromScore(tradionScore);
+
+            updateGauge(tradionScore, bias, color);
+            updateScores({ tradionScore, technicalScore, cotScore, fundamentalsScore });
             renderCategoryCards(data);
             setTimeout(() => loadScoreHistory(symbol), 100);
         } catch(e) {
@@ -395,6 +330,26 @@
         } finally {
             overlayEl.classList.add('hidden');
         }
+    }
+
+    function getBiasFromScore(score) {
+        if (score >= 16) return "EXTREME BULLISH";
+        if (score >= 10) return "VERY BULLISH";
+        if (score >= 5) return "BULLISH";
+        if (score <= -16) return "EXTREME BEARISH";
+        if (score <= -10) return "VERY BEARISH";
+        if (score <= -5) return "BEARISH";
+        return "NEUTRAL";
+    }
+
+    function getColorFromScore(score) {
+        if (score >= 16) return "#00e5a0";
+        if (score >= 10) return "#00cc88";
+        if (score >= 5) return "#00aa66";
+        if (score <= -16) return "#ff4d6d";
+        if (score <= -10) return "#ff6688";
+        if (score <= -5) return "#ff8099";
+        return "#ffaa00";
     }
 
     async function loadScoreHistory(asset) {
@@ -452,8 +407,7 @@
                             color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
                             lineWidth: (context) => context.tick.value === 0 ? 1 : 0
                         },
-                        min: -20,
-                        max: 20
+                        min: -20, max: 20
                     },
                     x: {
                         title: { display: true, text: 'Date', color: '#a0b0c0' },
@@ -479,11 +433,12 @@
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
-    function updateScores(data) {
-        setScoreValue('tradionScore', data.tradion_score);
-        setScoreValue('technicalScore', data.technical_score);
-        setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score);
+    // Sets the four bars from the pre-computed scores (no additional math here).
+    function updateScores(scores) {
+        setScoreValue('tradionScore', scores.tradionScore);
+        setScoreValue('technicalScore', scores.technicalScore);
+        setScoreValue('sentimentCOTScore', scores.cotScore);
+        setScoreValue('fundamentalsScore', scores.fundamentalsScore);
     }
 
     function setScoreValue(id, value) {
@@ -518,6 +473,19 @@
                 else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
                 html += `<tr><td>${ind.name}</td><td class="value ${labelClass}">${label}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
             }
+            else if (ind.signal_value !== undefined && ind.signal_value !== null &&
+                     (typeof ind.actual !== 'number' || typeof ind.forecast !== 'number')) {
+                const sv = Number(ind.signal_value) || 0;
+                let signal = sv > 0 ? 'Bullish' : (sv < 0 ? 'Bearish' : 'Neutral');
+                let signalClass = sv > 0 ? 'positive' : (sv < 0 ? 'negative' : 'neutral');
+                if (ind.signal) {
+                    signal = ind.signal;
+                    signalClass = signal === 'Bullish' ? 'positive'
+                                : signal === 'Bearish' ? 'negative'
+                                : 'neutral';
+                }
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
+            }
             else {
                 const surprise = ind.actual - ind.forecast;
                 const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
@@ -539,10 +507,29 @@
         let label = 'Neutral', labelClass = 'neutral';
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+
+        const baseUpper = (data.base || '').toUpperCase();
+        let pcrRow = '';
+        if (PCR_ASSETS.includes(baseUpper)) {
+            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
+                ? Number(data.pcr_score)
+                : Number(data.sentiment_score || 0);
+
+            let pcrClass = 'neutral';
+            let pcrDisplay = '0';
+            if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
+            else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
+
+            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        }
+
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
+                        <tbody>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                            ${pcrRow}
+                        </tbody>
                     </table>
                 </div>`;
     }
@@ -556,9 +543,14 @@
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
-        // Crowd Sentiment (COT) card
+        // ---------- Crowd Sentiment (COT) card ----------
         const crowdCategory = firstTwo[0];
-        const crowdBiasScore = data.category_bias[crowdCategory] || 0;
+        const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
+        const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
+        let crowdBiasScore = cotScoreForBias;
+        if (PCR_ASSETS.includes((data.base || '').toUpperCase())) {
+            crowdBiasScore += Number(data.sentiment_score || 0);
+        }
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
@@ -567,15 +559,52 @@
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card
+        // ---------- Technical Bias card ----------
         const techCategory = firstTwo[1];
         const techIndicators = data.base_indicators.filter(ind => ind.category === techCategory);
-        const techBiasScore = data.category_bias[techCategory] || 0;
+        const isStandaloneTech = PCR_ASSETS.includes((data.base || '').toUpperCase());
+
+        const techBiasScore = isStandaloneTech
+            ? Number(data.technical_score || 0)
+            : Number((data.category_bias || {})[techCategory] || 0);
+
         const techCard = document.createElement('div');
         techCard.className = 'panel';
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>`;
-        if (techIndicators.length === 0) {
+
+        if (isStandaloneTech) {
+            const trendInd = techIndicators.find(i => i.name === '21-day SMA Trend');
+            const trendScore = trendInd ? Number(trendInd.signal_value || 0) : 0;
+            const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
+            const trendClass  = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
+
+            const seasSignal = data.seasonality_bias || 'Neutral';
+            const seasScore  = Number(data.seasonality_score || 0);
+            const seasClass  = seasScore > 0 ? 'positive' : (seasScore < 0 ? 'negative' : 'neutral');
+
+            techHtml += `
+                <div class="indicator-row">
+                    <span class="indicator-label">21-day SMA Trend</span>
+                    <div class="indicator-values">
+                        <span class="value ${trendClass}">${trendSignal}</span>
+                        <span class="value ${trendClass}">${trendScore > 0 ? '+' : ''}${trendScore}</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                    </div>
+                </div>
+                <div class="indicator-row">
+                    <span class="indicator-label">Seasonality</span>
+                    <div class="indicator-values">
+                        <span class="value ${seasClass}">${seasSignal}</span>
+                        <span class="value ${seasClass}">${seasScore > 0 ? '+' : ''}${seasScore}</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                    </div>
+                </div>`;
+        } else if (techIndicators.length === 0) {
             techHtml += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
         } else {
             techHtml += buildFullTable(techIndicators, data);
@@ -584,7 +613,6 @@
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;

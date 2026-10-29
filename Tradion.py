@@ -18,6 +18,17 @@ import yfinance as yf
 from pathlib import Path
 import sqlite3
 import hashlib
+import re
+try:
+    import cloudscraper
+    HAS_CLOUDSCRAPER = True
+except ImportError:
+    HAS_CLOUDSCRAPER = False
+try:
+    from bs4 import BeautifulSoup
+    HAS_BS4 = True
+except ImportError:
+    HAS_BS4 = False
 from tvDatafeed import TvDatafeed, Interval
 app = Flask(__name__)
 # -------- PASTE THE DATABASE CONFIGURATION HERE --------
@@ -318,7 +329,7 @@ with app.app_context():
         db.session.commit()
         
     # List of all currencies (same as MAJOR_CURRENCIES defined later)
-    all_currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "XAU", "BTC"]
+    all_currencies = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD", "XAU", "BTC", "OIL"]
 
     for curr in all_currencies:
         # Central Bank Guidance (Monetary Policy) – for all currencies
@@ -388,7 +399,7 @@ UPLOAD_FOLDER.mkdir(exist_ok=True)
 COT_FILE_PATH = str(UPLOAD_FOLDER / "Max_3.xlsx")
 ECON_DATA_FILE_PATH = str(UPLOAD_FOLDER / "Economical_analyzer.xlsx")
 
-MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD","XAU","BTC"]
+MAJOR_CURRENCIES = ["USD", "EUR", "GBP", "JPY", "AUD", "CAD", "CHF", "NZD","XAU","BTC","OIL"]
 
 ALL_PAIRS = []
 usd_pairs = [("EUR", "USD"), ("GBP", "USD"), ("AUD", "USD"), ("NZD", "USD"),
@@ -405,6 +416,7 @@ ALL_PAIRS.extend(cross_pairs)
 # Add XAUUSD as a special pair
 ALL_PAIRS.append(("XAU", "USD"))
 ALL_PAIRS.append(("BTC", "USD"))
+ALL_PAIRS.append(("OIL", "USD"))
 
 SYMBOL_MAPPING = {
     "NZD/CAD": "NZDCAD=X", "GBP/NZD": "GBPNZD=X", "AUD/CHF": "AUDCHF=X",
@@ -419,6 +431,7 @@ SYMBOL_MAPPING = {
     "NZD/CHF": "NZDCHF=X",
     "XAU/USD": "GC=F",
     "BTC/USD": "BTC-USD",
+    "OIL": "CL=F",
 }
 
 LOWER_BETTER_INDICATORS = ["Unemployment Rate", "Jobless Claims", "Claims", "Unemployment Claims"]
@@ -427,6 +440,7 @@ cached_analysis = None
 cached_heatmap = None
 last_analysis_time = None
 manual_refresh_triggered = False
+scheduler = None   # populated in __main__; used by /debug/jobs
 cached_bond_score = None
 cached_bond_score_time = None
 BOND_CACHE_SECONDS = 3600  # 1 hour
@@ -926,9 +940,9 @@ def fetch_fastbull_sentiment():
         "USDCAD", "USDCHF", "EURCAD", "EURAUD", "EURCHF",
         "EURNZD", "USDJPY", "GBPAUD", "EURGBP", "GBPCAD",
         "GBPNZD", "AUDCAD", "NZDCAD", "GBPCHF", "AUDNZD",
-        "AUDCHF", "BTCUSD", "CHFJPY", "EURJPY", "CADCHF",
-        "NZDCHF", "GBPJPY", "XAUUSD", "EURUSD", "GBPUSD",
-        "CADJPY", "NZDUSD", "AUDUSD", "NZDJPY", "AUDJPY"
+        "AUDCHF", "CHFJPY", "EURJPY", "CADCHF",
+        "NZDCHF", "GBPJPY", "EURUSD", "GBPUSD",
+        "CADJPY", "NZDUSD", "AUDUSD", "NZDJPY", "AUDJPY",
     ]
     
     try:
@@ -945,7 +959,6 @@ def fetch_fastbull_sentiment():
             print("FastBull: No broker data found")
             return None
         
-        # Build dict of long percentages per pair
         pair_long_values = {pair: [] for pair in target_pairs}
         for broker_entry in all_broker_data:
             pairs = broker_entry.get("pairValueModels", [])
@@ -958,7 +971,6 @@ def fetch_fastbull_sentiment():
                     except (TypeError, ValueError):
                         pass
         
-        # Compute averages and convert to display format
         filtered_result = {}
         for pair, values in pair_long_values.items():
             if values:
@@ -972,29 +984,15 @@ def fetch_fastbull_sentiment():
             else:
                 filtered_result[pair] = None
         
-        # Convert keys to display format (with slashes)
+        # ---------- CORRECTED DISPLAY BLOCK ----------
         display_result = {}
         for api_pair, values in filtered_result.items():
-            if values:
-                if len(api_pair) == 6 and api_pair != "BTCUSD":
-                    display_pair = api_pair[:3] + "/" + api_pair[3:]
-                elif api_pair == "XAUUSD":
-                    display_pair = "XAU/USD"
-                elif api_pair == "BTCUSD":
-                    display_pair = "BTC/USD"
-                else:
-                    display_pair = api_pair
-                display_result[display_pair] = values
+            if len(api_pair) == 6:
+                display_pair = api_pair[:3] + "/" + api_pair[3:]
             else:
-                if len(api_pair) == 6 and api_pair != "BTCUSD":
-                    display_pair = api_pair[:3] + "/" + api_pair[3:]
-                elif api_pair == "XAUUSD":
-                    display_pair = "XAU/USD"
-                elif api_pair == "BTCUSD":
-                    display_pair = "BTC/USD"
-                else:
-                    display_pair = api_pair
-                display_result[display_pair] = None
+                display_pair = api_pair
+
+            display_result[display_pair] = values if values else None
         
         return display_result
     except Exception as e:
@@ -1128,6 +1126,15 @@ def get_all_latest_retail_sentiment() -> list:
 
 
 def get_retail_sentiment_score(pair: str) -> int:
+    # --- PCR override for BTC, XAU, OIL ---
+    base = pair.split('/')[0].upper() if '/' in pair else pair.upper()
+    if base in PCR_TICKER_MAP:
+        pcr = get_put_call_sentiment_score(base)
+        if pcr is not None:
+            return pcr
+        # if PCR has no data, fall through to retail as backup
+
+    # --- Original retail logic (unchanged) ---
     data = get_latest_retail_sentiment(pair)
     if data:
         return data['retail_bias']
@@ -1234,7 +1241,7 @@ def get_asset_score(asset: str) -> float:
     """
     base = asset.upper()
     quote = None
-    is_standalone = base in ["XAU", "BTC"]
+    is_standalone = base in ["XAU", "BTC", "OIL"]
 
     # Technical (21-day SMA)
     yf_symbol = SYMBOL_MAPPING.get(asset, asset + '=X')
@@ -1396,6 +1403,13 @@ def save_all_asset_scores():
             retail_cache[s.pair] = 1
         else:
             retail_cache[s.pair] = 00
+            
+        # ---------- PCR OVERRIDE FOR BTC/XAU/OIL ----------
+    for _asset in ("BTC", "XAU", "OIL"):
+        _pcr = get_put_call_sentiment_score(_asset)
+        if _pcr is not None:
+            retail_cache[f"{_asset}/USD"] = _pcr
+            retail_cache[_asset] = _pcr
 
     # 1d. Seasonality
     monthly_biases = MonthlyBias.query.all()
@@ -1973,7 +1987,7 @@ def get_econ_pair_bias(base, quote):
     diff = base_pct - quote_pct
     
     # Invert for XAU/USD and BTC/USD (these pairs move opposite to USD)
-    if (base == "XAU" and quote == "USD") or (base == "BTC" and quote == "USD"):
+    if (base == "XAU" and quote == "USD") or (base == "BTC" and quote == "USD") or (base == "OIL" and quote == "USD"):
         diff = -diff
     
     # Map absolute difference to score (0 to 4, with sign)
@@ -2153,7 +2167,7 @@ def detailed_analysis():
     results = []
     for base, quote in ALL_PAIRS:
         pair = f"{base}/{quote}"
-        is_standalone = base in ["XAU", "BTC"] and quote == "USD"
+        is_standalone = base in ["XAU", "BTC", "OIL"] and quote == "USD"
         try:
             if is_standalone:
                 base_scores = econ_cache.get(base, {})
@@ -2440,12 +2454,15 @@ def api_asset_scorecard(symbol):
         quote = None
 
     # Determine if this is a standalone asset (XAU or BTC)
-    is_standalone = base in ["XAU", "BTC"] and quote == "USD"
+    is_standalone = base in ["XAU", "BTC", "OIL"] and (quote == "USD" or quote is None)
 
     # ----- STANDALONE ASSET LOGIC (XAU/BTC) – UNCHANGED -----
     if is_standalone:
-        yf_symbol = SYMBOL_MAPPING.get(symbol, symbol.replace('/', '') + '=X')
-        trend_score_21d = get_technical_directional_score(yf_symbol)   # -2,0,2
+        internal_pair = f"{base}/USD"
+        yf_symbol = SYMBOL_MAPPING.get(internal_pair) \
+                    or SYMBOL_MAPPING.get(base) \
+                    or (base + "=X")
+        trend_score_21d = get_technical_directional_score(yf_symbol)
 
         base_cot = COTData.query.filter_by(currency=base).first()
         net_dir = 1 if base_cot and base_cot.net_position > 0 else (-1 if base_cot and base_cot.net_position < 0 else 0)
@@ -2477,27 +2494,32 @@ def api_asset_scorecard(symbol):
 
         fundamentals_score = round(sum(category_bias.values()), 1)
 
-        season_score = get_seasonality_score_from_yf(symbol)
+        season_score = get_seasonality_score_from_yf(internal_pair)
         season_bias = "Bullish" if season_score > 0 else ("Bearish" if season_score < 0 else "Neutral")
         
         # Compute Technical table score (season + trend)
         technical_table_score = season_score + trend_score_21d
 
-        sent = SentimentData.query.filter_by(pair=symbol).first()
-        if sent:
-            long_pct = sent.long_pct
-            if long_pct > 80:
-                sent_score_val = -2
-            elif long_pct > 60:
-                sent_score_val = -1
-            elif long_pct < 20:
-                sent_score_val = 2
-            elif long_pct < 40:
-                sent_score_val = 1
+                # Sentiment: PCR first (BTC/XAU/OIL), else legacy retail
+        pcr_score = get_put_call_sentiment_score(base)
+        if pcr_score is not None:
+            sent_score_val = pcr_score
+        else:
+            sent = SentimentData.query.filter_by(pair=symbol).first()
+            if sent:
+                long_pct = sent.long_pct
+                if long_pct > 80:
+                    sent_score_val = -2
+                elif long_pct > 60:
+                    sent_score_val = -1
+                elif long_pct < 20:
+                    sent_score_val = 2
+                elif long_pct < 40:
+                    sent_score_val = 1
+                else:
+                    sent_score_val = 0
             else:
                 sent_score_val = 0
-        else:
-            sent_score_val = 0
 
         tradion_score = technical_table_score + sentiment_cot_score + fundamentals_score
         overall_score = tradion_score + season_score + sent_score_val
@@ -2688,21 +2710,26 @@ def api_asset_scorecard(symbol):
         cot_table_score = cot_alignment_score
         tradion_score = fundamental_table_score + technical_table_score + cot_table_score
 
-        sent = SentimentData.query.filter_by(pair=symbol).first()
-        if sent:
-            long_pct = sent.long_pct
-            if long_pct > 80:
-                sent_score_val = -2
-            elif long_pct > 60:
-                sent_score_val = -1
-            elif long_pct < 20:
-                sent_score_val = 2
-            elif long_pct < 40:
-                sent_score_val = 1
+                # Sentiment: PCR first (BTC/XAU/OIL), else legacy retail
+        pcr_score = get_put_call_sentiment_score(base)
+        if pcr_score is not None:
+            sent_score_val = pcr_score
+        else:
+            sent = SentimentData.query.filter_by(pair=symbol).first()
+            if sent:
+                long_pct = sent.long_pct
+                if long_pct > 80:
+                    sent_score_val = -2
+                elif long_pct > 60:
+                    sent_score_val = -1
+                elif long_pct < 20:
+                    sent_score_val = 2
+                elif long_pct < 40:
+                    sent_score_val = 1
+                else:
+                    sent_score_val = 0
             else:
                 sent_score_val = 0
-        else:
-            sent_score_val = 0
 
         overall_bias, overall_symbol, overall_color, display_score = get_overall_bias_and_color(tradion_score)
 
@@ -3431,7 +3458,7 @@ def admin_cot_data_update():
 @login_required
 @admin_required
 def sync_cot_data():
-    currencies = ['USD','EUR','GBP','JPY','AUD','CAD','CHF','NZD','XAU','BTC']
+    currencies = ['USD','EUR','GBP','JPY','AUD','CAD','CHF','NZD','XAU','BTC','OIL']
     for cur in currencies:
         latest = COTHistory.query.filter_by(currency=cur).order_by(COTHistory.report_date.desc()).first()
         if latest:
@@ -3632,6 +3659,52 @@ def debug_routes():
 @login_required
 def sentiment_page():
     return render_template('sentiment.html', username=session['username'], is_admin=session.get('is_admin', False))
+
+@app.route('/put-call-ratio')
+@login_required
+def put_call_ratio_page():
+    return render_template('put_call_ratio.html',
+                           username=session['username'],
+                           is_admin=session.get('is_admin', False))
+
+
+@app.route('/api/put-call-ratio')
+@login_required
+def api_put_call_ratio():
+    """Latest PCR snapshot per asset + last 30 daily history for charts."""
+    out = []
+    for asset, cfg in PCR_TICKER_MAP.items():
+        latest = PutCallRatio.query.filter_by(asset=asset)\
+            .order_by(PutCallRatio.recorded_at.desc()).first()
+        history = PutCallRatio.query.filter_by(asset=asset)\
+            .order_by(PutCallRatio.recorded_at.asc()).limit(30).all()
+        out.append({
+            "asset": asset,
+            "ticker": cfg["ticker"],
+            "high_put": cfg["high_put"],
+            "high_call": cfg["high_call"],
+            "latest": {
+                "ratio": latest.ratio if latest else None,
+                "score": latest.score if latest else None,
+                "recorded_at": latest.recorded_at.strftime('%Y-%m-%d') if latest else None,
+            },
+            "history": [{
+                "date": h.recorded_at.strftime('%Y-%m-%d'),
+                "ratio": h.ratio,
+                "score": h.score,
+            } for h in history],
+        })
+    return jsonify(out)
+
+
+@app.route('/api/put-call-ratio/refresh', methods=['POST'])
+@login_required
+def api_pcr_refresh():
+    try:
+        summary = refresh_put_call_ratios()
+        return jsonify({"success": True, "results": summary})
+    except Exception as e:
+        return jsonify({"success": False, "error": str(e)}), 500
 
 @app.route('/heatmap')
 @login_required
@@ -4644,6 +4717,7 @@ with open('templates/economic_calendar.html', 'w') as f:
     <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
     <div class="menu-item" onclick="window.location.href='/carry-scanner'">
     <i data-lucide="dollar-sign" class="menu-icon"></i>
@@ -4884,6 +4958,7 @@ with open('templates/dashboard.html', 'w') as f:
     <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="handleMenuAction(() => window.location.href='/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="handleMenuAction(() => window.location.href='/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -5290,24 +5365,13 @@ setTimeout(() => {
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
         a{text-decoration:none;color:inherit}
 
-        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
+        /* ---------- SIDEBAR ---------- */
         .sidebar{
-            width:280px;
-            background:#121826;
-            min-height:100vh;
-            padding:20px;
-            position:fixed;
-            left:0;
-            top:0;
-            border-right:1px solid #2a3040;
-            z-index:1000;
-            transition: transform 0.3s ease;
-            overflow-y:auto;
-            -webkit-overflow-scrolling:touch;
+            width:280px;background:#121826;min-height:100vh;padding:20px;
+            position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;
+            transition: transform 0.3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;
         }
-        .sidebar.closed-mobile{
-            transform: translateX(-100%);
-        }
+        .sidebar.closed-mobile{transform: translateX(-100%);}
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
@@ -5315,72 +5379,29 @@ setTimeout(() => {
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
 
-        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
+        /* ---------- MOBILE HEADER ---------- */
         .mobile-header{
-            display:none;
-            position:fixed;
-            top:0;
-            left:0;
-            right:0;
-            height:56px;
-            background:#121826;
-            border-bottom:1px solid #2a3040;
-            z-index:999;
-            align-items:center;
-            padding:0 16px;
-            gap:12px;
+            display:none;position:fixed;top:0;left:0;right:0;height:56px;
+            background:#121826;border-bottom:1px solid #2a3040;z-index:999;
+            align-items:center;padding:0 16px;gap:12px;
         }
-        .mobile-header .hamburger{
-            background:none;
-            border:none;
-            color:#E0E0E0;
-            cursor:pointer;
-            padding:4px;
-            display:flex;
-            align-items:center;
-        }
-        .mobile-header .mobile-logo{
-            font-size:20px;
-            font-weight:800;
-            color:#00e5ff;
-            flex:1;
-        }
+        .mobile-header .hamburger{background:none;border:none;color:#E0E0E0;cursor:pointer;padding:4px;display:flex;align-items:center;}
+        .mobile-header .mobile-logo{font-size:20px;font-weight:800;color:#00e5ff;flex:1;}
 
-        /* ---------- OVERLAY (for mobile sidebar) ---------- */
-        .sidebar-overlay{
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.5);
-            z-index:998;
-            transition: opacity 0.3s;
-        }
-        .sidebar-overlay.active{
-            display:block;
-        }
+        /* ---------- OVERLAY ---------- */
+        .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:998;transition: opacity 0.3s;}
+        .sidebar-overlay.active{display:block;}
 
         /* ---------- MAIN CONTENT ---------- */
-        .main-content{
-            flex:1;
-            margin-left:280px;
-            padding:12px 20px;
-            transition: margin-left 0.3s;
-            width:100%;
-            min-height:100vh;
-        }
+        .main-content{flex:1;margin-left:280px;padding:12px 20px;transition: margin-left 0.3s;width:100%;min-height:100vh;}
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
         .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
-            background:#121826;
-            border-radius:16px;
-            padding:12px 12px 16px 12px;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            border:1px solid #2a3040;
-            position:relative;
+            background:#121826;border-radius:16px;padding:12px 12px 16px 12px;
+            display:flex;flex-direction:column;align-items:center;
+            border:1px solid #2a3040;position:relative;
         }
         .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
@@ -5405,12 +5426,7 @@ setTimeout(() => {
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
         .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-        .panel{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            border:1px solid #2a3040;
-        }
+        .panel{background:#121826;border-radius:12px;padding:10px;border:1px solid #2a3040;}
         .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
@@ -5432,33 +5448,16 @@ setTimeout(() => {
         .panel th:nth-child(5),.panel td:nth-child(5){width:15%}
         .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
         .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
-        .history-chart-container{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            margin-top:10px;
-            border:1px solid #2a3040;
-        }
+        .history-chart-container{background:#121826;border-radius:12px;padding:10px;margin-top:10px;border:1px solid #2a3040;}
         .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .chart-wrapper{position:relative;height:240px;width:100%}
 
-        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
+        /* ---------- RESPONSIVE ---------- */
         @media (max-width:768px){
             .mobile-header{display:flex}
-            .sidebar{
-                transform: translateX(-100%);
-                top:0;left:0;height:100%;width:280px;
-                z-index:1000;
-                box-shadow:2px 0 12px rgba(0,0,0,0.4);
-            }
+            .sidebar{transform: translateX(-100%);top:0;left:0;height:100%;width:280px;z-index:1000;box-shadow:2px 0 12px rgba(0,0,0,0.4);}
             .sidebar.open{transform: translateX(0)}
-            .main-content{
-                margin-left:0 !important;
-                padding-top:68px;
-                padding-left:15px;
-                padding-right:15px;
-                padding-bottom:20px;
-            }
+            .main-content{margin-left:0 !important;padding-top:68px;padding-left:15px;padding-right:15px;padding-bottom:20px;}
             .scorecard-grid{grid-template-columns:1fr;gap:15px}
             .gauge-container{width:140px;height:80px}
             .panel{padding:8px}
@@ -5473,7 +5472,6 @@ setTimeout(() => {
 </head>
 <body>
 
-<!-- ========== MOBILE HEADER ========== -->
 <header class="mobile-header">
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
         <i data-lucide="menu" style="width:24px;height:24px;"></i>
@@ -5481,10 +5479,8 @@ setTimeout(() => {
     <span class="mobile-logo">⚡ Tradion</span>
 </header>
 
-<!-- ========== SIDEBAR OVERLAY ========== -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
@@ -5493,6 +5489,7 @@ setTimeout(() => {
     <div class="menu-item" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -5506,7 +5503,6 @@ setTimeout(() => {
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
-<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Asset Scorecard</h2>
@@ -5600,7 +5596,6 @@ setTimeout(() => {
 </div>
 
 <script>
-    // ---------- MOBILE SIDEBAR TOGGLE ----------
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
     const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -5618,23 +5613,18 @@ setTimeout(() => {
     }
 
     hamburgerBtn.addEventListener('click', () => {
-        if (sidebar.classList.contains('open')) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
     });
 
     overlay.addEventListener('click', closeSidebar);
 
     function navigate(url) {
         window.location.href = url;
-        if (window.innerWidth <= 768) {
-            closeSidebar();
-        }
+        if (window.innerWidth <= 768) closeSidebar();
     }
 
-    // ---------- DATA & LOGIC (unchanged) ----------
+    // ---------- DATA ----------
     const currencies = {{ currencies|tojson }};
     const select = document.getElementById('symbolSelect');
     currencies.forEach(cur => {
@@ -5652,6 +5642,8 @@ setTimeout(() => {
         "Jobs Market Bias"
     ];
 
+    const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
+
     let historyChart = null;
 
     async function loadScorecard() {
@@ -5663,8 +5655,26 @@ setTimeout(() => {
             const res = await fetch('/api/asset_scorecard/' + encodeURIComponent(symbol));
             const data = await res.json();
             console.log('API response received.', data);
-            updateGauge(data.overall.score, data.overall.bias, data.overall.color);
-            updateScores(data);
+
+            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
+
+            // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
+            const fundamentalsScore = Number(data.fundamentals_score ?? 0);
+            const technicalScore    = Number(data.technical_score    ?? 0);
+
+            let cotScore = Number(data.sentiment_cot_score ?? 0);
+            if (isStandalone) {
+                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
+            }
+
+            // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
+            const tradionScore = technicalScore + cotScore + fundamentalsScore;
+
+            const bias  = getBiasFromScore(tradionScore);
+            const color = getColorFromScore(tradionScore);
+
+            updateGauge(tradionScore, bias, color);
+            updateScores({ tradionScore, technicalScore, cotScore, fundamentalsScore });
             renderCategoryCards(data);
             setTimeout(() => loadScoreHistory(symbol), 100);
         } catch(e) {
@@ -5672,6 +5682,26 @@ setTimeout(() => {
         } finally {
             overlayEl.classList.add('hidden');
         }
+    }
+
+    function getBiasFromScore(score) {
+        if (score >= 16) return "EXTREME BULLISH";
+        if (score >= 10) return "VERY BULLISH";
+        if (score >= 5) return "BULLISH";
+        if (score <= -16) return "EXTREME BEARISH";
+        if (score <= -10) return "VERY BEARISH";
+        if (score <= -5) return "BEARISH";
+        return "NEUTRAL";
+    }
+
+    function getColorFromScore(score) {
+        if (score >= 16) return "#00e5a0";
+        if (score >= 10) return "#00cc88";
+        if (score >= 5) return "#00aa66";
+        if (score <= -16) return "#ff4d6d";
+        if (score <= -10) return "#ff6688";
+        if (score <= -5) return "#ff8099";
+        return "#ffaa00";
     }
 
     async function loadScoreHistory(asset) {
@@ -5729,8 +5759,7 @@ setTimeout(() => {
                             color: (context) => context.tick.value === 0 ? '#2a3040' : 'transparent',
                             lineWidth: (context) => context.tick.value === 0 ? 1 : 0
                         },
-                        min: -20,
-                        max: 20
+                        min: -20, max: 20
                     },
                     x: {
                         title: { display: true, text: 'Date', color: '#a0b0c0' },
@@ -5756,11 +5785,12 @@ setTimeout(() => {
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
-    function updateScores(data) {
-        setScoreValue('tradionScore', data.tradion_score);
-        setScoreValue('technicalScore', data.technical_score);
-        setScoreValue('sentimentCOTScore', data.sentiment_cot_score);
-        setScoreValue('fundamentalsScore', data.fundamentals_score);
+    // Sets the four bars from the pre-computed scores (no additional math here).
+    function updateScores(scores) {
+        setScoreValue('tradionScore', scores.tradionScore);
+        setScoreValue('technicalScore', scores.technicalScore);
+        setScoreValue('sentimentCOTScore', scores.cotScore);
+        setScoreValue('fundamentalsScore', scores.fundamentalsScore);
     }
 
     function setScoreValue(id, value) {
@@ -5795,6 +5825,19 @@ setTimeout(() => {
                 else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
                 html += `<tr><td>${ind.name}</td><td class="value ${labelClass}">${label}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
             }
+            else if (ind.signal_value !== undefined && ind.signal_value !== null &&
+                     (typeof ind.actual !== 'number' || typeof ind.forecast !== 'number')) {
+                const sv = Number(ind.signal_value) || 0;
+                let signal = sv > 0 ? 'Bullish' : (sv < 0 ? 'Bearish' : 'Neutral');
+                let signalClass = sv > 0 ? 'positive' : (sv < 0 ? 'negative' : 'neutral');
+                if (ind.signal) {
+                    signal = ind.signal;
+                    signalClass = signal === 'Bullish' ? 'positive'
+                                : signal === 'Bearish' ? 'negative'
+                                : 'neutral';
+                }
+                html += `<tr><td>${ind.name}</td><td class="value ${signalClass}">${signal}</td><td class="value">-</td><td class="value">-</td><td class="value">-</td></tr>`;
+            }
             else {
                 const surprise = ind.actual - ind.forecast;
                 const better = ind.is_lower_better ? surprise < 0 : surprise > 0;
@@ -5816,10 +5859,29 @@ setTimeout(() => {
         let label = 'Neutral', labelClass = 'neutral';
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+
+        const baseUpper = (data.base || '').toUpperCase();
+        let pcrRow = '';
+        if (PCR_ASSETS.includes(baseUpper)) {
+            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
+                ? Number(data.pcr_score)
+                : Number(data.sentiment_score || 0);
+
+            let pcrClass = 'neutral';
+            let pcrDisplay = '0';
+            if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
+            else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
+
+            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        }
+
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
+                        <tbody>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                            ${pcrRow}
+                        </tbody>
                     </table>
                 </div>`;
     }
@@ -5833,9 +5895,14 @@ setTimeout(() => {
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
 
-        // Crowd Sentiment (COT) card
+        // ---------- Crowd Sentiment (COT) card ----------
         const crowdCategory = firstTwo[0];
-        const crowdBiasScore = data.category_bias[crowdCategory] || 0;
+        const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
+        const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
+        let crowdBiasScore = cotScoreForBias;
+        if (PCR_ASSETS.includes((data.base || '').toUpperCase())) {
+            crowdBiasScore += Number(data.sentiment_score || 0);
+        }
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
@@ -5844,15 +5911,52 @@ setTimeout(() => {
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card
+        // ---------- Technical Bias card ----------
         const techCategory = firstTwo[1];
         const techIndicators = data.base_indicators.filter(ind => ind.category === techCategory);
-        const techBiasScore = data.category_bias[techCategory] || 0;
+        const isStandaloneTech = PCR_ASSETS.includes((data.base || '').toUpperCase());
+
+        const techBiasScore = isStandaloneTech
+            ? Number(data.technical_score || 0)
+            : Number((data.category_bias || {})[techCategory] || 0);
+
         const techCard = document.createElement('div');
         techCard.className = 'panel';
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>`;
-        if (techIndicators.length === 0) {
+
+        if (isStandaloneTech) {
+            const trendInd = techIndicators.find(i => i.name === '21-day SMA Trend');
+            const trendScore = trendInd ? Number(trendInd.signal_value || 0) : 0;
+            const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
+            const trendClass  = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
+
+            const seasSignal = data.seasonality_bias || 'Neutral';
+            const seasScore  = Number(data.seasonality_score || 0);
+            const seasClass  = seasScore > 0 ? 'positive' : (seasScore < 0 ? 'negative' : 'neutral');
+
+            techHtml += `
+                <div class="indicator-row">
+                    <span class="indicator-label">21-day SMA Trend</span>
+                    <div class="indicator-values">
+                        <span class="value ${trendClass}">${trendSignal}</span>
+                        <span class="value ${trendClass}">${trendScore > 0 ? '+' : ''}${trendScore}</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                    </div>
+                </div>
+                <div class="indicator-row">
+                    <span class="indicator-label">Seasonality</span>
+                    <div class="indicator-values">
+                        <span class="value ${seasClass}">${seasSignal}</span>
+                        <span class="value ${seasClass}">${seasScore > 0 ? '+' : ''}${seasScore}</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                        <span class="value">-</span>
+                    </div>
+                </div>`;
+        } else if (techIndicators.length === 0) {
             techHtml += '<p style="color:#8892b0; font-size:0.75rem;">No indicators in this category.</p>';
         } else {
             techHtml += buildFullTable(techIndicators, data);
@@ -5861,7 +5965,6 @@ setTimeout(() => {
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
 
-        // Remaining cards
         rest.forEach(category => {
             const indicators = data.base_indicators.filter(ind => ind.category === category);
             const biasScore = data.category_bias[category] || 0;
@@ -5904,29 +6007,16 @@ setTimeout(() => {
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        /* ---------- BASE STYLES (unchanged) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
         a{text-decoration:none;color:inherit}
 
-        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
         .sidebar{
-            width:280px;
-            background:#121826;
-            min-height:100vh;
-            padding:20px;
-            position:fixed;
-            left:0;
-            top:0;
-            border-right:1px solid #2a3040;
-            z-index:1000;
-            transition: transform 0.3s ease;
-            overflow-y:auto;
-            -webkit-overflow-scrolling:touch;
+            width:280px;background:#121826;min-height:100vh;padding:20px;
+            position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;
+            transition: transform 0.3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;
         }
-        .sidebar.closed-mobile{
-            transform: translateX(-100%);
-        }
+        .sidebar.closed-mobile{transform: translateX(-100%);}
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
@@ -5934,74 +6024,27 @@ setTimeout(() => {
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
 
-        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
         .mobile-header{
-            display:none;
-            position:fixed;
-            top:0;
-            left:0;
-            right:0;
-            height:56px;
-            background:#121826;
-            border-bottom:1px solid #2a3040;
-            z-index:999;
-            align-items:center;
-            padding:0 16px;
-            gap:12px;
+            display:none;position:fixed;top:0;left:0;right:0;height:56px;
+            background:#121826;border-bottom:1px solid #2a3040;z-index:999;
+            align-items:center;padding:0 16px;gap:12px;
         }
-        .mobile-header .hamburger{
-            background:none;
-            border:none;
-            color:#E0E0E0;
-            cursor:pointer;
-            padding:4px;
-            display:flex;
-            align-items:center;
-        }
-        .mobile-header .mobile-logo{
-            font-size:20px;
-            font-weight:800;
-            color:#00e5ff;
-            flex:1;
-        }
+        .mobile-header .hamburger{background:none;border:none;color:#E0E0E0;cursor:pointer;padding:4px;display:flex;align-items:center;}
+        .mobile-header .mobile-logo{font-size:20px;font-weight:800;color:#00e5ff;flex:1;}
 
-        /* ---------- OVERLAY (for mobile sidebar) ---------- */
-        .sidebar-overlay{
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.5);
-            z-index:998;
-            transition: opacity 0.3s;
-        }
-        .sidebar-overlay.active{
-            display:block;
-        }
+        .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:998;transition: opacity 0.3s;}
+        .sidebar-overlay.active{display:block;}
 
-        /* ---------- MAIN CONTENT ---------- */
-        .main-content{
-            flex:1;
-            margin-left:280px;
-            padding:12px 20px;
-            transition: margin-left 0.3s;
-            width:100%;
-            min-height:100vh;
-        }
+        .main-content{flex:1;margin-left:280px;padding:12px 20px;transition: margin-left 0.3s;width:100%;min-height:100vh;}
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
 
-        /* ---------- SCORECARD GRID ---------- */
         .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
-            background:#121826;
-            border-radius:16px;
-            padding:12px 12px 16px 12px;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            border:1px solid #2a3040;
-            position:relative;
+            background:#121826;border-radius:16px;padding:12px 12px 16px 12px;
+            display:flex;flex-direction:column;align-items:center;
+            border:1px solid #2a3040;position:relative;
         }
         .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
@@ -6018,7 +6061,6 @@ setTimeout(() => {
         .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
-        /* ---------- SCORE SUMMARY ---------- */
         .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
         .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
         .score-label{font-weight:500;font-size:0.85rem}
@@ -6027,15 +6069,9 @@ setTimeout(() => {
         .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
 
-        /* ---------- RIGHT COLUMN ---------- */
         .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-        .panel{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            border:1px solid #2a3040;
-        }
+        .panel{background:#121826;border-radius:12px;padding:10px;border:1px solid #2a3040;}
         .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
@@ -6058,54 +6094,17 @@ setTimeout(() => {
         .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
         .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
 
-        /* ---------- HISTORY CHART ---------- */
-        .history-chart-container{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            margin-top:10px;
-            border:1px solid #2a3040;
-        }
+        .history-chart-container{background:#121826;border-radius:12px;padding:10px;margin-top:10px;border:1px solid #2a3040;}
         .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .chart-wrapper{position:relative;height:240px;width:100%}
 
-        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
         @media (max-width:768px){
-            /* Show mobile header */
-            .mobile-header{
-                display:flex;
-            }
-
-            /* Hide desktop sidebar by default, will be toggled */
-            .sidebar{
-                transform: translateX(-100%);
-                top:0;
-                left:0;
-                height:100%;
-                width:280px;
-                z-index:1000;
-                box-shadow: 2px 0 12px rgba(0,0,0,0.4);
-            }
-            .sidebar.open{
-                transform: translateX(0);
-            }
-
-            .main-content{
-                margin-left:0 !important;
-                padding-top:68px;  /* mobile header height + spacing */
-                padding-left:15px;
-                padding-right:15px;
-                padding-bottom:20px;
-            }
-
-            .scorecard-grid{
-                grid-template-columns:1fr;
-                gap:15px;
-            }
-            .gauge-container{
-                width:140px;
-                height:80px;
-            }
+            .mobile-header{display:flex}
+            .sidebar{transform: translateX(-100%);top:0;left:0;height:100%;width:280px;z-index:1000;box-shadow: 2px 0 12px rgba(0,0,0,0.4);}
+            .sidebar.open{transform: translateX(0)}
+            .main-content{margin-left:0 !important;padding-top:68px;padding-left:15px;padding-right:15px;padding-bottom:20px;}
+            .scorecard-grid{grid-template-columns:1fr;gap:15px}
+            .gauge-container{width:140px;height:80px}
             .panel{padding:8px}
             .indicator-values{gap:6px}
             .value{width:40px}
@@ -6118,19 +6117,15 @@ setTimeout(() => {
 </head>
 <body>
 
-<!-- ========== MOBILE HEADER ========== -->
 <header class="mobile-header">
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
         <i data-lucide="menu" style="width:24px;height:24px;"></i>
     </button>
     <span class="mobile-logo">⚡ Tradion</span>
-    <!-- optional spacer or extra icons -->
 </header>
 
-<!-- ========== SIDEBAR OVERLAY ========== -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
@@ -6139,6 +6134,7 @@ setTimeout(() => {
     <div class="menu-item active" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -6152,7 +6148,6 @@ setTimeout(() => {
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
-<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Forex Scorecard</h2>
@@ -6244,7 +6239,6 @@ setTimeout(() => {
 </div>
 
 <script>
-    // ---------- MOBILE SIDEBAR TOGGLE ----------
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
     const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -6254,33 +6248,22 @@ setTimeout(() => {
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
-
     function closeSidebar() {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
         document.body.style.overflow = '';
     }
-
     hamburgerBtn.addEventListener('click', () => {
-        if (sidebar.classList.contains('open')) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
     });
-
     overlay.addEventListener('click', closeSidebar);
 
-    // Close sidebar when a menu item is clicked (navigate via function)
     function navigate(url) {
         window.location.href = url;
-        // On mobile, close sidebar after navigating
-        if (window.innerWidth <= 768) {
-            closeSidebar();
-        }
+        if (window.innerWidth <= 768) closeSidebar();
     }
 
-    // ---------- PAIR LIST ----------
     const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
     allPairs.forEach(pair => {
@@ -6299,9 +6282,11 @@ setTimeout(() => {
         "Jobs Market Bias"
     ];
 
+    // Assets that use PCR (Put/Call Ratio) as their sentiment source
+    const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
+
     let historyChart = null;
 
-    // ---------- MAIN LOAD ----------
     async function loadScorecard() {
         const symbol = select.value;
         if (!symbol) return;
@@ -6312,19 +6297,26 @@ setTimeout(() => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            const fundamentalsScore = data.fundamentals_score ??
-                (["Jobs Market Bias", "Inflation Bias", "Economic Growth Bias"].reduce((sum, cat) => sum + (data.category_bias[cat] || 0), 0));
-            const technicalScore = data.technical_score ?? computeTechnicalScore(data);
-            const cotScore = data.sentiment_cot_score ?? 0;
-            const tradionScore = data.tradion_score ?? (fundamentalsScore + technicalScore + cotScore);
+            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
-            updateGauge(tradionScore, data.overall?.bias || getBiasFromScore(tradionScore), data.overall?.color || getColorFromScore(tradionScore));
-            updateScores({
-                tradionScore,
-                technicalScore,
-                cotScore,
-                fundamentalsScore
-            });
+            // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
+            const fundamentalsScore = Number(data.fundamentals_score ?? 0);
+            const technicalScore    = Number(data.technical_score    ?? 0);
+
+            let cotScore = Number(data.sentiment_cot_score ?? 0);
+            if (isStandalone) {
+                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
+            }
+
+            // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
+            const tradionScore = technicalScore + cotScore + fundamentalsScore;
+
+            // Recompute bias/color locally so gauge always agrees with the score
+            const bias  = getBiasFromScore(tradionScore);
+            const color = getColorFromScore(tradionScore);
+
+            updateGauge(tradionScore, bias, color);
+            updateScores({ tradionScore, technicalScore, cotScore, fundamentalsScore });
             renderCategoryCards(data);
             loadScoreHistory(symbol);
         } catch(e) {
@@ -6333,18 +6325,6 @@ setTimeout(() => {
         } finally {
             overlay.classList.add('hidden');
         }
-    }
-
-    function computeTechnicalScore(data) {
-        const seasonScore = data.seasonality_score || 0;
-        let trendScore = 0;
-        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
-        if (trendInd && trendInd.signal_value !== undefined) {
-            trendScore = Number(trendInd.signal_value);
-        } else {
-            trendScore = data.trend_score || 0;
-        }
-        return seasonScore + trendScore;
     }
 
     function getBiasFromScore(score) {
@@ -6381,6 +6361,7 @@ setTimeout(() => {
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
+    // Sets the four bars from the pre-computed scores (no additional math here).
     function updateScores(scores) {
         setScoreValue('tradionScore', scores.tradionScore);
         setScoreValue('technicalScore', scores.technicalScore);
@@ -6390,7 +6371,7 @@ setTimeout(() => {
 
     function setScoreValue(id, value) {
         const el = document.getElementById(id);
-        el.textContent = value.toFixed(1);
+        el.textContent = Number(value).toFixed(1);
         el.className = 'score-value ' + (value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral');
     }
 
@@ -6432,6 +6413,7 @@ setTimeout(() => {
         return html;
     }
 
+    // ---- Crowd Sentiment table: COT row + PCR row (only for BTC/XAU/OIL) ----
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -6440,10 +6422,27 @@ setTimeout(() => {
         let label = 'Neutral', labelClass = 'neutral';
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+
+        const baseUpper = (data.base || '').toUpperCase();
+        let pcrRow = '';
+        if (PCR_ASSETS.includes(baseUpper)) {
+            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
+                ? Number(data.pcr_score)
+                : Number(data.sentiment_score || 0);
+            let pcrClass = 'neutral';
+            let pcrDisplay = '0';
+            if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
+            else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
+            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        }
+
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
+                        <tbody>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                            ${pcrRow}
+                        </tbody>
                     </table>
                 </div>`;
     }
@@ -6455,10 +6454,16 @@ setTimeout(() => {
         const rest = CATEGORY_ORDER.slice(2);
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
+        const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
-        // Crowd Sentiment (COT) card
+        // ---------- Crowd Sentiment (COT) card ----------
         const crowdCategory = firstTwo[0];
-        const crowdBiasScore = data.category_bias[crowdCategory] || 0;
+        const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
+        const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
+        let crowdBiasScore = cotScoreForBias;
+        if (isStandalone) {
+            crowdBiasScore += Number(data.sentiment_score || 0);
+        }
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
@@ -6467,23 +6472,23 @@ setTimeout(() => {
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card
+        // ---------- Technical Bias card ----------
         const techCategory = firstTwo[1];
-        const techBiasScore = data.category_bias[techCategory] || 0;
+        const techBiasScore = Number(data.technical_score || 0);
         const techCard = document.createElement('div');
         techCard.className = 'panel';
         const seasonSignal = data.seasonality_bias || 'Neutral';
-        const seasonScore = data.seasonality_score || 0;
+        const seasonScore = Number(data.seasonality_score || 0);
         const seasonClass = seasonScore > 0 ? 'positive' : (seasonScore < 0 ? 'negative' : 'neutral');
         const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
-        const trendScore = trendInd ? Number(trendInd.signal_value) : 0;
+        const trendScore = trendInd ? Number(trendInd.signal_value || 0) : 0;
         const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
         const trendClass = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
 
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>
-                        <div class="indicator-row"><span class="indicator-label">21-day SMA Trend</span><div class="indicator-values"><span class="value ${trendClass}">${trendSignal}</span><span class="value">-</span><span class="value">-</span><span class="value">-</span></div></div>
-                        <div class="indicator-row"><span class="indicator-label">Seasonality</span><div class="indicator-values"><span class="value ${seasonClass}">${seasonSignal}</span><span class="value">${seasonScore > 0 ? '+' : ''}${seasonScore}</span><span class="value">-</span><span class="value">-</span></div></div>`;
+                        <div class="indicator-row"><span class="indicator-label">21-day SMA Trend</span><div class="indicator-values"><span class="value ${trendClass}">${trendSignal}</span><span class="value ${trendClass}">${trendScore > 0 ? '+' : ''}${trendScore}</span><span class="value">-</span><span class="value">-</span></div></div>
+                        <div class="indicator-row"><span class="indicator-label">Seasonality</span><div class="indicator-values"><span class="value ${seasonClass}">${seasonSignal}</span><span class="value ${seasonClass}">${seasonScore > 0 ? '+' : ''}${seasonScore}</span><span class="value">-</span><span class="value">-</span></div></div>`;
         techCard.innerHTML = techHtml;
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
@@ -6557,10 +6562,8 @@ setTimeout(() => {
 
     function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
 
-    // Load first pair if available
     if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
 
-    // Initialize Lucide icons (now also covers mobile header)
     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
@@ -6716,6 +6719,7 @@ with open('templates/central_bank_scorecard.html', 'w', encoding='utf-8') as f:
     <div class="menu-item" onclick="navigateTo('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item active" onclick="navigateTo('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigateTo('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigateTo('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -7153,6 +7157,7 @@ with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
                         <option value="NZD">NZD</option>
                         <option value="XAU">XAU</option>
                         <option value="BTC">BTC</option>
+                        <option value="OIL">OIL</option>
                     </select>
                 </div>
                 <div>
@@ -7271,7 +7276,7 @@ with open('templates/admin_central_bank.html', 'w', encoding='utf-8') as f:
 
 <script>
 const allPairs={{ ALL_PAIRS|tojson }};
-const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC"];
+const currencies=["USD","EUR","GBP","JPY","AUD","CAD","CHF","NZD","XAU","BTC","OIL"];
 let seasonCurrentPair='';
 let currentHistory = [];
 
@@ -7814,6 +7819,7 @@ canvas{max-height:400px;width:100%}
     <div class="menu-item" onclick="navigateTo('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="navigateTo('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigateTo('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigateTo('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -7849,6 +7855,7 @@ canvas{max-height:400px;width:100%}
                     <option value="CHF">CHF</option>
                     <option value="XAU">XAU</option>
                     <option value="BTC">BTC</option>
+                    <option value="OIL">OIL</option>
                 </select>
             </div>
         </div>
@@ -8095,6 +8102,213 @@ setTimeout(() => {
 </body>
 </html>''')
 
+#put to call html_
+    with open('templates/put_call_ratio.html', 'w') as f:
+        f.write('''<!DOCTYPE html>
+<html><head><title>Put/Call Ratio · Tradion</title><meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" href="/static/favicon.png" type="image/png">
+<script src="https://unpkg.com/lucide@latest"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex}
+.sidebar{width:280px;background:#121826;min-height:100vh;padding:20px;position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;transition:transform 0.3s}
+.sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
+.sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;color:#a0b0c0}
+.sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
+.sidebar .menu-item.active{background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;font-weight:bold}
+.sidebar .menu-icon{font-size:20px;margin-right:12px}
+.sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
+.main-content{flex:1;margin-left:280px;padding:20px 30px}
+.navbar{background:#121826;padding:15px 25px;display:flex;justify-content:space-between;align-items:center;border-bottom:1px solid #2a3040;border-radius:0 0 16px 16px;margin-bottom:20px}
+.navbar-title{font-size:18px;color:#00e5ff}
+button{padding:10px 20px;background:linear-gradient(135deg,#00e5ff,#00b8d4);color:#0B0F1A;border:none;border-radius:8px;cursor:pointer;font-weight:bold;transition:0.2s}
+button:hover{transform:scale(1.02)}
+button.secondary{background:transparent;border:1px solid #00e5ff;color:#00e5ff}
+.grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(360px,1fr));gap:20px;margin-top:20px}
+.card{background:#121826;border-radius:16px;padding:20px;border:1px solid #2a3040}
+.card h3{color:#00e5ff;font-size:1.2rem;margin-bottom:12px;display:flex;justify-content:space-between;align-items:center}
+.ticker-badge{background:rgba(0,229,255,0.15);color:#00e5ff;padding:2px 10px;border-radius:12px;font-size:0.75rem}
+.ratio-value{font-size:2.4rem;font-weight:800;margin:8px 0}
+.score-badge{display:inline-block;padding:4px 14px;border-radius:20px;font-size:0.85rem;font-weight:bold;margin-top:6px}
+.score-pos{background:rgba(0,229,160,0.2);color:#00e5a0}
+.score-neg{background:rgba(255,77,109,0.2);color:#ff4d6d}
+.score-neu{background:rgba(255,184,0,0.2);color:#ffb800}
+.thresholds{display:flex;justify-content:space-between;margin-top:12px;font-size:0.75rem;color:#8892b0}
+.thresholds span strong{color:#e0e0e0}
+.chart-wrap{height:160px;margin-top:14px}
+.muted{color:#8892b0;font-size:0.8rem}
+.hamburger{display:none;font-size:28px;cursor:pointer;color:#00e5ff;position:fixed;top:15px;left:20px;z-index:1100;background:#121826;padding:8px 12px;border-radius:8px;border:1px solid #2a3040}
+@media(max-width:768px){
+  .sidebar{transform:translateX(-100%);width:260px}
+  .sidebar.open{transform:translateX(0)}
+  .main-content{margin-left:0!important;padding:60px 15px 20px 15px!important}
+  .hamburger{display:block}
+  .grid{grid-template-columns:1fr}
+}
+</style>
+</head>
+<body>
+
+<div class="hamburger" onclick="toggleSidebar()">☰</div>
+<div class="sidebar" id="sidebar">
+    <div class="logo">⚡ Tradion</div>
+    <div class="menu-item" onclick="window.location.href='/dashboard'"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
+    <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
+    <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/forex-scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/central-bank-scorecard'"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
+    <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item active" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
+    <div class="menu-item" onclick="window.location.href='/economic-calendar'"><i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span></div>
+    <div class="menu-item" onclick="window.location.href='/carry-scanner'"><i data-lucide="dollar-sign" class="menu-icon"></i><span>Carry Trade Scanner</span></div>
+    <div class="menu-item" onclick="window.location.href='/seasonality'"><i data-lucide="calendar" class="menu-icon"></i><span>Seasonality</span></div>
+    <div class="menu-item" onclick="window.location.href='/history'"><i data-lucide="clock" class="menu-icon"></i><span>History</span></div>
+    {% if is_admin %}<div class="menu-item" onclick="window.location.href='/admin'"><i data-lucide="crown" class="menu-icon"></i><span>Admin</span></div>{% endif %}
+    <div class="menu-item" onclick="window.location.href='/heatmap'"><i data-lucide="flame" class="menu-icon"></i><span>Heatmap</span></div>
+    <div class="menu-item" onclick="window.location.href='/profile'"><i data-lucide="user" class="menu-icon"></i><span>Profile</span></div>
+    <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
+</div>
+
+<div class="main-content">
+    <div class="navbar">
+        <div class="navbar-title">Put/Call Ratio · Options Sentiment for BTC, XAU, OIL</div>
+        <div>
+            <button onclick="refreshPCR()"><i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh Now</button>
+            <span id="lastUpdate" style="margin-left:15px;font-size:12px;color:#8892b0"></span>
+        </div>
+    </div>
+
+    <div class="grid" id="cardsContainer">
+        <div class="card"><div class="muted">Loading...</div></div>
+    </div>
+</div>
+
+<script>
+const charts = {};
+
+function toggleSidebar() { document.getElementById('sidebar').classList.toggle('open'); }
+function logout(){fetch('/logout').then(()=>window.location.href='/login');}
+
+function scoreBadge(score) {
+    if (score === null || score === undefined)
+        return '<span class="score-badge score-neu">No data</span>';
+    if (score > 0)  return `<span class="score-badge score-pos">Bullish (${score > 0 ? '+' : ''}${score})</span>`;
+    if (score < 0)  return `<span class="score-badge score-neg">Bearish (${score})</span>`;
+    return '<span class="score-badge score-neu">Neutral (0)</span>';
+}
+
+function renderCard(item) {
+    const latest = item.latest;
+    const ratioStr = latest.ratio !== null ? latest.ratio.toFixed(3) : '—';
+    const ratioColor = latest.ratio === null ? '#8892b0'
+                     : latest.ratio >= item.high_put ? '#00e5a0'
+                     : latest.ratio <= item.high_call ? '#ff4d6d'
+                     : '#ffb800';
+    return `
+        <div class="card">
+            <h3>${item.asset} Sentiment <span class="ticker-badge">${item.ticker}</span></h3>
+            <div class="ratio-value" style="color:${ratioColor}">${ratioStr}</div>
+            <div class="muted">Put/Call Volume Ratio</div>
+            ${scoreBadge(latest.score)}
+            <div class="thresholds">
+                <span>High Put ≥ <strong>${item.high_put}</strong></span>
+                <span>High Call ≤ <strong>${item.high_call}</strong></span>
+            </div>
+            <div class="chart-wrap">
+                <canvas id="chart_${item.asset}"></canvas>
+            </div>
+            <div class="muted" style="margin-top:8px;font-size:0.7rem">
+    Last update: ${latest.recorded_at || '—'}
+</div>
+        </div>`;
+}
+
+function drawChart(item) {
+    const ctx = document.getElementById('chart_' + item.asset);
+    if (!ctx) return;
+    if (charts[item.asset]) charts[item.asset].destroy();
+    const labels = item.history.map(h => h.date);
+    const data = item.history.map(h => h.ratio);
+    charts[item.asset] = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: labels,
+            datasets: [{
+                label: 'PCR',
+                data: data,
+                borderColor: '#00e5ff',
+                backgroundColor: 'rgba(0,229,255,0.1)',
+                tension: 0.3,
+                fill: true,
+                pointRadius: 2,
+            }, {
+                label: 'High Put',
+                data: labels.map(() => item.high_put),
+                borderColor: '#00e5a0',
+                borderDash: [4,4],
+                pointRadius: 0,
+                fill: false,
+            }, {
+                label: 'High Call',
+                data: labels.map(() => item.high_call),
+                borderColor: '#ff4d6d',
+                borderDash: [4,4],
+                pointRadius: 0,
+                fill: false,
+            }]
+        },
+        options: {
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: { legend: { display: false } },
+            scales: {
+                x: { ticks: { color: '#8892b0', font: { size: 9 } }, grid: { display: false } },
+                y: { ticks: { color: '#8892b0' }, grid: { color: '#2a3040' } }
+            }
+        }
+    });
+}
+
+async function loadPCR() {
+    try {
+        const res = await fetch('/api/put-call-ratio');
+        const data = await res.json();
+        const container = document.getElementById('cardsContainer');
+        container.innerHTML = data.map(renderCard).join('');
+        data.forEach(drawChart);
+        const anyDate = data.find(d => d.latest.recorded_at);
+document.getElementById('lastUpdate').innerText = anyDate
+    ? 'Latest: ' + anyDate.latest.recorded_at
+    : '';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    } catch(e) {
+        document.getElementById('cardsContainer').innerHTML =
+            `<div class="card" style="color:#ff4d6d">Error: ${e.message}</div>`;
+    }
+}
+
+async function refreshPCR() {
+    const btn = event.target;
+    btn.disabled = true; btn.innerText = 'Fetching...';
+    try {
+        const res = await fetch('/api/put-call-ratio/refresh', {method: 'POST'});
+        const result = await res.json();
+        if (!result.success) alert('Refresh failed: ' + result.error);
+        await loadPCR();
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '<i data-lucide="refresh-cw" style="width:16px;height:16px;margin-right:6px"></i> Refresh Now';
+        if (typeof lucide !== 'undefined') lucide.createIcons();
+    }
+}
+
+loadPCR();
+setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
+</script>
+</body>
+</html>''')
+
+
 
                # Heatmap (with gauges, caching, and Lucide icons)
     with open('templates/heatmap.html', 'w') as f:
@@ -8166,6 +8380,7 @@ button:hover{transform:scale(1.02);box-shadow:0 0 15px rgba(0,229,255,0.3)}
     <div class="menu-item" onclick="window.location.href='/currencies'"><i data-lucide="currency" class="menu-icon"></i><span>COT Data</span></div>
     <div class="menu-item" onclick="window.location.href='/scorecard'"><i data-lucide="trending-up" class="menu-icon"></i><span>Asset Scorecard</span></div>
     <div class="menu-item" onclick="window.location.href='/sentiment'"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" 
      onclick="window.location.href='/economic-calendar'">
     <i data-lucide="calendar-days" class="menu-icon"></i>
@@ -8313,6 +8528,8 @@ setTimeout(() => {
 @login_required
 @admin_required
 def debug_jobs():
+    if scheduler is None or not scheduler.running:
+        return jsonify({'error': 'Scheduler not running (only active when app.py is __main__)'}), 503
     jobs = []
     for job in scheduler.get_jobs():
         jobs.append({
@@ -8543,6 +8760,18 @@ class CarryScoreHistory(db.Model):
     recorded_at = db.Column(db.DateTime, default=datetime.utcnow)
 
     __table_args__ = (db.Index('idx_carry_pair_date', 'pair', 'recorded_at'),)
+    
+    
+class PutCallRatio(db.Model):
+    __tablename__ = 'put_call_ratio'
+    id = db.Column(db.Integer, primary_key=True)
+    ticker = db.Column(db.String(10), nullable=False, index=True)   # IBIT, GLD, USO
+    asset = db.Column(db.String(20), nullable=False, index=True)    # BTC, XAU, OIL
+    ratio = db.Column(db.Float, nullable=False)
+    score = db.Column(db.Integer, default=0)                        # -2..+2 contrarian
+    recorded_at = db.Column(db.DateTime, default=datetime.utcnow, index=True)
+
+    __table_args__ = (db.Index('idx_pcr_asset_date', 'asset', 'recorded_at'),)
 
 
 @app.route('/carry-scanner')
@@ -8653,6 +8882,196 @@ def get_currency_rate(currency: str) -> float:
     else:
         print(f"❌ No Interest Rate Decision for {currency}")
         return 0.0
+
+# ---------- PUT/CALL RATIO CONFIGURATION ----------
+PCR_TICKER_MAP = {
+    "BTC": {"ticker": "IBIT", "high_put": 1.40, "high_call": 0.60},
+    "XAU": {"ticker": "GLD",  "high_put": 0.84, "high_call": 0.32},
+    "OIL": {"ticker": "USO",  "high_put": 1.71, "high_call": 0.82},
+}
+
+_BARCHART_URLS = {
+    "IBIT": "https://www.barchart.com/etfs-funds/quotes/IBIT/overview",
+    "GLD":  "https://www.barchart.com/etfs-funds/quotes/GLD/overview",
+    "SLV":  "https://www.barchart.com/etfs-funds/quotes/SLV/overview",
+    "QQQ":  "https://www.barchart.com/etfs-funds/quotes/QQQ/overview",
+    "SPY":  "https://www.barchart.com/etfs-funds/quotes/SPY/overview",
+    "UUP":  "https://www.barchart.com/etfs-funds/quotes/UUP/overview",
+    "USO":  "https://www.barchart.com/etfs-funds/quotes/USO/overview",
+}
+
+
+def fetch_put_call_ratio(ticker: str):
+    """Scrape Barchart for the Put/Call Vol Ratio. Returns float or None."""
+    if not HAS_CLOUDSCRAPER or not HAS_BS4:
+        print("⚠️ cloudscraper or bs4 not installed — skipping Barchart fetch")
+        return None
+    if ticker not in _BARCHART_URLS:
+        return None
+
+    target_url = _BARCHART_URLS[ticker]
+    headers = {
+        "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                       "AppleWebKit/537.36 (KHTML, like Gecko) "
+                       "Chrome/114.0.0.0 Safari/537.36"),
+        "Accept": "application/json, text/html, application/xhtml+xml",
+    }
+    try:
+        scraper = cloudscraper.create_scraper()
+        resp = scraper.get(target_url, headers=headers, timeout=15)
+        if resp.status_code != 200:
+            print(f"Barchart HTTP {resp.status_code} for {ticker}")
+            return None
+        soup = BeautifulSoup(resp.text, "html.parser")
+        for block in soup.find_all("div", class_="column"):
+            text = block.get_text(separator=" ").strip()
+            if "Put/Call Vol Ratio" in text:
+                m = re.search(r"Put/Call Vol Ratio\s*([0-9.]+)", text)
+                if m:
+                    return float(m.group(1))
+        m = re.search(r"Put/Call Vol Ratio\s*([0-9.]+)",
+                      soup.get_text(separator=" "))
+        if m:
+            return float(m.group(1))
+        return None
+    except Exception as e:
+        print(f"Barchart scrape error for {ticker}: {e}")
+        return None
+
+def fetch_put_call_ratio_yfinance(ticker: str):
+    """
+    Compute Put/Call Volume Ratio from Yahoo Finance options chain.
+    Picks the nearest expiry that actually has meaningful volume.
+    Falls back to open interest if volume is zero.
+    Returns float or None.
+    """
+    try:
+        t = yf.Ticker(ticker)
+        expirations = t.options
+        if not expirations:
+            print(f"⚠️ No options expirations for {ticker}")
+            return None
+
+        # Try each expiry in order; use the first one with real volume
+        chosen = None
+        for exp in expirations[:4]:          # check up to 4 nearest expiries
+            try:
+                chain = t.option_chain(exp)
+                call_vol = chain.calls["volume"].sum(skipna=True)
+                put_vol  = chain.puts["volume"].sum(skipna=True)
+                if (call_vol or 0) + (put_vol or 0) >= 500:
+                    chosen = (exp, chain, call_vol, put_vol)
+                    break
+            except Exception as inner:
+                print(f"  ↳ skipping expiry {exp} for {ticker}: {inner}")
+                continue
+
+        if chosen is None:
+            # Nobody has volume — fall back to nearest expiry + open interest
+            chain = t.option_chain(expirations[0])
+            call_vol = chain.calls["openInterest"].sum(skipna=True)
+            put_vol  = chain.puts["openInterest"].sum(skipna=True)
+            exp_used = expirations[0]
+        else:
+            exp_used, chain, call_vol, put_vol = chosen
+            if (call_vol or 0) == 0:
+                call_vol = chain.calls["openInterest"].sum(skipna=True)
+                put_vol  = chain.puts["openInterest"].sum(skipna=True)
+
+        if not call_vol or pd.isna(call_vol):
+            print(f"⚠️ No usable volume/OI for {ticker}")
+            return None
+
+        ratio = float(put_vol / call_vol)
+        print(f"📊 {ticker} PCR = {ratio:.3f}  "
+              f"(exp={exp_used}, put_vol={put_vol:.0f}, call_vol={call_vol:.0f})")
+        return ratio
+
+    except Exception as e:
+        print(f"❌ yfinance PCR error for {ticker}: {e}")
+        return None
+
+
+def compute_pcr_score(ratio: float, high_put: float, high_call: float) -> int:
+    """Contrarian: high put→bullish(+2), high call→bearish(-2)."""
+    if ratio >= high_put:
+        return 2
+    if ratio <= high_call:
+        return -2
+    return 0
+
+
+def refresh_put_call_ratios() -> dict:
+    """Fetch PCR for BTC/XAU/OIL and store ONE entry per day per asset.
+    - If today's record exists → update it (no new row).
+    - Else → insert a new row.
+    - After every save, prune to the last 30 entries per asset.
+    """
+    results = {}
+    with app.app_context():
+        db.create_all()
+
+        today = datetime.utcnow().date()
+        start_of_day = datetime.combine(today, datetime.min.time())
+        end_of_day   = datetime.combine(today, datetime.max.time())
+
+        for asset, cfg in PCR_TICKER_MAP.items():
+            ticker = cfg["ticker"]
+            ratio = fetch_put_call_ratio_yfinance(ticker)
+            if ratio is None:
+                results[asset] = {"ticker": ticker, "ratio": None,
+                                  "score": None, "error": "fetch failed"}
+                continue
+            score = compute_pcr_score(ratio, cfg["high_put"], cfg["high_call"])
+
+            # --- One record per day: update today's row, else insert ---
+            existing = PutCallRatio.query.filter(
+                PutCallRatio.asset == asset,
+                PutCallRatio.recorded_at >= start_of_day,
+                PutCallRatio.recorded_at <= end_of_day
+            ).first()
+
+            if existing:
+                existing.ticker = ticker
+                existing.ratio = ratio
+                existing.score = score
+                existing.recorded_at = datetime.utcnow()   # refresh timestamp of today's row
+            else:
+                db.session.add(PutCallRatio(
+                    ticker=ticker, asset=asset,
+                    ratio=ratio, score=score,
+                    recorded_at=datetime.utcnow()
+                ))
+
+            results[asset] = {"ticker": ticker, "ratio": ratio, "score": score}
+            print(f"✅ PCR {asset} ({ticker}) = {ratio:.3f} → score {score:+d} "
+                  f"({'updated' if existing else 'inserted'})")
+
+        db.session.commit()
+
+        # --- Prune: keep only last 30 records per asset ---
+        for asset in PCR_TICKER_MAP:
+            count = PutCallRatio.query.filter_by(asset=asset).count()
+            if count > 30:
+                ids = [r.id for r in PutCallRatio.query.filter_by(asset=asset)
+                       .order_by(PutCallRatio.recorded_at.asc())
+                       .limit(count - 30).all()]
+                if ids:
+                    PutCallRatio.query.filter(PutCallRatio.id.in_(ids))\
+                        .delete(synchronize_session=False)
+        db.session.commit()
+    return results
+
+
+def get_put_call_sentiment_score(asset: str):
+    """Latest contrarian PCR score (-2..+2) for BTC/XAU/OIL, or None if no data."""
+    asset = asset.upper()
+    if asset not in PCR_TICKER_MAP:
+        return None
+    latest = PutCallRatio.query.filter_by(asset=asset)\
+        .order_by(PutCallRatio.recorded_at.desc()).first()
+    return latest.score if latest else None
+
 
 
 def score_spread(spread: float) -> int:
@@ -8784,65 +9203,77 @@ def get_carry_score_history(days=30):
 if __name__ == '__main__':
     create_templates()
     
-    # Start background scheduler for retail sentiment (Myfxbook + FastBull)
-  #  from apscheduler.schedulers.background import BackgroundScheduler
-   # from apscheduler.triggers.cron import CronTrigger
-  ##  from datetime import timedelta
- #   import atexit
+    # ---- Background scheduler ----
+    from apscheduler.schedulers.background import BackgroundScheduler
+    from apscheduler.triggers.cron import CronTrigger
+    import atexit
     
-    #scheduler = BackgroundScheduler()
+    scheduler = BackgroundScheduler()
     
-    # Myfxbook job (kept as fallback – may fail, but that's fine)
-   # scheduler.add_job(
-     #   func=update_retail_sentiment,
-     #   trigger="interval",
-     #   minutes=30,
-      #  id='retail_sentiment_job'
-    #)
+    # 1) Myfxbook fallback (30 min) — may fail, that's fine
+    scheduler.add_job(
+        func=update_retail_sentiment,
+        trigger="interval",
+        minutes=30,
+        id='retail_sentiment_job'
+    )
     
-    # FastBull job (new primary source)
-   # scheduler.add_job(
-     #   func=update_sentiment_from_fastbull,
-      #  trigger="interval",
-     #   minutes=60,
-     #   id='fastbull_sentiment_job'
-   # )
+    # 2) FastBull retail sentiment (60 min) — now FX-only (no BTC/XAU/OIL)
+    scheduler.add_job(
+        func=update_sentiment_from_fastbull,
+        trigger="interval",
+        minutes=60,
+        id='fastbull_sentiment_job'
+    )
     
-    # Score history job (every 3 days at midnight UTC)
- #   scheduler.add_job(
-    #    func=save_all_asset_scores,
-   #     trigger=CronTrigger(day='*/3', hour=0, minute=0),
-    #    id='score_history_job'
-   # )
+    # 3) Put/Call ratio for BTC / XAU / OIL (60 min)
+    scheduler.add_job(
+        func=refresh_put_call_ratios,
+        trigger="interval",
+        minutes=60,
+        id='pcr_job'
+    )
     
-  #  scheduler.start()
- #   atexit.register(lambda: scheduler.shutdown())
+    # 4) Asset score history — every 3 days at 00:00 UTC
+    scheduler.add_job(
+        func=save_all_asset_scores,
+        trigger=CronTrigger(day='*/3', hour=0, minute=0),
+        id='score_history_job'
+    )
     
-    # ---------- ADD THIS ----------
-    # Run FastBull update once immediately on startup (with app context)
-  #  print("Running initial FastBull sentiment fetch...")
-  #  with app.app_context():
-   #     update_sentiment_from_fastbull()
-    # -----------------------------
+    scheduler.start()
+    atexit.register(lambda: scheduler.shutdown())
     
+    # ---- Immediate fetches on startup ----
+    print("Running initial FastBull sentiment fetch...")
+    with app.app_context():
+        update_sentiment_from_fastbull()
+    
+    print("Fetching initial Put/Call ratios (BTC / XAU / OIL)...")
+    with app.app_context():
+        pcr_summary = refresh_put_call_ratios()
+        for asset, info in pcr_summary.items():
+            if info.get("ratio") is not None:
+                print(f"   ✅ {asset} ({info['ticker']}) = {info['ratio']:.3f}  →  score {info['score']:+d}")
+            else:
+                print(f"   ⚠️ {asset} ({info['ticker']}) fetch failed")
+    
+    # ---- Auto-open browser ----
     def open_browser():
         time.sleep(2)
         webbrowser.open('http://localhost:5000')
     
     threading.Thread(target=open_browser, daemon=True).start()
     
-    print("=" * 50)
+    # ---- Banner ----
+    print("=" * 55)
     print("Tradion - Dark Pro Trader Edition")
     print("Admin: Karlmax / admin4125")
-    print("All requested changes implemented:")
-    print("- Sentiment column inverted (contrarian)")
-    print("- COT admin: longs, shorts, auto net position")
-    print("- Currencies page renamed to 'COT Data' with vertical bar graph")
-    print("- Asset Scorecard padding increased (medium size)")
-    print("- Technical score now uses 21-day SMA from Yahoo Finance")
-    print("- Retail sentiment auto-fetched from FastBull (every 60 minutes)")
-    print("- Myfxbook fallback still runs every 30 minutes (may fail)")
-    print("- Score history saved every 3 days at midnight UTC (max 30 entries)")
-    print("=" * 50)
+    print("Active scheduled jobs:")
+    print("  • FastBull sentiment ....... every 60 min  (FX pairs only)")
+    print("  • Myfxbook fallback ........ every 30 min")
+    print("  • Put/Call ratio ........... every 60 min  (BTC / XAU / OIL)")
+    print("  • Asset score history ...... every 3 days @ 00:00 UTC")
+    print("=" * 55)
     
     app.run(debug=False, use_reloader=False, host='0.0.0.0', port=5000)

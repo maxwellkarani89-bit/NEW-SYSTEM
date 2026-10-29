@@ -8,29 +8,16 @@
     <script src="https://unpkg.com/lucide@latest"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
     <style>
-        /* ---------- BASE STYLES (unchanged) ---------- */
         *{margin:0;padding:0;box-sizing:border-box}
         body{font-family:'Segoe UI','Inter',sans-serif;background:#0B0F1A;color:#E0E0E0;display:flex;min-height:100vh}
         a{text-decoration:none;color:inherit}
 
-        /* ---------- SIDEBAR (Desktop + Mobile sliding) ---------- */
         .sidebar{
-            width:280px;
-            background:#121826;
-            min-height:100vh;
-            padding:20px;
-            position:fixed;
-            left:0;
-            top:0;
-            border-right:1px solid #2a3040;
-            z-index:1000;
-            transition: transform 0.3s ease;
-            overflow-y:auto;
-            -webkit-overflow-scrolling:touch;
+            width:280px;background:#121826;min-height:100vh;padding:20px;
+            position:fixed;left:0;top:0;border-right:1px solid #2a3040;z-index:1000;
+            transition: transform 0.3s ease;overflow-y:auto;-webkit-overflow-scrolling:touch;
         }
-        .sidebar.closed-mobile{
-            transform: translateX(-100%);
-        }
+        .sidebar.closed-mobile{transform: translateX(-100%);}
         .sidebar .logo{font-size:24px;font-weight:800;color:#00e5ff;text-align:center;margin-bottom:30px;padding-bottom:20px;border-bottom:1px solid #2a3040}
         .sidebar .menu-item{display:flex;align-items:center;padding:12px 15px;margin:5px 0;border-radius:10px;cursor:pointer;transition:all 0.2s;color:#a0b0c0}
         .sidebar .menu-item:hover{background:rgba(0,229,255,0.08);color:#00e5ff}
@@ -38,74 +25,27 @@
         .sidebar .menu-icon{font-size:20px;margin-right:12px}
         .sidebar .menu-icon svg{width:20px;height:20px;vertical-align:middle}
 
-        /* ---------- MOBILE HEADER (hidden on desktop) ---------- */
         .mobile-header{
-            display:none;
-            position:fixed;
-            top:0;
-            left:0;
-            right:0;
-            height:56px;
-            background:#121826;
-            border-bottom:1px solid #2a3040;
-            z-index:999;
-            align-items:center;
-            padding:0 16px;
-            gap:12px;
+            display:none;position:fixed;top:0;left:0;right:0;height:56px;
+            background:#121826;border-bottom:1px solid #2a3040;z-index:999;
+            align-items:center;padding:0 16px;gap:12px;
         }
-        .mobile-header .hamburger{
-            background:none;
-            border:none;
-            color:#E0E0E0;
-            cursor:pointer;
-            padding:4px;
-            display:flex;
-            align-items:center;
-        }
-        .mobile-header .mobile-logo{
-            font-size:20px;
-            font-weight:800;
-            color:#00e5ff;
-            flex:1;
-        }
+        .mobile-header .hamburger{background:none;border:none;color:#E0E0E0;cursor:pointer;padding:4px;display:flex;align-items:center;}
+        .mobile-header .mobile-logo{font-size:20px;font-weight:800;color:#00e5ff;flex:1;}
 
-        /* ---------- OVERLAY (for mobile sidebar) ---------- */
-        .sidebar-overlay{
-            display:none;
-            position:fixed;
-            inset:0;
-            background:rgba(0,0,0,0.5);
-            z-index:998;
-            transition: opacity 0.3s;
-        }
-        .sidebar-overlay.active{
-            display:block;
-        }
+        .sidebar-overlay{display:none;position:fixed;inset:0;background:rgba(0,0,0,0.5);z-index:998;transition: opacity 0.3s;}
+        .sidebar-overlay.active{display:block;}
 
-        /* ---------- MAIN CONTENT ---------- */
-        .main-content{
-            flex:1;
-            margin-left:280px;
-            padding:12px 20px;
-            transition: margin-left 0.3s;
-            width:100%;
-            min-height:100vh;
-        }
+        .main-content{flex:1;margin-left:280px;padding:12px 20px;transition: margin-left 0.3s;width:100%;min-height:100vh;}
         .header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px;flex-wrap:wrap;gap:10px}
         .header h2{color:#00e5ff;font-size:1.8rem}
         .symbol-selector select{padding:8px 12px;background:#121826;border:1.5px solid #2a3040;color:#fff;border-radius:8px;font-size:0.9rem;min-width:180px}
 
-        /* ---------- SCORECARD GRID ---------- */
         .scorecard-grid{display:grid;grid-template-columns:0.9fr 1.1fr;gap:12px}
         .gauge-panel{
-            background:#121826;
-            border-radius:16px;
-            padding:12px 12px 16px 12px;
-            display:flex;
-            flex-direction:column;
-            align-items:center;
-            border:1px solid #2a3040;
-            position:relative;
+            background:#121826;border-radius:16px;padding:12px 12px 16px 12px;
+            display:flex;flex-direction:column;align-items:center;
+            border:1px solid #2a3040;position:relative;
         }
         .gauge-container{position:relative;width:160px;height:90px;margin-bottom:8px}
         .gauge-svg{width:100%;height:100%}
@@ -122,7 +62,6 @@
         .spinner{border:3px solid #2a3040;border-top:3px solid #00e5ff;border-radius:50%;width:30px;height:30px;animation:spin 1s linear infinite}
         @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
 
-        /* ---------- SCORE SUMMARY ---------- */
         .score-summary{display:flex;flex-direction:column;gap:6px;width:100%;margin-top:8px}
         .score-item{display:flex;justify-content:space-between;align-items:center;padding:4px 10px;background:#1a1f2e;border-radius:8px}
         .score-label{font-weight:500;font-size:0.85rem}
@@ -131,15 +70,9 @@
         .score-value.negative{background:rgba(255,77,109,0.15);color:#ff4d6d}
         .score-value.neutral{background:rgba(255,184,0,0.15);color:#ffb800}
 
-        /* ---------- RIGHT COLUMN ---------- */
         .right-col{display:flex;flex-direction:column;gap:10px}
         .two-cols{display:grid;grid-template-columns:1fr 1fr;gap:10px}
-        .panel{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            border:1px solid #2a3040;
-        }
+        .panel{background:#121826;border-radius:12px;padding:10px;border:1px solid #2a3040;}
         .panel h3{color:#00e5ff;font-size:0.9rem;margin-bottom:6px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .indicator-row{display:flex;justify-content:space-between;padding:3px 0;border-bottom:1px solid rgba(42,48,64,0.3)}
         .indicator-row:last-child{border-bottom:none}
@@ -162,54 +95,17 @@
         .panel.crowd-table th:nth-child(1),.panel.crowd-table td:nth-child(1){width:50%}
         .panel.crowd-table th:nth-child(2),.panel.crowd-table td:nth-child(2){width:50%}
 
-        /* ---------- HISTORY CHART ---------- */
-        .history-chart-container{
-            background:#121826;
-            border-radius:12px;
-            padding:10px;
-            margin-top:10px;
-            border:1px solid #2a3040;
-        }
+        .history-chart-container{background:#121826;border-radius:12px;padding:10px;margin-top:10px;border:1px solid #2a3040;}
         .history-chart-container h3{color:#00e5ff;font-size:0.9rem;margin-bottom:8px;border-bottom:1px solid #2a3040;padding-bottom:4px}
         .chart-wrapper{position:relative;height:240px;width:100%}
 
-        /* ---------- RESPONSIVE (Phone & Tablet) ---------- */
         @media (max-width:768px){
-            /* Show mobile header */
-            .mobile-header{
-                display:flex;
-            }
-
-            /* Hide desktop sidebar by default, will be toggled */
-            .sidebar{
-                transform: translateX(-100%);
-                top:0;
-                left:0;
-                height:100%;
-                width:280px;
-                z-index:1000;
-                box-shadow: 2px 0 12px rgba(0,0,0,0.4);
-            }
-            .sidebar.open{
-                transform: translateX(0);
-            }
-
-            .main-content{
-                margin-left:0 !important;
-                padding-top:68px;  /* mobile header height + spacing */
-                padding-left:15px;
-                padding-right:15px;
-                padding-bottom:20px;
-            }
-
-            .scorecard-grid{
-                grid-template-columns:1fr;
-                gap:15px;
-            }
-            .gauge-container{
-                width:140px;
-                height:80px;
-            }
+            .mobile-header{display:flex}
+            .sidebar{transform: translateX(-100%);top:0;left:0;height:100%;width:280px;z-index:1000;box-shadow: 2px 0 12px rgba(0,0,0,0.4);}
+            .sidebar.open{transform: translateX(0)}
+            .main-content{margin-left:0 !important;padding-top:68px;padding-left:15px;padding-right:15px;padding-bottom:20px;}
+            .scorecard-grid{grid-template-columns:1fr;gap:15px}
+            .gauge-container{width:140px;height:80px}
             .panel{padding:8px}
             .indicator-values{gap:6px}
             .value{width:40px}
@@ -222,19 +118,15 @@
 </head>
 <body>
 
-<!-- ========== MOBILE HEADER ========== -->
 <header class="mobile-header">
     <button class="hamburger" id="hamburgerBtn" aria-label="Menu">
         <i data-lucide="menu" style="width:24px;height:24px;"></i>
     </button>
     <span class="mobile-logo">⚡ Tradion</span>
-    <!-- optional spacer or extra icons -->
 </header>
 
-<!-- ========== SIDEBAR OVERLAY ========== -->
 <div class="sidebar-overlay" id="sidebarOverlay"></div>
 
-<!-- ========== SIDEBAR ========== -->
 <div class="sidebar" id="sidebar">
     <div class="logo">⚡ Tradion</div>
     <div class="menu-item" onclick="navigate('/dashboard')"><i data-lucide="chart-line" class="menu-icon"></i><span>Dashboard</span></div>
@@ -243,6 +135,7 @@
     <div class="menu-item active" onclick="navigate('/forex-scorecard')"><i data-lucide="trending-up" class="menu-icon"></i><span>Forex Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/central-bank-scorecard')"><i data-lucide="landmark" class="menu-icon"></i><span>Central Bank Scorecard</span></div>
     <div class="menu-item" onclick="navigate('/sentiment')"><i data-lucide="message-circle" class="menu-icon"></i><span>Sentiment</span></div>
+    <div class="menu-item" onclick="window.location.href='/put-call-ratio'"><i data-lucide="bar-chart-2" class="menu-icon"></i><span>Put/Call Ratio</span></div>
     <div class="menu-item {% if current_page == 'economic_calendar' %}active{% endif %}" onclick="navigate('/economic-calendar')">
         <i data-lucide="calendar-days" class="menu-icon"></i><span>Economic Calendar</span>
     </div>
@@ -256,7 +149,6 @@
     <div class="menu-item" onclick="logout()"><i data-lucide="log-out" class="menu-icon"></i><span>Logout</span></div>
 </div>
 
-<!-- ========== MAIN CONTENT ========== -->
 <div class="main-content">
     <div class="header">
         <h2>Forex Scorecard</h2>
@@ -348,7 +240,6 @@
 </div>
 
 <script>
-    // ---------- MOBILE SIDEBAR TOGGLE ----------
     const sidebar = document.getElementById('sidebar');
     const overlay = document.getElementById('sidebarOverlay');
     const hamburgerBtn = document.getElementById('hamburgerBtn');
@@ -358,33 +249,22 @@
         overlay.classList.add('active');
         document.body.style.overflow = 'hidden';
     }
-
     function closeSidebar() {
         sidebar.classList.remove('open');
         overlay.classList.remove('active');
         document.body.style.overflow = '';
     }
-
     hamburgerBtn.addEventListener('click', () => {
-        if (sidebar.classList.contains('open')) {
-            closeSidebar();
-        } else {
-            openSidebar();
-        }
+        if (sidebar.classList.contains('open')) closeSidebar();
+        else openSidebar();
     });
-
     overlay.addEventListener('click', closeSidebar);
 
-    // Close sidebar when a menu item is clicked (navigate via function)
     function navigate(url) {
         window.location.href = url;
-        // On mobile, close sidebar after navigating
-        if (window.innerWidth <= 768) {
-            closeSidebar();
-        }
+        if (window.innerWidth <= 768) closeSidebar();
     }
 
-    // ---------- PAIR LIST ----------
     const allPairs = {{ all_pairs|tojson }};
     const select = document.getElementById('symbolSelect');
     allPairs.forEach(pair => {
@@ -403,9 +283,11 @@
         "Jobs Market Bias"
     ];
 
+    // Assets that use PCR (Put/Call Ratio) as their sentiment source
+    const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
+
     let historyChart = null;
 
-    // ---------- MAIN LOAD ----------
     async function loadScorecard() {
         const symbol = select.value;
         if (!symbol) return;
@@ -416,19 +298,26 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            const fundamentalsScore = data.fundamentals_score ??
-                (["Jobs Market Bias", "Inflation Bias", "Economic Growth Bias"].reduce((sum, cat) => sum + (data.category_bias[cat] || 0), 0));
-            const technicalScore = data.technical_score ?? computeTechnicalScore(data);
-            const cotScore = data.sentiment_cot_score ?? 0;
-            const tradionScore = data.tradion_score ?? (fundamentalsScore + technicalScore + cotScore);
+            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
-            updateGauge(tradionScore, data.overall?.bias || getBiasFromScore(tradionScore), data.overall?.color || getColorFromScore(tradionScore));
-            updateScores({
-                tradionScore,
-                technicalScore,
-                cotScore,
-                fundamentalsScore
-            });
+            // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
+            const fundamentalsScore = Number(data.fundamentals_score ?? 0);
+            const technicalScore    = Number(data.technical_score    ?? 0);
+
+            let cotScore = Number(data.sentiment_cot_score ?? 0);
+            if (isStandalone) {
+                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
+            }
+
+            // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
+            const tradionScore = technicalScore + cotScore + fundamentalsScore;
+
+            // Recompute bias/color locally so gauge always agrees with the score
+            const bias  = getBiasFromScore(tradionScore);
+            const color = getColorFromScore(tradionScore);
+
+            updateGauge(tradionScore, bias, color);
+            updateScores({ tradionScore, technicalScore, cotScore, fundamentalsScore });
             renderCategoryCards(data);
             loadScoreHistory(symbol);
         } catch(e) {
@@ -437,18 +326,6 @@
         } finally {
             overlay.classList.add('hidden');
         }
-    }
-
-    function computeTechnicalScore(data) {
-        const seasonScore = data.seasonality_score || 0;
-        let trendScore = 0;
-        const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
-        if (trendInd && trendInd.signal_value !== undefined) {
-            trendScore = Number(trendInd.signal_value);
-        } else {
-            trendScore = data.trend_score || 0;
-        }
-        return seasonScore + trendScore;
     }
 
     function getBiasFromScore(score) {
@@ -485,6 +362,7 @@
         document.getElementById('gaugeFill').setAttribute('stroke-dasharray', `${dash} ${circumference}`);
     }
 
+    // Sets the four bars from the pre-computed scores (no additional math here).
     function updateScores(scores) {
         setScoreValue('tradionScore', scores.tradionScore);
         setScoreValue('technicalScore', scores.technicalScore);
@@ -494,7 +372,7 @@
 
     function setScoreValue(id, value) {
         const el = document.getElementById(id);
-        el.textContent = value.toFixed(1);
+        el.textContent = Number(value).toFixed(1);
         el.className = 'score-value ' + (value > 0 ? 'positive' : value < 0 ? 'negative' : 'neutral');
     }
 
@@ -536,6 +414,7 @@
         return html;
     }
 
+    // ---- Crowd Sentiment table: COT row + PCR row (only for BTC/XAU/OIL) ----
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -544,10 +423,27 @@
         let label = 'Neutral', labelClass = 'neutral';
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
+
+        const baseUpper = (data.base || '').toUpperCase();
+        let pcrRow = '';
+        if (PCR_ASSETS.includes(baseUpper)) {
+            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
+                ? Number(data.pcr_score)
+                : Number(data.sentiment_score || 0);
+            let pcrClass = 'neutral';
+            let pcrDisplay = '0';
+            if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
+            else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
+            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        }
+
         return `<div style="overflow-x:auto;">
                     <table class="crowd-table">
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
-                        <tbody><tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr></tbody>
+                        <tbody>
+                            <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
+                            ${pcrRow}
+                        </tbody>
                     </table>
                 </div>`;
     }
@@ -559,10 +455,16 @@
         const rest = CATEGORY_ORDER.slice(2);
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
+        const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
-        // Crowd Sentiment (COT) card
+        // ---------- Crowd Sentiment (COT) card ----------
         const crowdCategory = firstTwo[0];
-        const crowdBiasScore = data.category_bias[crowdCategory] || 0;
+        const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
+        const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
+        let crowdBiasScore = cotScoreForBias;
+        if (isStandalone) {
+            crowdBiasScore += Number(data.sentiment_score || 0);
+        }
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
@@ -571,23 +473,23 @@
         crowdCard.innerHTML = crowdHtml;
         twoColsDiv.appendChild(crowdCard);
 
-        // Technical Bias card
+        // ---------- Technical Bias card ----------
         const techCategory = firstTwo[1];
-        const techBiasScore = data.category_bias[techCategory] || 0;
+        const techBiasScore = Number(data.technical_score || 0);
         const techCard = document.createElement('div');
         techCard.className = 'panel';
         const seasonSignal = data.seasonality_bias || 'Neutral';
-        const seasonScore = data.seasonality_score || 0;
+        const seasonScore = Number(data.seasonality_score || 0);
         const seasonClass = seasonScore > 0 ? 'positive' : (seasonScore < 0 ? 'negative' : 'neutral');
         const trendInd = data.base_indicators?.find(i => i.name === '21-day SMA Trend');
-        const trendScore = trendInd ? Number(trendInd.signal_value) : 0;
+        const trendScore = trendInd ? Number(trendInd.signal_value || 0) : 0;
         const trendSignal = trendScore > 0 ? 'Bullish' : (trendScore < 0 ? 'Bearish' : 'Neutral');
         const trendClass = trendScore > 0 ? 'positive' : (trendScore < 0 ? 'negative' : 'neutral');
 
         let techHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${techCategory}</h3></div>
                         <div class="indicator-row" style="font-weight:bold; margin-bottom:2px"><span>Bias Score</span><span class="value ${techBiasScore > 0 ? 'positive' : techBiasScore < 0 ? 'negative' : 'neutral'}">${techBiasScore > 0 ? '+' : ''}${techBiasScore}</span></div>
-                        <div class="indicator-row"><span class="indicator-label">21-day SMA Trend</span><div class="indicator-values"><span class="value ${trendClass}">${trendSignal}</span><span class="value">-</span><span class="value">-</span><span class="value">-</span></div></div>
-                        <div class="indicator-row"><span class="indicator-label">Seasonality</span><div class="indicator-values"><span class="value ${seasonClass}">${seasonSignal}</span><span class="value">${seasonScore > 0 ? '+' : ''}${seasonScore}</span><span class="value">-</span><span class="value">-</span></div></div>`;
+                        <div class="indicator-row"><span class="indicator-label">21-day SMA Trend</span><div class="indicator-values"><span class="value ${trendClass}">${trendSignal}</span><span class="value ${trendClass}">${trendScore > 0 ? '+' : ''}${trendScore}</span><span class="value">-</span><span class="value">-</span></div></div>
+                        <div class="indicator-row"><span class="indicator-label">Seasonality</span><div class="indicator-values"><span class="value ${seasonClass}">${seasonSignal}</span><span class="value ${seasonClass}">${seasonScore > 0 ? '+' : ''}${seasonScore}</span><span class="value">-</span><span class="value">-</span></div></div>`;
         techCard.innerHTML = techHtml;
         twoColsDiv.appendChild(techCard);
         container.appendChild(twoColsDiv);
@@ -661,10 +563,8 @@
 
     function logout() { fetch('/logout').then(()=>window.location.href='/login'); }
 
-    // Load first pair if available
     if (allPairs.length > 0) { select.value = allPairs[0][0] + '/' + allPairs[0][1]; loadScorecard(); }
 
-    // Initialize Lucide icons (now also covers mobile header)
     setTimeout(() => { if (typeof lucide !== 'undefined') lucide.createIcons(); }, 100);
 </script>
 </body>
