@@ -2327,6 +2327,10 @@ def detailed_analysis():
                 })
         except Exception as e:
             print(f"Error processing {pair}: {e}")
+            try:
+                db.session.rollback()
+            except Exception as _rb_err:
+                print(f"  ↳ rollback failed for {pair}: {_rb_err}")
             results.append({
                 "symbol": pair, "bias": "ERROR", "score": 0,
                 "trend": 0, "seasonality": 0, "cot": 0, "crowd": 0,
@@ -2335,7 +2339,6 @@ def detailed_analysis():
                 "nfp": 0, "avg_hourly_earnings": 0, "unemp_rate": 0,
                 "unemp_claims": 0, "adp": 0, "jolts": 0
             })
-    return jsonify(results)
 
 @app.route('/api/analyze', methods=['POST'])
 @login_required
@@ -2357,96 +2360,124 @@ def api_analyze():
 
         for base, quote in ALL_PAIRS:
             pair_name = f"{base}/{quote}"
+            try:
+                # ---- NEW WEIGHTED SCORES ----
+                weighted = calculate_weighted_pair_score(pair_name, base, quote)
+                total_score = weighted["total_raw"]
+                overall_bias, overall_symbol, overall_color, display_score = classify_bias(total_score)
 
-            # ---- NEW WEIGHTED SCORES ----
-            weighted = calculate_weighted_pair_score(pair_name, base, quote)
-            total_score = weighted["total_raw"]          # FIXED: use total_raw, not total_scaled
-            overall_bias, overall_symbol, overall_color, display_score = classify_bias(total_score)
-
-            # ---- COT data for display (keep old format) ----
-            cot_df, _ = analyze_cot([(base, quote)])
-            if not cot_df.empty:
-                r = cot_df.iloc[0]
-                cot_data = {
-                    'bias': str(r['COT_Bias']),
-                    'symbol': str(r['COT_Symbol']),
-                    'momentum': str(r['Momentum']),
-                    'mom_symbol': str(r['Mom_Symbol']),
-                    'score': int(r['COT_Score']),
-                    'momentum_score': int(r['Momentum_Score'])
-                }
-            else:
-                cot_data = {'bias': 'No Data', 'symbol': '●', 'momentum': 'No Data',
-                            'mom_symbol': '●', 'score': 0, 'momentum_score': 0}
-
-            # ---- Economic display using new weighted economic bias ----
-            econ_bias, econ_sym, diff_econ, econ_score_norm = get_economic_weighted_bias(base, quote)
-            econ_data = {
-                'bias': econ_bias,
-                'symbol': econ_sym,
-                'diff': diff_econ,
-                'score': econ_score_norm
-            }
-
-            # ---- Technical (21d SMA) ----
-            yf_symbol = SYMBOL_MAPPING.get(pair_name, pair_name.replace('/', '') + '=X')
-            trend_raw = get_technical_directional_score(yf_symbol)
-            trend_bias = "Bullish" if trend_raw > 0 else "Bearish" if trend_raw < 0 else "Neutral"
-            trend_symbol = "▲" if trend_raw > 0 else "▼" if trend_raw < 0 else "●"
-
-            # ---- Seasonality ----
-            seasonality_bias, seasonality_score = get_seasonality_bias(pair_name)
-
-            # ---- Sentiment (contrarian) ----
-            sent = sentiment_data.get(pair_name)
-            if sent:
-                if sent.short_pct > sent.long_pct:
-                    sentiment_label = "Bullish"
-                    sent_score = 2
-                elif sent.long_pct > sent.short_pct:
-                    sentiment_label = "Bearish"
-                    sent_score = -2
+                # ---- COT data for display (keep old format) ----
+                cot_df, _ = analyze_cot([(base, quote)])
+                if not cot_df.empty:
+                    r = cot_df.iloc[0]
+                    cot_data = {
+                        'bias': str(r['COT_Bias']),
+                        'symbol': str(r['COT_Symbol']),
+                        'momentum': str(r['Momentum']),
+                        'mom_symbol': str(r['Mom_Symbol']),
+                        'score': int(r['COT_Score']),
+                        'momentum_score': int(r['Momentum_Score'])
+                    }
                 else:
-                    sentiment_label = "Neutral"
+                    cot_data = {'bias': 'No Data', 'symbol': '●', 'momentum': 'No Data',
+                                'mom_symbol': '●', 'score': 0, 'momentum_score': 0}
+
+                # ---- Economic display using new weighted economic bias ----
+                econ_bias, econ_sym, diff_econ, econ_score_norm = get_economic_weighted_bias(base, quote)
+                econ_data = {
+                    'bias': econ_bias,
+                    'symbol': econ_sym,
+                    'diff': diff_econ,
+                    'score': econ_score_norm
+                }
+
+                # ---- Technical (21d SMA) ----
+                yf_symbol = SYMBOL_MAPPING.get(pair_name, pair_name.replace('/', '') + '=X')
+                trend_raw = get_technical_directional_score(yf_symbol)
+                trend_bias = "Bullish" if trend_raw > 0 else "Bearish" if trend_raw < 0 else "Neutral"
+                trend_symbol = "▲" if trend_raw > 0 else "▼" if trend_raw < 0 else "●"
+
+                # ---- Seasonality ----
+                seasonality_bias, seasonality_score = get_seasonality_bias(pair_name)
+
+                # ---- Sentiment (contrarian) ----
+                sent = sentiment_data.get(pair_name)
+                if sent:
+                    if sent.short_pct > sent.long_pct:
+                        sentiment_label = "Bullish"
+                        sent_score = 2
+                    elif sent.long_pct > sent.short_pct:
+                        sentiment_label = "Bearish"
+                        sent_score = -2
+                    else:
+                        sentiment_label = "Neutral"
+                        sent_score = 0
+                else:
+                    sentiment_label = "N/A"
                     sent_score = 0
-            else:
-                sentiment_label = "N/A"
-                sent_score = 0
 
-            # ---- Build result object ----
-            result = {
-                'pair': pair_name,
-                'cot': cot_data,
-                'economic': econ_data,
-                'trend': {'bias': trend_bias, 'symbol': trend_symbol, 'score': trend_raw},
-                'seasonality': {'bias': seasonality_bias, 'score': seasonality_score},
-                'sentiment': {'bias': sentiment_label, 'score': sent_score},
-                'overall': {
-                    'bias': overall_bias,
-                    'symbol': overall_symbol,
-                    'score': round(display_score, 1),
-                    'color': overall_color
-                },
-            }
-            results.append(result)
+                # ---- Build result object ----
+                result = {
+                    'pair': pair_name,
+                    'cot': cot_data,
+                    'economic': econ_data,
+                    'trend': {'bias': trend_bias, 'symbol': trend_symbol, 'score': trend_raw},
+                    'seasonality': {'bias': seasonality_bias, 'score': seasonality_score},
+                    'sentiment': {'bias': sentiment_label, 'score': sent_score},
+                    'overall': {
+                        'bias': overall_bias,
+                        'symbol': overall_symbol,
+                        'score': round(display_score, 1),
+                        'color': overall_color
+                    },
+                }
+                results.append(result)
 
-            # Save history
-            history = AnalysisHistory(
-                user_id=user.id,
-                pair=pair_name,
-                cot_bias=str(cot_data['bias']),
-                cot_momentum=str(cot_data['momentum']),
-                econ_bias=econ_bias,
-                econ_diff=diff_econ,
-                trend_score=float(trend_raw),
-                seasonality_bias=seasonality_bias,
-                seasonality_score=float(seasonality_score),
-                overall_score=float(total_score),
-                overall_bias=overall_bias
-            )
-            db.session.add(history)
+                # Save history
+                history = AnalysisHistory(
+                    user_id=user.id,
+                    pair=pair_name,
+                    cot_bias=str(cot_data['bias']),
+                    cot_momentum=str(cot_data['momentum']),
+                    econ_bias=econ_bias,
+                    econ_diff=diff_econ,
+                    trend_score=float(trend_raw),
+                    seasonality_bias=seasonality_bias,
+                    seasonality_score=float(seasonality_score),
+                    overall_score=float(total_score),
+                    overall_bias=overall_bias
+                )
+                db.session.add(history)
+                # Commit per pair so a later failure cannot discard this pair's history
+                db.session.commit()
 
-        db.session.commit()
+            except Exception as pair_err:
+                print(f"Error processing {pair_name} in api_analyze: {pair_err}")
+                # CRITICAL: Postgres aborts the whole session transaction on any error.
+                # Without rollback, every subsequent pair would fail with
+                # InFailedSqlTransaction and the whole dashboard shows ERROR.
+                try:
+                    db.session.rollback()
+                except Exception as _rb_err:
+                    print(f"  ↳ rollback failed for {pair_name}: {_rb_err}")
+                # Append an error placeholder so downstream code (calculate_currency_strength,
+                # heatmap) has a valid shape to iterate over.
+                results.append({
+                    'pair': pair_name,
+                    'cot': {'bias': 'No Data', 'symbol': '●', 'momentum': 'No Data',
+                            'mom_symbol': '●', 'score': 0, 'momentum_score': 0},
+                    'economic': {'bias': 'NEUTRAL', 'symbol': '●', 'diff': 0, 'score': 0},
+                    'trend': {'bias': 'Neutral', 'symbol': '●', 'score': 0},
+                    'seasonality': {'bias': 'Neutral', 'score': 0},
+                    'sentiment': {'bias': 'N/A', 'score': 0},
+                    'overall': {'bias': 'ERROR', 'symbol': '⚠️', 'score': 0.0, 'color': '#ff4d6d'},
+                })
+
+        # Final safety commit — no-op if every per-pair commit already succeeded
+        try:
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
         # Currency strength (keep legacy calculation)
         currency_ranking, currency_scores, currency_econ_data = calculate_currency_strength(results)
