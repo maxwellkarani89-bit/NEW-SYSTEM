@@ -9,6 +9,7 @@ yfinance
 openpyxl
 sqlalchemy-libsql
 psycopg2-binary
+psycopg[binary]>=3.2
 gunicorn
 websocket-client
 git+https://github.com/rongardF/tvdatafeed.git
