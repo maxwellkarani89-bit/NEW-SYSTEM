@@ -9269,6 +9269,8 @@ def refresh_put_call_ratios() -> dict:
 
         for asset, cfg in PCR_TICKER_MAP.items():
             ticker = cfg["ticker"]
+
+            # Try in order: yfinance → direct Yahoo → Polygon → Strasmore
             ratio = fetch_put_call_ratio_yfinance(ticker)
             if ratio is None:
                 print(f"  ↳ yfinance empty for {ticker}, trying direct Yahoo...")
@@ -9279,13 +9281,12 @@ def refresh_put_call_ratios() -> dict:
             if ratio is None:
                 print(f"  ↳ Polygon empty for {ticker}, trying Strasmore...")
                 ratio = fetch_put_call_ratio_strasmore(ticker)
+
             if ratio is None:
-               print(f"  ↳ yfinance failed for {ticker}, trying Strasmore...")
-               ratio = fetch_put_call_ratio_strasmore(ticker)
-            if ratio is None:
-               results[asset] = {"ticker": ticker, "ratio": None,
-                                "score": None, "error": "fetch failed"}
-               continue
+                results[asset] = {"ticker": ticker, "ratio": None,
+                                  "score": None, "error": "fetch failed"}
+                continue
+
             score = compute_pcr_score(ratio, cfg["high_put"], cfg["high_call"])
 
             # --- One record per day: update today's row, else insert ---
@@ -9488,18 +9489,15 @@ from apscheduler.triggers.cron import CronTrigger
 
 def _start_background_jobs_once():
     """
-    Start scheduler and do initial fetches exactly once per deployment.
-    File-based lock prevents multiple gunicorn workers from double-running.
+    Start scheduler and do initial fetches.
+    Runs at module import time so it works under gunicorn on Render.
+    Uses an in-process guard (not a file) so container restarts
+    always re-arm the scheduler without a full redeploy.
     """
-    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.jobs_started')
-    if os.path.exists(lock_path):
-        print("⏭️  Background jobs already started by another worker — skipping")
+    global scheduler
+    if scheduler is not None and getattr(scheduler, 'running', False):
+        print("⏭️  Background jobs already running in this process — skipping")
         return
-    try:
-        with open(lock_path, 'w') as f:
-            f.write(datetime.utcnow().isoformat())
-    except Exception as e:
-        print(f"⚠️ Could not create lock file: {e} — proceeding anyway")
 
     scheduler = BackgroundScheduler()
 
@@ -9519,7 +9517,8 @@ def _start_background_jobs_once():
         id='retail_sentiment_job'
     )
 
-    # Put/Call Ratio for BTC/XAU/OIL (every 60 min)
+    # Put/Call Ratio for BTC/XAU/OIL (daily at 14:00 UTC = 10:00 ET,
+    # shortly after US market open when options volume is meaningful)
     scheduler.add_job(
         func=refresh_put_call_ratios,
         trigger=CronTrigger(hour=14, minute=0),
