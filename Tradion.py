@@ -30,6 +30,41 @@ try:
 except ImportError:
     HAS_BS4 = False
 from tvDatafeed import TvDatafeed, Interval
+
+
+# =============================================================================
+# ⬇️⬇️⬇️  FIX 2 — PASTE THIS BLOCK HERE  ⬇️⬇️⬇️
+# =============================================================================
+# Yahoo Finance TLS-fingerprint workaround
+# ---------------------------------------------------------------------------
+# Yahoo blocks non-browser TLS handshakes on cloud hosts (401 Invalid Crumb).
+# curl_cffi impersonates a real Chrome browser's TLS/JA3 fingerprint + HTTP/2
+# settings, which gets past the bot wall on Render/AWS/GCP etc.
+# Reference: https://github.com/ranaroussi/yfinance/issues/2422
+try:
+    from curl_cffi import requests as curl_requests
+    _YF_SESSION = curl_requests.Session(impersonate="chrome")
+    print("✅ Yahoo session: curl_cffi Chrome impersonation active")
+except Exception as _e:
+    _YF_SESSION = None
+    print(f"⚠️ curl_cffi unavailable ({_e}) — falling back to plain requests "
+          f"(Yahoo may return 401 on cloud hosts)")
+
+
+def _yf_ticker(symbol: str):
+    """Return a yfinance Ticker bound to the Chrome-impersonating session."""
+    if _YF_SESSION is not None:
+        try:
+            return yf.Ticker(symbol, session=_YF_SESSION)
+        except TypeError:
+            # very old yfinance without session= kwarg
+            return yf.Ticker(symbol)
+    return yf.Ticker(symbol)
+# =============================================================================
+# ⬆️⬆️⬆️  END OF FIX 2  ⬆️⬆️⬆️
+# =============================================================================
+
+
 app = Flask(__name__)
 # -------- PASTE THE DATABASE CONFIGURATION HERE --------
 import os
@@ -429,8 +464,13 @@ SYMBOL_MAPPING = {
     "GBP/AUD": "GBPAUD=X", "GBP/CAD": "GBPCAD=X", "GBP/CHF": "GBPCHF=X",
     "AUD/CAD": "AUDCAD=X", "AUD/NZD": "AUDNZD=X", "CAD/CHF": "CADCHF=X",
     "NZD/CHF": "NZDCHF=X",
+    # ---- Pair form (dashboard, forex scorecard) ----
     "XAU/USD": "GC=F",
     "BTC/USD": "BTC-USD",
+    "OIL/USD": "CL=F",
+    # ---- Standalone form (asset scorecard dropdown) ----
+    "XAU": "GC=F",
+    "BTC": "BTC-USD",
     "OIL": "CL=F",
 }
 
@@ -610,7 +650,7 @@ def get_trend_score_21d(pair_symbol):
         if '=' not in symbol and '-' not in symbol:
             symbol = symbol + '=X'
         
-        ticker = yf.Ticker(symbol)
+        ticker = _yf_ticker(symbol)
         hist = ticker.history(period="2mo", interval="1d")
         if len(hist) < 21:
             return 0
@@ -764,7 +804,7 @@ def get_seasonality_score_from_yf(pair: str) -> int:
         if not yf_symbol:
             yf_symbol = pair.replace('/', '') + '=X'
         
-        ticker = yf.Ticker(yf_symbol)
+        ticker = _yf_ticker(yf_symbol)
         df = ticker.history(period="10y", interval="1d")
         if df.empty:
             return 0
@@ -1459,7 +1499,13 @@ def save_all_asset_scores():
         symbols.append(yf_sym)
 
     try:
-        data = yf.download(symbols, period="2mo", interval="1d", group_by='ticker', auto_adjust=False)
+        if _YF_SESSION is not None:
+            data = yf.download(symbols, period="2mo", interval="1d",
+                               group_by='ticker', auto_adjust=False,
+                               session=_YF_SESSION)
+        else:
+            data = yf.download(symbols, period="2mo", interval="1d",
+                               group_by='ticker', auto_adjust=False)
     except Exception as e:
         app.logger.error(f"yfinance batch download failed: {e}")
         data = {}
@@ -1469,7 +1515,7 @@ def save_all_asset_scores():
         if yf_sym not in data:
             # fallback: individual download (should rarely happen)
             try:
-                ticker = yf.Ticker(yf_sym)
+                ticker = _yf_ticker(yf_sym)
                 hist = ticker.history(period="2mo")
                 if len(hist) >= 21:
                     sma = hist['Close'].rolling(21).mean().iloc[-1]
@@ -8575,7 +8621,7 @@ def api_seasonality():
         yf_symbol = pair.replace('/', '') + '=X'
 
     try:
-        ticker = yf.Ticker(yf_symbol)
+        ticker = _yf_ticker(yf_symbol)
         df = ticker.history(period="10y", interval="1d")
         if df.empty:
             return jsonify({'error': 'No data found for this symbol'}), 404
@@ -8959,7 +9005,7 @@ def fetch_put_call_ratio_yfinance(ticker: str):
     Returns float or None.
     """
     try:
-        t = yf.Ticker(ticker)
+        t = _yf_ticker(ticker)
         expirations = t.options
         if not expirations:
             print(f"⚠️ No options expirations for {ticker}")
@@ -9003,6 +9049,38 @@ def fetch_put_call_ratio_yfinance(ticker: str):
     except Exception as e:
         print(f"❌ yfinance PCR error for {ticker}: {e}")
         return None
+    
+    
+    
+def fetch_put_call_ratio_strasmore(ticker: str):
+    """Free fallback via Strasmore's keyless demo API.
+    Docs: https://www.strasmore.com/blog/free-stock-market-data-api
+    Returns float or None.
+    """
+    try:
+        resp = requests.get(
+            "https://ai.strasmore.com/api/demo?q=put_call_ratio",
+            timeout=15,
+            headers={"Accept": "application/json"},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("rows", [])
+        # Strasmore rows are heterogeneous; look for our ticker in any column
+        for row in rows:
+            if isinstance(row, dict):
+                # match on any "ticker"/"symbol" style column
+                for key in ("ticker", "symbol", "underlying"):
+                    if str(row.get(key, "")).upper() == ticker.upper():
+                        for val_key in ("put_call_ratio", "pcr", "ratio"):
+                            if row.get(val_key) is not None:
+                                return float(row[val_key])
+        # If exact ticker not present, and our ticker is IBIT/GLD/USO,
+        # the endpoint may not cover ETFs — return None so caller can try CBOE
+        return None
+    except Exception as e:
+        print(f"Strasmore PCR error for {ticker}: {e}")
+        return None
 
 
 def compute_pcr_score(ratio: float, high_put: float, high_call: float) -> int:
@@ -9032,9 +9110,12 @@ def refresh_put_call_ratios() -> dict:
             ticker = cfg["ticker"]
             ratio = fetch_put_call_ratio_yfinance(ticker)
             if ratio is None:
-                results[asset] = {"ticker": ticker, "ratio": None,
-                                  "score": None, "error": "fetch failed"}
-                continue
+               print(f"  ↳ yfinance failed for {ticker}, trying Strasmore...")
+               ratio = fetch_put_call_ratio_strasmore(ticker)
+            if ratio is None:
+               results[asset] = {"ticker": ticker, "ratio": None,
+                                "score": None, "error": "fetch failed"}
+               continue
             score = compute_pcr_score(ratio, cfg["high_put"], cfg["high_call"])
 
             # --- One record per day: update today's row, else insert ---
