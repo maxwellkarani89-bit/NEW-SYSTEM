@@ -32,9 +32,6 @@ except ImportError:
 from tvDatafeed import TvDatafeed, Interval
 
 
-# =============================================================================
-# ⬇️⬇️⬇️  FIX 2 — PASTE THIS BLOCK HERE  ⬇️⬇️⬇️
-# =============================================================================
 # Yahoo Finance TLS-fingerprint workaround
 # ---------------------------------------------------------------------------
 # Yahoo blocks non-browser TLS handshakes on cloud hosts (401 Invalid Crumb).
@@ -60,9 +57,7 @@ def _yf_ticker(symbol: str):
             # very old yfinance without session= kwarg
             return yf.Ticker(symbol)
     return yf.Ticker(symbol)
-# =============================================================================
-# ⬆️⬆️⬆️  END OF FIX 2  ⬆️⬆️⬆️
-# =============================================================================
+
 
 
 app = Flask(__name__)
@@ -3786,6 +3781,7 @@ def api_put_call_ratio():
 
 @app.route('/api/put-call-ratio/refresh', methods=['POST'])
 @login_required
+@admin_required
 def api_pcr_refresh():
     try:
         summary = refresh_put_call_ratios()
@@ -9134,6 +9130,59 @@ def fetch_put_call_ratio_yahoo_direct(ticker: str):
         print(f"❌ direct Yahoo PCR error for {ticker}: {e}")
         return None
     
+    
+
+
+# ---------- POLYGON.IO PCR FETCHER ----------
+POLYGON_API_KEY = os.environ.get('POLYGON_API_KEY', '')
+
+def fetch_put_call_ratio_polygon(ticker: str):
+    """PCR from Polygon.io options snapshot. Free tier: 5 calls/min, 15-min delayed."""
+    if not POLYGON_API_KEY:
+        print(f"  ↳ Polygon: POLYGON_API_KEY not set")
+        return None
+    try:
+        url = f"https://api.polygon.io/v3/snapshot/options/{ticker}"
+        params = {"apiKey": POLYGON_API_KEY, "limit": 250}
+        resp = requests.get(url, params=params, timeout=15)
+        if resp.status_code != 200:
+            print(f"  ↳ Polygon HTTP {resp.status_code} for {ticker}: {resp.text[:120]}")
+            return None
+        results = resp.json().get("results", [])
+        if not results:
+            print(f"  ↳ Polygon: empty results for {ticker}")
+            return None
+
+        call_vol = sum(
+            (r.get("day", {}).get("volume") or 0)
+            for r in results if r.get("details", {}).get("contract_type") == "call"
+        )
+        put_vol = sum(
+            (r.get("day", {}).get("volume") or 0)
+            for r in results if r.get("details", {}).get("contract_type") == "put"
+        )
+        # Fall back to open interest if volume is 0 (weekends / pre-market)
+        if call_vol == 0:
+            call_vol = sum(
+                (r.get("open_interest") or 0)
+                for r in results if r.get("details", {}).get("contract_type") == "call"
+            )
+            put_vol = sum(
+                (r.get("open_interest") or 0)
+                for r in results if r.get("details", {}).get("contract_type") == "put"
+            )
+        if call_vol == 0:
+            print(f"  ↳ Polygon: no volume/OI for {ticker}")
+            return None
+
+        ratio = float(put_vol / call_vol)
+        print(f"📊 {ticker} PCR (Polygon) = {ratio:.3f}  "
+              f"(put_vol={put_vol:.0f}, call_vol={call_vol:.0f})")
+        return ratio
+    except Exception as e:
+        print(f"❌ Polygon PCR error for {ticker}: {e}")
+        return None
+    
 
 def fetch_put_call_ratio_strasmore(ticker: str):
     """Free keyless fallback via Strasmore demo API. No Yahoo dependency.
@@ -9225,7 +9274,10 @@ def refresh_put_call_ratios() -> dict:
                 print(f"  ↳ yfinance empty for {ticker}, trying direct Yahoo...")
                 ratio = fetch_put_call_ratio_yahoo_direct(ticker)
             if ratio is None:
-                print(f"  ↳ direct Yahoo empty for {ticker}, trying Strasmore...")
+                print(f"  ↳ direct Yahoo empty for {ticker}, trying Polygon...")
+                ratio = fetch_put_call_ratio_polygon(ticker)
+            if ratio is None:
+                print(f"  ↳ Polygon empty for {ticker}, trying Strasmore...")
                 ratio = fetch_put_call_ratio_strasmore(ticker)
             if ratio is None:
                print(f"  ↳ yfinance failed for {ticker}, trying Strasmore...")
@@ -9470,8 +9522,7 @@ def _start_background_jobs_once():
     # Put/Call Ratio for BTC/XAU/OIL (every 60 min)
     scheduler.add_job(
         func=refresh_put_call_ratios,
-        trigger="interval",
-        minutes=60,
+        trigger=CronTrigger(hour=14, minute=0),
         id='pcr_job'
     )
 
