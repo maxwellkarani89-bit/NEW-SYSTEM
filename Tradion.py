@@ -2195,7 +2195,7 @@ def detailed_analysis():
     def get_cot_align(base, quote):
         base_cot = cot_cache.get(base, {'net':0, 'change':0, 'longs':0, 'shorts':0})
         quote_cot = cot_cache.get(quote, {'net':0, 'change':0, 'longs':0, 'shorts':0})
-    
+
         # 1. Net % diff
         b_total = base_cot['longs'] + base_cot['shorts']
         q_total = quote_cot['longs'] + quote_cot['shorts']
@@ -2203,11 +2203,11 @@ def detailed_analysis():
         q_long_pct = (quote_cot['longs'] / q_total * 100) if q_total > 0 else 50
         pct_diff = b_long_pct - q_long_pct
         net_score = 1 if pct_diff > 20 else (-1 if pct_diff < -20 else 0)
-    
+
         # 2. Weekly change diff
         weekly_diff = base_cot['change'] - quote_cot['change']
         weekly_score = 1 if weekly_diff > 0 else (-1 if weekly_diff < 0 else 0)
-    
+
         return net_score + weekly_score
 
     results = []
@@ -2276,7 +2276,7 @@ def detailed_analysis():
                             return -2
                         return raw
                     else:
-                       return 1 if diff > 0 else (-1 if diff < 0 else 0)  
+                       return 1 if diff > 0 else (-1 if diff < 0 else 0)
                 gdp = norm("GDP Growth Rate QoQ (%)")
                 m_pmi = norm("Manufacturing PMI")
                 s_pmi = norm("Services PMI")
@@ -2339,6 +2339,8 @@ def detailed_analysis():
                 "nfp": 0, "avg_hourly_earnings": 0, "unemp_rate": 0,
                 "unemp_claims": 0, "adp": 0, "jolts": 0
             })
+
+    return jsonify(results)
 
 @app.route('/api/analyze', methods=['POST'])
 @login_required
