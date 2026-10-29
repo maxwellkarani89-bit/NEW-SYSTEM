@@ -8998,22 +8998,16 @@ def fetch_put_call_ratio(ticker: str):
         return None
 
 def fetch_put_call_ratio_yfinance(ticker: str):
-    """
-    Compute Put/Call Volume Ratio from Yahoo Finance options chain.
-    Picks the nearest expiry that actually has meaningful volume.
-    Falls back to open interest if volume is zero.
-    Returns float or None.
-    """
+    """Compute PCR from Yahoo options chain via yfinance + curl_cffi session."""
     try:
         t = _yf_ticker(ticker)
         expirations = t.options
         if not expirations:
-            print(f"⚠️ No options expirations for {ticker}")
+            print(f"  ↳ {ticker}: t.options returned empty (options endpoint gated)")
             return None
 
-        # Try each expiry in order; use the first one with real volume
         chosen = None
-        for exp in expirations[:4]:          # check up to 4 nearest expiries
+        for exp in expirations[:4]:
             try:
                 chain = t.option_chain(exp)
                 call_vol = chain.calls["volume"].sum(skipna=True)
@@ -9022,11 +9016,10 @@ def fetch_put_call_ratio_yfinance(ticker: str):
                     chosen = (exp, chain, call_vol, put_vol)
                     break
             except Exception as inner:
-                print(f"  ↳ skipping expiry {exp} for {ticker}: {inner}")
+                print(f"  ↳ {ticker} expiry {exp} failed: {inner}")
                 continue
 
         if chosen is None:
-            # Nobody has volume — fall back to nearest expiry + open interest
             chain = t.option_chain(expirations[0])
             call_vol = chain.calls["openInterest"].sum(skipna=True)
             put_vol  = chain.puts["openInterest"].sum(skipna=True)
@@ -9038,20 +9031,106 @@ def fetch_put_call_ratio_yfinance(ticker: str):
                 put_vol  = chain.puts["openInterest"].sum(skipna=True)
 
         if not call_vol or pd.isna(call_vol):
-            print(f"⚠️ No usable volume/OI for {ticker}")
+            print(f"  ↳ {ticker}: no usable volume/OI")
             return None
 
         ratio = float(put_vol / call_vol)
         print(f"📊 {ticker} PCR = {ratio:.3f}  "
               f"(exp={exp_used}, put_vol={put_vol:.0f}, call_vol={call_vol:.0f})")
         return ratio
-
     except Exception as e:
         print(f"❌ yfinance PCR error for {ticker}: {e}")
         return None
+
+
+def fetch_put_call_ratio_yahoo_direct(ticker: str):
+    """Fetch options chain directly from Yahoo using curl_cffi, bypassing
+    yfinance's crumb plumbing. Often works when t.options returns []."""
+    if _YF_SESSION is None:
+        return None
+    try:
+        # Step 1: consent cookie (fc.yahoo.com sets it)
+        _YF_SESSION.get("https://fc.yahoo.com", timeout=10, allow_redirects=True)
+
+        # Step 2: get a crumb tied to that cookie
+        r = _YF_SESSION.get(
+            "https://query2.finance.yahoo.com/v1/test/getcrumb",
+            timeout=10
+        )
+        crumb = (r.text or "").strip()
+        if not crumb or len(crumb) > 30 or "<" in crumb:
+            print(f"  ↳ {ticker}: direct fetch — no valid crumb ({crumb[:20]!r})")
+            return None
+
+        # Step 3: pull options chain for the nearest expiry
+        url = f"https://query2.finance.yahoo.com/v7/finance/options/{ticker}"
+        r = _YF_SESSION.get(url, timeout=15, params={"crumb": crumb})
+        if r.status_code != 200:
+            print(f"  ↳ {ticker}: direct fetch HTTP {r.status_code}")
+            return None
+        data = r.json()
+
+        results = (data.get("optionChain") or {}).get("result") or []
+        if not results:
+            print(f"  ↳ {ticker}: direct fetch — empty result")
+            return None
+
+        opts = results[0].get("options") or []
+        if not opts:
+            return None
+        nearest = opts[0]
+        calls = nearest.get("calls") or []
+        puts  = nearest.get("puts")  or []
+
+        call_vol = sum((c.get("volume") or 0) for c in calls)
+        put_vol  = sum((p.get("volume") or 0) for p in puts)
+
+        if call_vol == 0:
+            call_vol = sum((c.get("openInterest") or 0) for c in calls)
+            put_vol  = sum((p.get("openInterest") or 0) for p in puts)
+
+        if call_vol == 0:
+            print(f"  ↳ {ticker}: direct fetch — no volume/OI")
+            return None
+
+        ratio = float(put_vol / call_vol)
+        print(f"📊 {ticker} PCR (direct) = {ratio:.3f}  "
+              f"(put_vol={put_vol:.0f}, call_vol={call_vol:.0f})")
+        return ratio
+    except Exception as e:
+        print(f"❌ direct Yahoo PCR error for {ticker}: {e}")
+        return None
     
-    
-    
+
+def fetch_put_call_ratio_strasmore(ticker: str):
+    """Free keyless fallback via Strasmore demo API. No Yahoo dependency.
+    Returns float or None."""
+    try:
+        resp = requests.get(
+            "https://ai.strasmore.com/api/demo?q=put_call_ratio",
+            timeout=15,
+            headers={"Accept": "application/json", "User-Agent": "Mozilla/5.0"},
+        )
+        resp.raise_for_status()
+        payload = resp.json()
+        rows = payload.get("rows", [])
+        for row in rows:
+            if not isinstance(row, dict):
+                continue
+            for key in ("ticker", "symbol", "underlying"):
+                if str(row.get(key, "")).upper() == ticker.upper():
+                    for val_key in ("put_call_ratio", "pcr", "ratio"):
+                        if row.get(val_key) is not None:
+                            val = float(row[val_key])
+                            print(f"📊 {ticker} PCR (Strasmore) = {val:.3f}")
+                            return val
+        print(f"  ↳ {ticker}: Strasmore — ticker not in response")
+        return None
+    except Exception as e:
+        print(f"❌ Strasmore PCR error for {ticker}: {e}")
+        return None
+
+
 def fetch_put_call_ratio_strasmore(ticker: str):
     """Free fallback via Strasmore's keyless demo API.
     Docs: https://www.strasmore.com/blog/free-stock-market-data-api
@@ -9109,6 +9188,12 @@ def refresh_put_call_ratios() -> dict:
         for asset, cfg in PCR_TICKER_MAP.items():
             ticker = cfg["ticker"]
             ratio = fetch_put_call_ratio_yfinance(ticker)
+            if ratio is None:
+                print(f"  ↳ yfinance empty for {ticker}, trying direct Yahoo...")
+                ratio = fetch_put_call_ratio_yahoo_direct(ticker)
+            if ratio is None:
+                print(f"  ↳ direct Yahoo empty for {ticker}, trying Strasmore...")
+                ratio = fetch_put_call_ratio_strasmore(ticker)
             if ratio is None:
                print(f"  ↳ yfinance failed for {ticker}, trying Strasmore...")
                ratio = fetch_put_call_ratio_strasmore(ticker)
