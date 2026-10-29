@@ -7,16 +7,22 @@ __pycache__/
 # Virtual environment
 venv/
 env/
+.venv/
 .env
-.venv
 
 # Database files (local SQLite)
 *.db
 *.sqlite
 *.sqlite3
 
-# Uploaded files (they may contain sensitive data or be large)
+# Flask instance folder (default SQLite path)
+instance/
+
+# Uploaded files (may contain sensitive data or be large)
 uploads/
+
+# Background jobs lock file (created by Tradion.py on startup)
+.jobs_started
 
 # IDE settings
 .vscode/
@@ -27,12 +33,9 @@ uploads/
 # Logs
 *.log
 
-# Environment variables (contains SECRET_KEY, DATABASE_URL)
-.env
-
 # OS metadata
 .DS_Store
 Thumbs.db
 
 # Jupyter Notebook checkpoints
-.ipynb_checkpoints/
+.ipynb_checkpoints

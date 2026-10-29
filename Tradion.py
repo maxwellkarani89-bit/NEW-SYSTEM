@@ -9225,80 +9225,104 @@ def get_carry_score_history(days=30):
 
 
 
-if __name__ == '__main__':
-    create_templates()
-    
-    # ---- Background scheduler ----
-    from apscheduler.schedulers.background import BackgroundScheduler
-    from apscheduler.triggers.cron import CronTrigger
-    import atexit
-    
+# =============================================================================
+# STARTUP — background jobs and initial fetches
+# These must run OUTSIDE `if __name__ == '__main__':` so they execute under
+# gunicorn on Render. A file-based lock ensures only one worker runs them.
+# =============================================================================
+
+import atexit
+from apscheduler.schedulers.background import BackgroundScheduler
+from apscheduler.triggers.cron import CronTrigger
+
+def _start_background_jobs_once():
+    """
+    Start scheduler and do initial fetches exactly once per deployment.
+    File-based lock prevents multiple gunicorn workers from double-running.
+    """
+    lock_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.jobs_started')
+    if os.path.exists(lock_path):
+        print("⏭️  Background jobs already started by another worker — skipping")
+        return
+    try:
+        with open(lock_path, 'w') as f:
+            f.write(datetime.utcnow().isoformat())
+    except Exception as e:
+        print(f"⚠️ Could not create lock file: {e} — proceeding anyway")
+
     scheduler = BackgroundScheduler()
-    
-    # 1) Myfxbook fallback (30 min) — may fail, that's fine
-    scheduler.add_job(
-        func=update_retail_sentiment,
-        trigger="interval",
-        minutes=30,
-        id='retail_sentiment_job'
-    )
-    
-    # 2) FastBull retail sentiment (60 min) — now FX-only (no BTC/XAU/OIL)
+
+    # FastBull sentiment (FX pairs, every 60 min)
     scheduler.add_job(
         func=update_sentiment_from_fastbull,
         trigger="interval",
         minutes=60,
         id='fastbull_sentiment_job'
     )
-    
-    # 3) Put/Call ratio for BTC / XAU / OIL (60 min)
+
+    # Myfxbook fallback (every 30 min)
+    scheduler.add_job(
+        func=update_retail_sentiment,
+        trigger="interval",
+        minutes=30,
+        id='retail_sentiment_job'
+    )
+
+    # Put/Call Ratio for BTC/XAU/OIL (every 60 min)
     scheduler.add_job(
         func=refresh_put_call_ratios,
         trigger="interval",
         minutes=60,
         id='pcr_job'
     )
-    
-    # 4) Asset score history — every 3 days at 00:00 UTC
+
+    # Asset score history (every 3 days at midnight UTC)
     scheduler.add_job(
         func=save_all_asset_scores,
         trigger=CronTrigger(day='*/3', hour=0, minute=0),
         id='score_history_job'
     )
-    
+
     scheduler.start()
     atexit.register(lambda: scheduler.shutdown())
-    
-    # ---- Immediate fetches on startup ----
+    print("✅ Background scheduler started — 4 jobs registered")
+
+    # --- Initial fetch on startup (once) ---
     print("Running initial FastBull sentiment fetch...")
-    with app.app_context():
+    try:
         update_sentiment_from_fastbull()
-    
+    except Exception as e:
+        print(f"⚠️ Initial FastBull fetch failed: {e}")
+
     print("Fetching initial Put/Call ratios (BTC / XAU / OIL)...")
-    with app.app_context():
+    try:
         pcr_summary = refresh_put_call_ratios()
         for asset, info in pcr_summary.items():
             if info.get("ratio") is not None:
-                print(f"   ✅ {asset} ({info['ticker']}) = {info['ratio']:.3f}  →  score {info['score']:+d}")
+                print(f"  ✅ {asset} ({info['ticker']}): ratio={info['ratio']:.3f} → score {info['score']:+d}")
             else:
-                print(f"   ⚠️ {asset} ({info['ticker']}) fetch failed")
-    
-    # ---- Auto-open browser ----
+                print(f"  ⚠️ {asset} ({info['ticker']}): {info.get('error', 'fetch failed')}")
+    except Exception as e:
+        print(f"⚠️ Initial PCR fetch failed: {e}")
+
+
+# Run once on first import (single gunicorn worker on Render, or dev server).
+# Also runs locally — the __main__ block below will skip its own startup work.
+_start_background_jobs_once()
+
+
+if __name__ == '__main__':
+    create_templates()
+
     def open_browser():
         time.sleep(2)
         webbrowser.open('http://localhost:5000')
-    
+
     threading.Thread(target=open_browser, daemon=True).start()
-    
-    # ---- Banner ----
-    print("=" * 55)
+
+    print("=" * 50)
     print("Tradion - Dark Pro Trader Edition")
     print("Admin: Karlmax / admin4125")
-    print("Active scheduled jobs:")
-    print("  • FastBull sentiment ....... every 60 min  (FX pairs only)")
-    print("  • Myfxbook fallback ........ every 30 min")
-    print("  • Put/Call ratio ........... every 60 min  (BTC / XAU / OIL)")
-    print("  • Asset score history ...... every 3 days @ 00:00 UTC")
-    print("=" * 55)
-    
+    print("=" * 50)
+
     app.run(debug=False, use_reloader=False, host='0.0.0.0', port=5000)
