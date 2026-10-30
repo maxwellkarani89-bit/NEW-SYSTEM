@@ -82,7 +82,15 @@ if database_url:
         'pool_pre_ping': True,
         'pool_recycle': 300,
         'pool_size': 5,
-        'max_overflow': 10
+        'max_overflow': 10,
+        # Disable psycopg3 auto-prepared statements.
+        # Render Postgres uses pgbouncer in transaction mode, which does not
+        # support server-side prepared statements — reusing connection names
+        # across pooled physical backends triggers "prepared statement already
+        # exists" errors (_pg3_0, _pg3_1, ...) after ~5 executions per query.
+        'connect_args': {
+            'prepare_threshold': None,
+        },
     }
 else:
     basedir = os.path.abspath(os.path.dirname(__file__))
