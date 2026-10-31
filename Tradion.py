@@ -2662,6 +2662,7 @@ def api_asset_scorecard(symbol):
             'seasonality_bias': season_bias,
             'seasonality_score': season_score,
             'sentiment_score': sent_score_val,
+            'pcr_score': pcr_score,
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
 
@@ -2836,6 +2837,7 @@ def api_asset_scorecard(symbol):
             'seasonality_bias': season_bias,
             'seasonality_score': season_score,
             'sentiment_score': sent_score_val,
+            'pcr_score': pcr_score,
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
 
@@ -2952,6 +2954,7 @@ def api_asset_scorecard(symbol):
             'seasonality_bias': season_bias,
             'seasonality_score': season_score,
             'sentiment_score': sent_score_val,
+            'pcr_score': None,
             'score_history': [0, 1, 2, 1, 3, 2, 4, 3, 2, 1, 2, 0]
         })
 
@@ -6373,7 +6376,7 @@ setTimeout(() => {
         "Jobs Market Bias"
     ];
 
-    // Assets that use PCR (Put/Call Ratio) as their sentiment source
+    // Assets that may use PCR (Put/Call Ratio) when data is fresh
     const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
 
     let historyChart = null;
@@ -6388,16 +6391,12 @@ setTimeout(() => {
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
-
             // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
             const fundamentalsScore = Number(data.fundamentals_score ?? 0);
             const technicalScore    = Number(data.technical_score    ?? 0);
 
-            let cotScore = Number(data.sentiment_cot_score ?? 0);
-            if (isStandalone) {
-                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
-            }
+            // COT bar = COT + sentiment (PCR if fresh for BTC/XAU/OIL, else Retail)
+            const cotScore = Number(data.sentiment_cot_score ?? 0) + Number(data.sentiment_score || 0);
 
             // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
             const tradionScore = technicalScore + cotScore + fundamentalsScore;
@@ -6504,7 +6503,7 @@ setTimeout(() => {
         return html;
     }
 
-    // ---- Crowd Sentiment table: COT row + PCR row (only for BTC/XAU/OIL) ----
+    // ---- Crowd Sentiment table: COT row + Sentiment row (PCR if fresh, else Retail) ----
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -6514,17 +6513,22 @@ setTimeout(() => {
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
 
-        const baseUpper = (data.base || '').toUpperCase();
-        let pcrRow = '';
-        if (PCR_ASSETS.includes(baseUpper)) {
-            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
-                ? Number(data.pcr_score)
-                : Number(data.sentiment_score || 0);
-            let pcrClass = 'neutral';
-            let pcrDisplay = '0';
+        // Sentiment row: PCR if fresh (only possible for BTC/XAU/OIL), else Retail
+        const hasFreshPCR = data.pcr_score !== null && data.pcr_score !== undefined;
+        const sentimentVal = Number(data.sentiment_score || 0);
+
+        let sentimentRow;
+        if (hasFreshPCR) {
+            const pcrVal = Number(data.pcr_score);
+            let pcrClass = 'neutral', pcrDisplay = '0';
             if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
             else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
-            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+            sentimentRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        } else {
+            let sClass = 'neutral', sDisplay = '0';
+            if (sentimentVal > 0) { sClass = 'positive'; sDisplay = `+${sentimentVal}`; }
+            else if (sentimentVal < 0) { sClass = 'negative'; sDisplay = `${sentimentVal}`; }
+            sentimentRow = `<tr><td>Retail Sentiment</td><td class="value ${sClass}">${sDisplay}</td></tr>`;
         }
 
         return `<div style="overflow-x:auto;">
@@ -6532,7 +6536,7 @@ setTimeout(() => {
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
                         <tbody>
                             <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
-                            ${pcrRow}
+                            ${sentimentRow}
                         </tbody>
                     </table>
                 </div>`;
@@ -6545,16 +6549,14 @@ setTimeout(() => {
         const rest = CATEGORY_ORDER.slice(2);
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
-        const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
         // ---------- Crowd Sentiment (COT) card ----------
+        // Bias = COT + sentiment (PCR if fresh for BTC/XAU/OIL, else Retail) — for ALL assets
         const crowdCategory = firstTwo[0];
         const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
         const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
-        let crowdBiasScore = cotScoreForBias;
-        if (isStandalone) {
-            crowdBiasScore += Number(data.sentiment_score || 0);
-        }
+        const crowdBiasScore = cotScoreForBias + Number(data.sentiment_score || 0);
+
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
@@ -9336,20 +9338,30 @@ def refresh_put_call_ratios() -> dict:
     return results
 
 
-def get_put_call_sentiment_score(asset: str):
-    """Latest contrarian PCR score (-2..+2) for BTC/XAU/OIL, or None if no data."""
+def get_put_call_sentiment_score(asset: str, max_age_hours: int = 48):
+    """Latest contrarian PCR score (-2..+2) for BTC/XAU/OIL.
+    Returns None if:
+      - no record exists
+      - latest record is older than max_age_hours (stale)
+    Caller falls back to FastBull / SentimentData in that case.
+    """
     asset = asset.upper()
     if asset not in PCR_TICKER_MAP:
         return None
     try:
         latest = PutCallRatio.query.filter_by(asset=asset)\
             .order_by(PutCallRatio.recorded_at.desc()).first()
-        return latest.score if latest else None
+        if not latest:
+            return None
+
+        # Freshness check — do not return stale PCR as if it were live
+        age_hours = (datetime.utcnow() - latest.recorded_at).total_seconds() / 3600.0
+        if age_hours > max_age_hours:
+            print(f"⚠️ PCR for {asset} is {age_hours:.1f}h old (>{max_age_hours}h) — treating as unavailable")
+            return None
+
+        return latest.score
     except Exception as e:
-        # Postgres aborts the WHOLE session transaction on any error. Without this
-        # rollback, one failed query (e.g. missing table) cascades to every
-        # subsequent query in the same request — BTC and OIL end up showing
-        # InFailedSqlTransaction when only XAU is really broken.
         try:
             db.session.rollback()
         except Exception:

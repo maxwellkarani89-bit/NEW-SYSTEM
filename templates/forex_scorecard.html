@@ -283,7 +283,7 @@
         "Jobs Market Bias"
     ];
 
-    // Assets that use PCR (Put/Call Ratio) as their sentiment source
+    // Assets that may use PCR (Put/Call Ratio) when data is fresh
     const PCR_ASSETS = ['BTC', 'XAU', 'OIL'];
 
     let historyChart = null;
@@ -298,16 +298,12 @@
             if (!res.ok) throw new Error(`HTTP ${res.status}`);
             const data = await res.json();
 
-            const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
-
             // ---- Compute the three bars first (SINGLE SOURCE OF TRUTH) ----
             const fundamentalsScore = Number(data.fundamentals_score ?? 0);
             const technicalScore    = Number(data.technical_score    ?? 0);
 
-            let cotScore = Number(data.sentiment_cot_score ?? 0);
-            if (isStandalone) {
-                cotScore += Number(data.sentiment_score || 0);   // add PCR for BTC/XAU/OIL
-            }
+            // COT bar = COT + sentiment (PCR if fresh for BTC/XAU/OIL, else Retail)
+            const cotScore = Number(data.sentiment_cot_score ?? 0) + Number(data.sentiment_score || 0);
 
             // Tradion Score = literal sum of the three bars (used for gauge + Tradion bar + history)
             const tradionScore = technicalScore + cotScore + fundamentalsScore;
@@ -414,7 +410,7 @@
         return html;
     }
 
-    // ---- Crowd Sentiment table: COT row + PCR row (only for BTC/XAU/OIL) ----
+    // ---- Crowd Sentiment table: COT row + Sentiment row (PCR if fresh, else Retail) ----
     function buildCrowdTable(data) {
         const cotInd = data.base_indicators.find(i => i.name === 'COT Alignment');
         if (!cotInd) return '<p>No data</p>';
@@ -424,17 +420,22 @@
         if (score > 0) { label = 'Bullish'; labelClass = 'positive'; }
         else if (score < 0) { label = 'Bearish'; labelClass = 'negative'; }
 
-        const baseUpper = (data.base || '').toUpperCase();
-        let pcrRow = '';
-        if (PCR_ASSETS.includes(baseUpper)) {
-            const pcrVal = (data.pcr_score !== undefined && data.pcr_score !== null)
-                ? Number(data.pcr_score)
-                : Number(data.sentiment_score || 0);
-            let pcrClass = 'neutral';
-            let pcrDisplay = '0';
+        // Sentiment row: PCR if fresh (only possible for BTC/XAU/OIL), else Retail
+        const hasFreshPCR = data.pcr_score !== null && data.pcr_score !== undefined;
+        const sentimentVal = Number(data.sentiment_score || 0);
+
+        let sentimentRow;
+        if (hasFreshPCR) {
+            const pcrVal = Number(data.pcr_score);
+            let pcrClass = 'neutral', pcrDisplay = '0';
             if (pcrVal > 0) { pcrClass = 'positive'; pcrDisplay = `+${pcrVal}`; }
             else if (pcrVal < 0) { pcrClass = 'negative'; pcrDisplay = `${pcrVal}`; }
-            pcrRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+            sentimentRow = `<tr><td>Put/Call Ratio</td><td class="value ${pcrClass}">${pcrDisplay}</td></tr>`;
+        } else {
+            let sClass = 'neutral', sDisplay = '0';
+            if (sentimentVal > 0) { sClass = 'positive'; sDisplay = `+${sentimentVal}`; }
+            else if (sentimentVal < 0) { sClass = 'negative'; sDisplay = `${sentimentVal}`; }
+            sentimentRow = `<tr><td>Retail Sentiment</td><td class="value ${sClass}">${sDisplay}</td></tr>`;
         }
 
         return `<div style="overflow-x:auto;">
@@ -442,7 +443,7 @@
                         <thead><tr><th>Indicator</th><th>Signal</th></tr></thead>
                         <tbody>
                             <tr><td>COT Alignment</td><td class="value ${labelClass}">${label}</td></tr>
-                            ${pcrRow}
+                            ${sentimentRow}
                         </tbody>
                     </table>
                 </div>`;
@@ -455,16 +456,14 @@
         const rest = CATEGORY_ORDER.slice(2);
         const twoColsDiv = document.createElement('div');
         twoColsDiv.className = 'two-cols';
-        const isStandalone = PCR_ASSETS.includes((data.base || '').toUpperCase());
 
         // ---------- Crowd Sentiment (COT) card ----------
+        // Bias = COT + sentiment (PCR if fresh for BTC/XAU/OIL, else Retail) — for ALL assets
         const crowdCategory = firstTwo[0];
         const cotIndForBias = data.base_indicators?.find(i => i.name === 'COT Alignment');
         const cotScoreForBias = cotIndForBias ? Number(cotIndForBias.score || 0) : 0;
-        let crowdBiasScore = cotScoreForBias;
-        if (isStandalone) {
-            crowdBiasScore += Number(data.sentiment_score || 0);
-        }
+        const crowdBiasScore = cotScoreForBias + Number(data.sentiment_score || 0);
+
         const crowdCard = document.createElement('div');
         crowdCard.className = 'panel';
         let crowdHtml = `<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;"><h3 style="margin:0;">${crowdCategory}</h3></div>
